@@ -1,7 +1,6 @@
 ﻿namespace Pigeon.Messaging.Contracts
 {
     using System;
-    using System.IO;
     using System.Text.RegularExpressions;
 
     /// <summary>

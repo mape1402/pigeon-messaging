@@ -19,5 +19,4 @@
         /// </summary>
         public string Domain { get; set; }
     }
-
 }
