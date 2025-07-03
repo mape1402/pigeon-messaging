@@ -1,4 +1,4 @@
-# 🦤 Pigeon.Messaging
+# 🕊️ Pigeon.Messaging
 
 **Simple. Fast. Broker-agnostic messaging for .NET**
 
