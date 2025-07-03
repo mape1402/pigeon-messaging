@@ -1,0 +1,62 @@
+name: Build
+
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - '.github/workflows/publish.yml'
+      - 'Pelican.sln'
+      - 'Directory.Build.props'
+  release:
+    types: [published]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: ⬇️ Checkout
+        uses: actions/checkout@v3
+
+      - name: 'Install .NET SDK'
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            6.0.x
+            7.0.x
+            8.0.x
+            9.0.x
+
+      - name: 📦 Restore
+        run: dotnet restore
+
+      - name: 🛠️ Build
+        run: dotnet build --no-restore --configuration Release
+
+      - name: 🧪 Test
+        run: dotnet test --no-build --configuration Release --verbosity normal
+
+      - name: 📦 Pack (for publish)
+        run: dotnet pack src/Pigeon.Messaging/Pigeon.Messaging.csproj --no-build --configuration Release --output ./nupkgs
+
+      - name: 📤 Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-packages
+          path: ./nupkgs/*.nupkg
+
+  publish:
+    if: github.event_name == 'release' && github.event.action == 'published'
+    runs-on: ubuntu-latest
+    needs: build-and-test
+
+    steps:
+      - name: 📥 Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: nuget-packages
+          path: ./nupkgs
+
+      - name: 🚀 Push to NuGet
+        run: dotnet nuget push ./nupkgs/*.nupkg -k ${{ secrets.NUGET_API_KEY }} -s https://api.nuget.org/v3/index.json --skip-duplicate

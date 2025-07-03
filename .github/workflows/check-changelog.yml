@@ -1,0 +1,43 @@
+name: Check CHANGELOG
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  check-changelog:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: ⬇️ Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Need to get the base branch
+
+      - name: 🔍 Detect changes under src/
+        id: check_diff
+        run: |
+          BASE_REF="origin/${{ github.event.pull_request.base.ref }}"
+          echo "🔍 Comparing against base: $BASE_REF"
+          git fetch origin ${{ github.event.pull_request.base.ref }} --depth=1
+
+          FILES=$(git diff --name-only $BASE_REF...HEAD)
+          echo "$FILES"
+
+          if echo "$FILES" | grep -q '^src/'; then
+            echo "src_changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "src_changed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: 🛡 Require CHANGELOG.md update
+        if: steps.check_diff.outputs.src_changed == 'true'
+        run: |
+          BASE_REF="origin/${{ github.event.pull_request.base.ref }}"
+          echo "Verifying CHANGELOG.md update..."
+          if git diff --name-only $BASE_REF...HEAD | grep -q '^CHANGELOG.md$'; then
+            echo "✅ CHANGELOG.md was updated."
+          else
+            echo "❌ CHANGELOG.md was NOT updated. Please include your changes in it."
+            exit 1
+          fi
