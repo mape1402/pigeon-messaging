@@ -1,12 +1,12 @@
-﻿namespace Pigeon.Messaging.Publishing
+﻿namespace Pigeon.Messaging.Producing
 {
     using Pigeon.Messaging.Contracts;
 
     /// <summary>
-    /// Defines an asynchronous publisher for sending messages to topics,
+    /// Defines an asynchronous producer for sending messages to topics,
     /// optionally including a semantic version for the message contract.
     /// </summary>
-    public interface IPublisher
+    public interface IProducer
     {
         /// <summary>
         /// Publishes a message asynchronously to a given topic with an explicit semantic version.

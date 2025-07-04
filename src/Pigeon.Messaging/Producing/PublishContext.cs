@@ -1,4 +1,4 @@
-﻿namespace Pigeon.Messaging.Publishing
+﻿namespace Pigeon.Messaging.Producing
 {
     using System.Collections.Concurrent;
     using System.Collections.ObjectModel;

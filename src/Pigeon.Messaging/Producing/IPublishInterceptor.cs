@@ -1,4 +1,4 @@
-﻿namespace Pigeon.Messaging.Publishing
+﻿namespace Pigeon.Messaging.Producing
 {
     /// <summary>
     /// Defines an interceptor that can inspect or modify a message

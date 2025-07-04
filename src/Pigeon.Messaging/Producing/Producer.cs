@@ -1,20 +1,21 @@
-﻿namespace Pigeon.Messaging.Publishing
+﻿namespace Pigeon.Messaging.Producing
 {
+    using Pigeon.Messaging;
     using Pigeon.Messaging.Contracts;
 
     /// <summary>
-    /// Provides a base implementation for a message publisher with support for publish interceptors,
+    /// Provides a base implementation for a message produce with support for publish interceptors,
     /// payload wrapping, and versioning.
     /// This abstract class defines the general workflow for publishing a message,
     /// delegating the actual publish operation to the specific message broker implementation.
     /// </summary>
-    public abstract class BasePublisher : IPublisher
+    public abstract class Producer : IProducer
     {
         private readonly IEnumerable<IPublishInterceptor> _interceptors;
         private readonly GlobalSettings _options;
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="BasePublisher"/> class.
+        /// Initializes a new instance of the <see cref="Producer"/> class.
         /// </summary>
         /// <param name="interceptors">
         /// A collection of publish interceptors that can enrich or modify the publish context
@@ -26,7 +27,7 @@
         /// <exception cref="ArgumentNullException">
         /// Thrown if <paramref name="interceptors"/> or <paramref name="options"/> is null.
         /// </exception>
-        protected BasePublisher(IEnumerable<IPublishInterceptor> interceptors, GlobalSettings options)
+        protected Producer(IEnumerable<IPublishInterceptor> interceptors, GlobalSettings options)
         {
             _interceptors = interceptors ?? throw new ArgumentNullException(nameof(interceptors));
             _options = options ?? throw new ArgumentNullException(nameof(options));
