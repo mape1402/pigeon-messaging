@@ -1,4 +1,4 @@
-﻿namespace Pigeon.Messaging.Consuming
+﻿namespace Pigeon.Messaging.Consuming.Dispatching
 {
     /// <summary>
     /// Represents a delegate that handles a consumed message of a specific type,

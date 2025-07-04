@@ -1,5 +1,6 @@
 ﻿namespace Pigeon.Messaging.Consuming.Configuration
 {
+    using Pigeon.Messaging.Consuming.Dispatching;
     using Pigeon.Messaging.Contracts;
     using System.Collections.Concurrent;
 

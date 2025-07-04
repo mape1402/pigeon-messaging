@@ -1,4 +1,4 @@
-﻿namespace Pigeon.Messaging.Consuming
+﻿namespace Pigeon.Messaging.Consuming.Dispatching
 {
     /// <summary>
     /// Defines a contract for interceptors that run before a message is dispatched
