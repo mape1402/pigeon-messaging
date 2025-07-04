@@ -39,6 +39,7 @@
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.6"/>
     <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="9.0.6"/>
     <PackageVersion Include="Microsoft.Extensions.Options" Version="9.0.6"/>
+    <PackageVersion Include="RabbitMQ.Client" Version="7.1.2"/>
     <PackageVersion Include="MinVer" Version="6.0.0"/>
   </ItemGroup>
 

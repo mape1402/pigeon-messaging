@@ -38,5 +38,27 @@
         /// configuration if needed.
         /// </remarks>
         public MessagingSettings MessagingSettings { get; init; }
+
+        /// <summary>
+        /// Attempts to retrieve a strongly-typed settings object for a specific adapter
+        /// from the configured <see cref="MessagingSettings"/>.
+        /// </summary>
+        /// <typeparam name="T">The type of the settings object to bind to.</typeparam>
+        /// <param name="adapterKey">The key name of the message broker or adapter in the configuration.</param>
+        /// <param name="output">
+        /// When this method returns, contains the bound settings instance if found; otherwise, the specified default value.
+        /// </param>
+        /// <returns><c>true</c> if the settings were found and bound successfully; otherwise, <c>false</c>.</returns>
+
+        public bool TryGetAdapterSettings<T>(string adapterKey, out T output)
+        {
+            output = default;
+
+            if(!MessagingSettings.MessageBrokers.TryGetValue(adapterKey, out var section))
+                return false;
+
+            output = section.Get<T>();
+            return true;
+        }
     }
 }
