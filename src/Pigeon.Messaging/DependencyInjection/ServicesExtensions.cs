@@ -6,7 +6,7 @@
     using Pigeon.Messaging.Consuming.Dispatching;
     using Pigeon.Messaging.Consuming.Management;
     using Pigeon.Messaging.Contracts;
-    using Pigeon.Messaging.Publishing;
+    using Pigeon.Messaging.Producing;
 
     /// <summary>
     /// Provides extension methods for registering the Pigeon messaging infrastructure
