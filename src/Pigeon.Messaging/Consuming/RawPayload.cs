@@ -109,7 +109,7 @@
         {
             using var doc = JsonDocument.Parse(RawJson);
 
-            if (!doc.RootElement.TryGetProperty("RawMetadata", out var metaElement))
+            if (!doc.RootElement.TryGetProperty("Metadata", out var metaElement))
                 return new Dictionary<string, JsonElement>();
 
             var dict = new Dictionary<string, JsonElement>();
