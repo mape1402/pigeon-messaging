@@ -4,7 +4,7 @@
     /// Defines the contract for an adapter that connects to the underlying message broker
     /// and raises an event when messages are consumed.
     /// </summary>
-    public interface IMessageBrokerAdapter
+    public interface IMessageBrokerConsumingAdapter
     {
         /// <summary>
         /// Starts listening for incoming messages.
