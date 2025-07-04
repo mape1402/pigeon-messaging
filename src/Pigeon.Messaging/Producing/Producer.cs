@@ -2,17 +2,20 @@
 {
     using Pigeon.Messaging;
     using Pigeon.Messaging.Contracts;
+    using Pigeon.Messaging.Producing.Management;
+    using System;
 
     /// <summary>
-    /// Provides a base implementation for a message produce with support for publish interceptors,
+    /// Provides a base implementation for a message producer with support for publish interceptors,
     /// payload wrapping, and versioning.
     /// This abstract class defines the general workflow for publishing a message,
-    /// delegating the actual publish operation to the specific message broker implementation.
+    /// delegating the actual publish operation to the producing manager.
     /// </summary>
-    public abstract class Producer : IProducer
+    public class Producer : IProducer
     {
         private readonly IEnumerable<IPublishInterceptor> _interceptors;
-        private readonly GlobalSettings _options;
+        private readonly IProducingManager _producingManager;
+        private readonly GlobalSettings _settings;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="Producer"/> class.
@@ -21,22 +24,27 @@
         /// A collection of publish interceptors that can enrich or modify the publish context
         /// before the message is sent to the message broker.
         /// </param>
-        /// <param name="options">
-        /// The messaging options containing configuration details such as the domain name.
+        /// <param name="producingManager">
+        /// The producing manager responsible for dispatching the final message payload
+        /// to the configured message broker.
+        /// </param>
+        /// <param name="settings">
+        /// The global messaging settings containing configuration details such as the domain name.
         /// </param>
         /// <exception cref="ArgumentNullException">
-        /// Thrown if <paramref name="interceptors"/> or <paramref name="options"/> is null.
+        /// Thrown if any of the required dependencies are <c>null</c>.
         /// </exception>
-        protected Producer(IEnumerable<IPublishInterceptor> interceptors, GlobalSettings options)
+        public Producer(IEnumerable<IPublishInterceptor> interceptors, IProducingManager producingManager, GlobalSettings settings)
         {
             _interceptors = interceptors ?? throw new ArgumentNullException(nameof(interceptors));
-            _options = options ?? throw new ArgumentNullException(nameof(options));
+            _producingManager = producingManager ?? throw new ArgumentNullException(nameof(producingManager));
+            _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         }
 
         /// <summary>
         /// <inheritdoc/>
         /// </summary>
-        public async ValueTask PublishAsync<T>(T message, string topic, SemanticVersion version, CancellationToken cancellationToken = default) where T : class
+        public virtual async ValueTask PublishAsync<T>(T message, string topic, SemanticVersion version, CancellationToken cancellationToken = default) where T : class
         {
             if (message is null)
                 throw new ArgumentNullException(nameof(message));
@@ -44,6 +52,30 @@
             if (string.IsNullOrWhiteSpace(topic))
                 throw new ArgumentException("Topic cannot be null or empty.", nameof(topic));
 
+            await PublishCore(message, topic, version, cancellationToken);
+        }
+
+        /// <summary>
+        /// <inheritdoc/>
+        /// </summary>
+        public virtual ValueTask PublishAsync<T>(T message, string topic, CancellationToken cancellationToken = default) where T : class
+            => PublishAsync(message, topic, SemanticVersion.Default, cancellationToken);
+
+        /// <summary>
+        /// Defines the core logic for publishing a message.
+        /// Applies all registered interceptors, wraps the payload with metadata and versioning,
+        /// and delegates the final push to the producing manager.
+        /// </summary>
+        /// <typeparam name="T">The type of the message payload.</typeparam>
+        /// <param name="message">The message instance to publish.</param>
+        /// <param name="topic">The target topic or channel.</param>
+        /// <param name="version">The semantic version of the message contract.</param>
+        /// <param name="cancellationToken">
+        /// A cancellation token to observe while waiting for the task to complete.
+        /// </param>
+        /// <returns>A <see cref="ValueTask"/> representing the asynchronous operation.</returns>
+        protected virtual async ValueTask PublishCore<T>(T message, string topic, SemanticVersion version, CancellationToken cancellationToken = default) where T : class
+        {
             var publishContext = new PublishContext();
 
             foreach (var interceptor in _interceptors)
@@ -55,31 +87,10 @@
                 Message = message,
                 MessageVersion = version,
                 Metadata = publishContext.GetMetadata(),
-                Domain = _options.Domain
+                Domain = _settings.Domain
             };
 
-            await PublishCore(payload, topic, cancellationToken);
+            await _producingManager.PushAsync(payload, topic, cancellationToken);
         }
-
-        /// <summary>
-        /// <inheritdoc/>
-        /// </summary>
-        public ValueTask PublishAsync<T>(T message, string topic, CancellationToken cancellationToken = default) where T : class
-            => PublishAsync(message, topic, SemanticVersion.Default, cancellationToken);
-
-        /// <summary>
-        /// Publishes the wrapped payload to the underlying message broker.
-        /// Implement this method to handle the specific publish logic for
-        /// RabbitMQ, Kafka, Azure Service Bus, etc.
-        /// </summary>
-        /// <typeparam name="T">The type of the message payload.</typeparam>
-        /// <param name="payload">The wrapped payload including metadata, domain, version, and message.</param>
-        /// <param name="topic">The target topic or queue.</param>
-        /// <param name="cancellationToken">
-        /// A token to monitor for cancellation requests.
-        /// This allows the operation to be cancelled before completion.
-        /// </param>
-        /// <returns>A ValueTask representing the asynchronous operation.</returns>
-        protected abstract ValueTask PublishCore<T>(WrappedPayload<T> payload, string topic, CancellationToken cancellationToken = default) where T : class;
     }
 }

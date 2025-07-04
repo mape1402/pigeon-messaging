@@ -7,6 +7,7 @@
     using Pigeon.Messaging.Consuming.Management;
     using Pigeon.Messaging.Contracts;
     using Pigeon.Messaging.Producing;
+    using Pigeon.Messaging.Producing.Management;
 
     /// <summary>
     /// Provides extension methods for registering the Pigeon messaging infrastructure
@@ -37,6 +38,9 @@
             services.AddSingleton(consumingConfigurator);
             services.AddSingleton<IConsumingDispatcher, ConsumingDispatcher>();
             services.AddSingleton<IConsumingManager, ConsumingManager>();
+
+            services.AddScoped<IProducer, Producer>();
+            services.AddSingleton<IProducingManager, ProducingManager>();
 
             // Bind the MessagingSettings from configuration.
             var settings = configuration
