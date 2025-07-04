@@ -1,14 +1,14 @@
-﻿namespace Pigeon.Messaging.Consuming
+﻿namespace Pigeon.Messaging.Consuming.Dispatching
 {
     /// <summary>
-    /// Defines the contract for a consuming engine responsible for
+    /// Defines the contract for a consuming dispatcher responsible for
     /// dispatching raw payloads to their corresponding message handlers
     /// based on topic and version.
     /// </summary>
-    public interface IConsumingEngine
+    public interface IConsumingDispatcher
     {
         /// <summary>
-        /// Handles a raw payload asynchronously by resolving the appropriate
+        /// Dispatches a raw payload asynchronously by resolving the appropriate
         /// consumer configuration for the given topic and message version.
         /// </summary>
         /// <param name="topic">
@@ -24,6 +24,6 @@
         /// <returns>
         /// A <see cref="Task"/> representing the asynchronous handling operation.
         /// </returns>
-        Task HandleAsync(string topic, RawPayload rawPayload, CancellationToken cancellationToken = default);
+        Task DispatchAsync(string topic, RawPayload rawPayload, CancellationToken cancellationToken = default);
     }
 }

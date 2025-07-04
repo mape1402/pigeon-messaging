@@ -1,4 +1,4 @@
-﻿namespace Pigeon.Messaging.Consuming
+﻿namespace Pigeon.Messaging.Consuming.Dispatching
 {
     using Pigeon.Messaging.Contracts;
     using System.Collections.Concurrent;

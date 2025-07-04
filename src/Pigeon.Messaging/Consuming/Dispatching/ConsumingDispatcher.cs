@@ -1,18 +1,18 @@
-﻿namespace Pigeon.Messaging.Consuming
+﻿namespace Pigeon.Messaging.Consuming.Dispatching
 {
     using Microsoft.Extensions.DependencyInjection;
     using Pigeon.Messaging.Consuming.Configuration;
 
-    internal class ConsumingEngine : IConsumingEngine
+    internal class ConsumingDispatcher : IConsumingDispatcher
     {
         private readonly IServiceProvider _serviceProvider;
 
-        public ConsumingEngine(IServiceProvider serviceProvider)
+        public ConsumingDispatcher(IServiceProvider serviceProvider)
         {
             _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
         }
 
-        public async Task HandleAsync(string topic, RawPayload rawPayload, CancellationToken cancellationToken = default)
+        public async Task DispatchAsync(string topic, RawPayload rawPayload, CancellationToken cancellationToken = default)
         {
             if(string.IsNullOrWhiteSpace(topic))
                 throw new ArgumentNullException(nameof(topic));
