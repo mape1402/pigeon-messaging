@@ -2,18 +2,38 @@
 {
     using Microsoft.Extensions.Options;
     using RabbitMQ.Client;
+    using System;
+    using System.Threading;
+    using System.Threading.Tasks;
 
+    /// <summary>
+    /// Provides RabbitMQ connection and channel management with safe async initialization and disposal.
+    /// Maintains a singleton <see cref="IConnection"/> instance reused across channels.
+    /// </summary>
     internal class ConnectionProvider : IConnectionProvider, IAsyncDisposable
     {
         private readonly RabbitSettings _options;
         private IConnection _connection;
+
+        // Semaphore to ensure only one concurrent connection creation operation
         private readonly SemaphoreSlim _connectionLock = new(1, 1);
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ConnectionProvider"/> class.
+        /// </summary>
+        /// <param name="options">The RabbitMQ settings injected via options pattern.</param>
+        /// <exception cref="ArgumentNullException">Thrown if options is null.</exception>
         public ConnectionProvider(IOptions<RabbitSettings> options)
         {
             _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
         }
 
+        /// <summary>
+        /// Creates or returns an open RabbitMQ connection asynchronously.
+        /// Ensures thread-safe lazy initialization using a semaphore.
+        /// </summary>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>A task that completes with an open <see cref="IConnection"/>.</returns>
         public async Task<IConnection> CreateConnectionAsync(CancellationToken cancellationToken = default)
         {
             if (_connection != null && _connection.IsOpen)
@@ -35,6 +55,12 @@
             }
         }
 
+        /// <summary>
+        /// Creates a new channel on the current open connection.
+        /// If the connection is not open, it will be created first.
+        /// </summary>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>A task that completes with a new <see cref="IChannel"/> instance.</returns>
         public async Task<IChannel> CreateChannelAsync(CancellationToken cancellationToken = default)
         {
             if (_connection == null || !_connection.IsOpen)
@@ -43,6 +69,10 @@
             return await _connection.CreateChannelAsync(cancellationToken: cancellationToken);
         }
 
+        /// <summary>
+        /// Asynchronously disposes the RabbitMQ connection by closing it if open and releasing resources.
+        /// </summary>
+        /// <returns>A task representing the asynchronous dispose operation.</returns>
         public async ValueTask DisposeAsync()
         {
             if (_connection != null)
