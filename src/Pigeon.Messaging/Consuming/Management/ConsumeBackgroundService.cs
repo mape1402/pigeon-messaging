@@ -11,7 +11,7 @@
     /// orchestrating the connection to the message broker, managing subscriptions,
     /// and executing the consumer pipeline.
     /// </remarks>
-    public class ConsumeBackgroundService : BackgroundService
+    public class ConsumeBackgroundService : IHostedService
     {
         private readonly IConsumingManager _consumingManager;
 
@@ -31,15 +31,26 @@
         }
 
         /// <summary>
-        /// Starts the background consuming loop by delegating to the <see cref="IConsumingManager"/>.
+        /// Starts the background service, initiating the message consumption process
+        /// via the configured <see cref="IConsumingManager"/>.
         /// </summary>
-        /// <param name="stoppingToken">
-        /// A <see cref="CancellationToken"/> that indicates when the host is shutting down.
+        /// <param name="cancellationToken">
+        /// A token to signal that start operation should be canceled.
         /// </param>
-        /// <returns>
-        /// A <see cref="Task"/> that represents the background operation.
-        /// </returns>
-        protected override Task ExecuteAsync(CancellationToken stoppingToken)
-            => _consumingManager.StartAsync(stoppingToken);
+        /// <returns>A <see cref="Task"/> representing the asynchronous start operation.</returns>
+        public Task StartAsync(CancellationToken cancellationToken)
+            => _consumingManager.StartAsync(cancellationToken);
+
+        /// <summary>
+        /// Stops the background service, triggering a graceful shutdown
+        /// of the message consumption process via the configured <see cref="IConsumingManager"/>.
+        /// </summary>
+        /// <param name="cancellationToken">
+        /// A token to signal that stop operation should be canceled.
+        /// </param>
+        /// <returns>A <see cref="Task"/> representing the asynchronous stop operation.</returns>
+        public Task StopAsync(CancellationToken cancellationToken)
+            => _consumingManager.StopAsync(cancellationToken);
+
     }
 }
