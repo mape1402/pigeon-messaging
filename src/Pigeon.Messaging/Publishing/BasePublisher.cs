@@ -1,6 +1,5 @@
 ﻿namespace Pigeon.Messaging.Publishing
 {
-    using Microsoft.Extensions.Options;
     using Pigeon.Messaging.Contracts;
 
     /// <summary>
@@ -12,7 +11,7 @@
     public abstract class BasePublisher : IPublisher
     {
         private readonly IEnumerable<IPublishInterceptor> _interceptors;
-        private readonly MessagingOptions _options;
+        private readonly GlobalSettings _options;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="BasePublisher"/> class.
@@ -27,10 +26,10 @@
         /// <exception cref="ArgumentNullException">
         /// Thrown if <paramref name="interceptors"/> or <paramref name="options"/> is null.
         /// </exception>
-        protected BasePublisher(IEnumerable<IPublishInterceptor> interceptors, IOptions<MessagingOptions> options)
+        protected BasePublisher(IEnumerable<IPublishInterceptor> interceptors, GlobalSettings options)
         {
             _interceptors = interceptors ?? throw new ArgumentNullException(nameof(interceptors));
-            _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
+            _options = options ?? throw new ArgumentNullException(nameof(options));
         }
 
         /// <summary>
