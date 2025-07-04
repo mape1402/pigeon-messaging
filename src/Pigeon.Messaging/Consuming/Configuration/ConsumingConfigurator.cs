@@ -3,10 +3,11 @@
     using Pigeon.Messaging.Consuming.Dispatching;
     using Pigeon.Messaging.Contracts;
     using System.Collections.Concurrent;
+    using System.Collections.Generic;
 
     internal class ConsumingConfigurator : IConsumingConfigurator
     {
-        private readonly ConcurrentDictionary<(string, SemanticVersion), ConsumerConfiguration> _consumers = new();
+        private readonly ConcurrentDictionary<(string Topic, SemanticVersion Version), ConsumerConfiguration> _consumers = new();
 
         public IConsumingConfigurator AddConsumer<T>(string topic, SemanticVersion version, ConsumeHandler<T> handler) where T : class
         {
@@ -54,6 +55,9 @@
 
         public ConsumerConfiguration GetConfiguration(string topic)
             => GetConfiguration(topic, SemanticVersion.Default);
+
+        public IEnumerable<string> GetAllTopics()
+            => _consumers.Keys.Select(x => x.Topic);
 
         private void CheckTopic(string topic)
         {

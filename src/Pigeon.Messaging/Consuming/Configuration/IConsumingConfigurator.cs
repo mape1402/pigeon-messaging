@@ -62,5 +62,18 @@
         /// <param name="topic">The topic or channel to look up.</param>
         /// <returns>The matching <see cref="ConsumerConfiguration"/>.</returns>
         ConsumerConfiguration GetConfiguration(string topic);
+
+        /// <summary>
+        /// Retrieves all registered topic names currently configured in the consuming engine.
+        /// </summary>
+        /// <remarks>
+        /// This can be useful for diagnostics, monitoring, or dynamically inspecting
+        /// which topics have active consumers.
+        /// </remarks>
+        /// <returns>
+        /// An <see cref="IEnumerable{T}"/> containing all topic names
+        /// with at least one registered consumer.
+        /// </returns>
+        IEnumerable<string> GetAllTopics();
     }
 }

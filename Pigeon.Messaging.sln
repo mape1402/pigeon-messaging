@@ -16,6 +16,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 		Directory.Build.props = Directory.Build.props
 	EndProjectSection
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pigeon.Messaging.Rabbit", "src\Pigeon.Messaging.Rabbit\Pigeon.Messaging.Rabbit.csproj", "{B548D2AB-9C88-483D-9687-E340405302B7}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -30,6 +32,10 @@ Global
 		{51F19562-46AD-49A0-83DE-1604D789A9C7}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{51F19562-46AD-49A0-83DE-1604D789A9C7}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{51F19562-46AD-49A0-83DE-1604D789A9C7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B548D2AB-9C88-483D-9687-E340405302B7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B548D2AB-9C88-483D-9687-E340405302B7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B548D2AB-9C88-483D-9687-E340405302B7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B548D2AB-9C88-483D-9687-E340405302B7}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -37,6 +43,7 @@ Global
 	GlobalSection(NestedProjects) = preSolution
 		{1DEAB35F-07FA-40A0-83BA-01527DF27080} = {6711B2C7-0746-4A45-8E61-BA235480C06A}
 		{51F19562-46AD-49A0-83DE-1604D789A9C7} = {E888E2D4-A105-4B19-8A53-86DFDA724740}
+		{B548D2AB-9C88-483D-9687-E340405302B7} = {6711B2C7-0746-4A45-8E61-BA235480C06A}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {3F2B5274-3B0F-4F73-B211-9BD128E1AF56}

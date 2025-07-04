@@ -6,12 +6,12 @@
     internal class ConsumingManager : IConsumingManager
     {
         private readonly IConsumingDispatcher _dispatcher;
-        private readonly IEnumerable<IMessageBrokerAdapter> _messageBrokerAdapters;
+        private readonly IEnumerable<IMessageBrokerConsumingAdapter> _messageBrokerAdapters;
         private readonly ILogger<ConsumingManager> _logger;
 
         private CancellationToken _backgroundCancellationToken;
 
-        public ConsumingManager(IConsumingDispatcher dispatcher, IEnumerable<IMessageBrokerAdapter> messageBrokerAdapters, ILogger<ConsumingManager> logger)
+        public ConsumingManager(IConsumingDispatcher dispatcher, IEnumerable<IMessageBrokerConsumingAdapter> messageBrokerAdapters, ILogger<ConsumingManager> logger)
         {
             _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
             _messageBrokerAdapters = messageBrokerAdapters ?? throw new ArgumentNullException(nameof(messageBrokerAdapters));

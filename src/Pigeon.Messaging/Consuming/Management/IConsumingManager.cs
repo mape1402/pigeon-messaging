@@ -2,7 +2,7 @@
 {
     /// <summary>
     /// Defines the contract for the consuming manager, which orchestrates
-    /// the lifecycle of one or more <see cref="IMessageBrokerAdapter"/> instances,
+    /// the lifecycle of one or more <see cref="IMessageBrokerConsumingAdapter"/> instances,
     /// starts the consuming loop, and dispatches consumed messages
     /// to the configured consumers.
     /// </summary>
