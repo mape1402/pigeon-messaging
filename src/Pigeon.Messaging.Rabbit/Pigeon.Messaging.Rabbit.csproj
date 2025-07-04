@@ -21,9 +21,4 @@
     <ProjectReference Include="..\Pigeon.Messaging\Pigeon.Messaging.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="DependencyInjection\" />
-    <Folder Include="Publishing\" />
-  </ItemGroup>
-
 </Project>
