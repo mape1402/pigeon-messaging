@@ -51,12 +51,12 @@
         /// the methods marked with <see cref="ConsumerAttribute"/> as message handlers.
         /// </summary>
         /// <param name="hubConsumers">Enumerable of consumer types.</param>
-        private void ScanHubConsumers(IEnumerable<Type> hubConsumers)
+        internal void ScanHubConsumers(IEnumerable<Type> hubConsumers)
         {
             foreach (var consumerType in hubConsumers)
             {
                 // Defensive check, although Scan already filters these.
-                if (!typeof(HubConsumer).IsAssignableFrom(consumerType))
+                if (consumerType.IsAbstract || !typeof(HubConsumer).IsAssignableFrom(consumerType))
                     continue;
 
                 // Get public instance methods declared only on this type that have ConsumerAttribute
@@ -72,8 +72,9 @@
                     {
                         // Find the message parameter (exclude CancellationToken)
                         var messageParam = method.GetParameters().FirstOrDefault(p => p.ParameterType != typeof(CancellationToken));
-                        if (messageParam == null)
-                            throw new InvalidOperationException($"Method '{method.Name}' must have a message parameter.");
+
+                        if (messageParam == null || method.ReturnType != typeof(Task))
+                            throw new InvalidOperationException($"Method '{method.Name}' in type '{method.DeclaringType}' has an invalid signature.");
 
                         var messageType = messageParam.ParameterType;
 

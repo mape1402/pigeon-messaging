@@ -62,7 +62,7 @@
         /// <summary>
         /// Optional metadata attached to the message envelope.
         /// </summary>
-        public IReadOnlyDictionary<string, object> RawMetadata { get; init; }
+        public IReadOnlyDictionary<string, string> RawMetadata { get; init; }
 
         /// <summary>
         /// Retrieves a strongly typed metadata value by key.
@@ -79,24 +79,19 @@
         /// </exception>
         public T GetMetadata<T>(string key)
         {
-            if (_metadata.TryGetValue(key, out object tValue))
-                return (T)tValue;
+            if (_metadata.TryGetValue(key, out var typed))
+                return (T)typed;
 
             if (!RawMetadata.TryGetValue(key, out var value))
                 throw new KeyNotFoundException($"Key '{key}' not found.");
 
-            if (value is T typed)
-                return typed;
+            var typedValue = JsonSerializer.Deserialize<T>(value);
 
-            if (value is JsonElement je)
-            {
-                var typedValue = je.Deserialize<T>();
+            if(typedValue == null)
+                throw new InvalidCastException($"Cannot cast value of key '{key}' to type '{typeof(T).FullName}'.");
 
-                _metadata.TryAdd(key, typedValue);
-                return typedValue!;
-            }
-
-            throw new InvalidCastException($"Cannot cast value of key '{key}' to type '{typeof(T).FullName}'.");
+            _metadata.TryAdd(key, typedValue);
+            return typedValue!; 
         }
     }
 }

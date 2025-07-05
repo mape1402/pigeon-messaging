@@ -55,7 +55,7 @@
 
             Domain = domainProp.GetString()!;
 
-            if (!root.TryGetProperty("MessageVersion", out var versionProp) || versionProp.ValueKind != JsonValueKind.Object)
+            if (!root.TryGetProperty("MessageVersion", out var versionProp) || versionProp.ValueKind != JsonValueKind.String)
                 throw new JsonException("Missing or invalid 'MessageVersion' property.");
 
             MessageVersion = versionProp.GetString();
@@ -105,17 +105,17 @@
         /// Consumers can use <see cref="JsonElement"/> to deserialize each value
         /// lazily and safely to the desired type when needed.
         /// </remarks>
-        public IReadOnlyDictionary<string, JsonElement> GetMetadata()
+        public IReadOnlyDictionary<string, string> GetMetadata()
         {
             using var doc = JsonDocument.Parse(RawJson);
 
             if (!doc.RootElement.TryGetProperty("Metadata", out var metaElement))
-                return new Dictionary<string, JsonElement>();
+                return new Dictionary<string, string>();
 
-            var dict = new Dictionary<string, JsonElement>();
+            var dict = new Dictionary<string, string>();
 
             foreach (var prop in metaElement.EnumerateObject())
-                dict[prop.Name] = prop.Value;
+                dict[prop.Name] = prop.Value.GetRawText();
 
             return dict;
         }

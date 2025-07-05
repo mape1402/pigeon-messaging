@@ -12,8 +12,12 @@
         /// the message is sent.
         /// </summary>
         /// <param name="publishContext">The context of the publish operation,
-        /// containing metadata and other information about the message.</param>
+        /// containing metadata and other information about the message.
+        /// </param>
+        /// <param name="cancellationToken">
+        /// A token for cooperative cancellation.
+        /// </param>
         /// <returns>A <see cref="ValueTask"/> representing the asynchronous operation.</returns>
-        ValueTask Intercept(PublishContext publishContext);
+        ValueTask Intercept(PublishContext publishContext, CancellationToken cancellationToken = default);
     }
 }

@@ -24,7 +24,6 @@
 
                 var interceptors = scope.ServiceProvider.GetServices<IConsumeInterceptor>();
 
-                var rawMetadata = rawPayload.GetMetadata();
                 var context = new ConsumeContext
                 {
                     CancellationToken = cancellationToken,
@@ -35,7 +34,7 @@
                     Services = scope.ServiceProvider,
                     Topic = topic,
                     Message = rawPayload.GetMessage(configuration.MessageType),
-                    RawMetadata = rawMetadata.ToDictionary(kvp => kvp.Key, kvp => (object)kvp.Value)
+                    RawMetadata = rawPayload.GetMetadata()
                 };
 
                 foreach (var interceptor in interceptors)
