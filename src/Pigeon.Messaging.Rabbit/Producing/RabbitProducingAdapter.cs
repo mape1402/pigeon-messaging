@@ -72,7 +72,7 @@
                 var body = Encoding.UTF8.GetBytes(payloadJson);
 
                 // Publish the message to the topic with default exchange (empty string)
-                await _channel.BasicPublishAsync(string.Empty, topic, body, cancellationToken);
+                await _channel.BasicPublishAsync<BasicProperties>(string.Empty, topic, false, new BasicProperties(), body,  cancellationToken);
             }
             catch (Exception ex)
             {

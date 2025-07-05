@@ -9,6 +9,6 @@
         /// Gets the connection URI used to establish a connection with the RabbitMQ broker.
         /// Example: amqp://user:password@host:port/vhost
         /// </summary>
-        public string Url { get; init; }
+        public string Url { get; set; }
     }
 }
