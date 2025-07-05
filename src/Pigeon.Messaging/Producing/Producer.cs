@@ -79,7 +79,7 @@
             var publishContext = new PublishContext();
 
             foreach (var interceptor in _interceptors)
-                await interceptor.Intercept(publishContext);
+                await interceptor.Intercept(publishContext, cancellationToken);
 
             var payload = new WrappedPayload<T>
             {

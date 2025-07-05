@@ -1,6 +1,7 @@
 ﻿namespace Microsoft.Extensions.DependencyInjection
 {
     using Microsoft.Extensions.Configuration;
+    using Microsoft.Extensions.Options;
     using Pigeon.Messaging;
     using Pigeon.Messaging.Consuming.Configuration;
     using Pigeon.Messaging.Consuming.Dispatching;
@@ -47,8 +48,7 @@
                 .GetSection(PigeonSettingsKeyMap)
                 .Get<MessagingSettings>();
 
-            services.Configure<MessagingSettings>(
-                opts => configuration.GetSection(PigeonSettingsKeyMap).Bind(opts));
+            services.AddSingleton(Options.Create(settings));
 
             // Initialize the global settings builder.
             var settingsBuilder = new GlobalSettingsBuilder(
