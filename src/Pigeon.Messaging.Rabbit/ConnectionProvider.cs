@@ -17,15 +17,17 @@
 
         // Semaphore to ensure only one concurrent connection creation operation
         private readonly SemaphoreSlim _connectionLock = new(1, 1);
+        private readonly IConnectionFactory _factory;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="ConnectionProvider"/> class.
         /// </summary>
         /// <param name="options">The RabbitMQ settings injected via options pattern.</param>
         /// <exception cref="ArgumentNullException">Thrown if options is null.</exception>
-        public ConnectionProvider(IOptions<RabbitSettings> options)
+        public ConnectionProvider(IConnectionFactory factory, IOptions<RabbitSettings> options)
         {
             _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
+            _factory = factory ?? throw new ArgumentNullException(nameof(factory));
         }
 
         /// <summary>
@@ -44,8 +46,8 @@
             {
                 if (_connection == null || !_connection.IsOpen)
                 {
-                    var factory = new ConnectionFactory { Uri = new Uri(_options.Url) };
-                    _connection = await factory.CreateConnectionAsync(cancellationToken);
+                    _factory.Uri = new Uri(_options.Url);
+                    _connection = await _factory.CreateConnectionAsync(cancellationToken);
                 }
                 return _connection;
             }

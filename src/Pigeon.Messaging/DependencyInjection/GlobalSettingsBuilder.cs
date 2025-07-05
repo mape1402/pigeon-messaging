@@ -31,7 +31,7 @@
         /// <exception cref="ArgumentNullException">
         /// Thrown if any of the required dependencies are null.
         /// </exception>
-        internal GlobalSettingsBuilder(
+        public GlobalSettingsBuilder(
             IServiceCollection services,
             IConfiguration configuration,
             IConsumingConfigurator consumingConfigurator,

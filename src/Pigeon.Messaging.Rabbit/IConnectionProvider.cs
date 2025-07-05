@@ -16,10 +16,10 @@
         Task<IConnection> CreateConnectionAsync(CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// Creates a new logical channel (IModel) for communicating with RabbitMQ.
+        /// Creates a new logical channel for communicating with RabbitMQ.
         /// </summary>
         /// <param name="cancellationToken">Optional cancellation token.</param>
-        /// <returns>A new <see cref="IModel"/> instance.</returns>
+        /// <returns>A new <see cref="IChannel"/> instance.</returns>
         Task<IChannel> CreateChannelAsync(CancellationToken cancellationToken = default);
     }
 }
