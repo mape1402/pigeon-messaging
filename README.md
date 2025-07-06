@@ -89,31 +89,31 @@ public class UserHubConsumer : HubConsumer{
     
     // Support Dependency Injection
     public UserHubConsumer(IAnyService service){
-        //...
-        // Consuming Context Access by property Context
-	   Console.WriteLine($"Received new message. Topic: {Context.Topic} Version: {Context.MessageVersion} From: {Context.From}");
+      //...
+      // Consuming Context Access by property Context
+	 Console.WriteLine($"Received new message. Topic: {Context.Topic} Version: {Context.MessageVersion} From: {Context.From}");
     }
     
     // Easy consumer by attribute declaration
     [Consumer("create-user", "1.0.0")]
     public Task CreateUser(CreateUserMessage message, CancellationToken cancellationToken = default){
-        //DO something ...
-		return Task.CompletedTask;
+       //DO something ...
+	  return Task.CompletedTask;
     }
     
     // Support for multiple versioning or topics
     [Consumer("update-user", ["1.0.1"])]
     [Consumer("update-user", ["1.0.0"])] 
     public Task UpdateUser(UpdateUserMessage message, CancellationToken cancellationToken = default){
-        //DO something ...
-		return Task.CompletedTask;
+      //DO something ...
+	  return Task.CompletedTask;
     }
 
     // Support for multiple consumers by version 
 	[Consumer("update-user", ["2.0.0"])]
     public Task UpdateUserV2(UpdateUserV2Message message, CancellationToken cancellationToken = default){
-        //DO something ...
-		return Task.CompletedTask;
+      //DO something ...
+	  return Task.CompletedTask;
     }
 }
 ```
@@ -154,14 +154,14 @@ public class MyPublishInterceptor : IPublishInterceptor{
     }
     
     public ValueTask Intercept(PublishContext context, CancellationToken cancellationToken = default){	   
-        // Do something...
-        var myMetadata = new MyMetadata{
-          SomeValue = "Attach extra information to your messages such as tracing, SAGAS information, security information, etc."  
-        };
+      // Do something...
+      var myMetadata = new MyMetadata{
+        SomeValue = "Attach extra information to your messages such as tracing, SAGAS information, security information, etc."  
+      };
         
-        context.AddMetadata("MyMetadata", myMetadata);
+      context.AddMetadata("MyMetadata", myMetadata);
         
-        return ValueTask.CompletedTask;
+      return ValueTask.CompletedTask;
     }
 }
 
@@ -173,11 +173,11 @@ public class MyConsumeInterceptor : IConsumeInterceptor{
     }
     
     public ValueTask Intercept(ConsumeContext context, CancellationToken cancellationToken = default){
-        var myMetadata = context.GetMetadata<MyMetadata>("MyMetadata");
+      var myMetadata = context.GetMetadata<MyMetadata>("MyMetadata");
 	   
-        // Do something...
+      // Do something...
         
-        return ValueTask.CompletedTask;
+      return ValueTask.CompletedTask;
     }
 }
 ```
@@ -198,10 +198,12 @@ builder.Services.AddPigeon(builder.Configuration, config =>
 ```json
 {
   "Pigeon": {
-    "Domain": "YourApp.Domain"
-  },
-  "RabbitMq": {
-    "Url": "amqp://guest:guest@localhost:5672"
+    "Domain": "YourApp.Domain",
+    "MessageBrokers": {
+        "RabbitMq": {
+            "Url": "amqp://guest:guest@localhost:5672"
+          }
+    }  
   }
 }
 ```
