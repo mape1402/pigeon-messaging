@@ -39,6 +39,7 @@
             services.AddSingleton(consumingConfigurator);
             services.AddSingleton<IConsumingDispatcher, ConsumingDispatcher>();
             services.AddSingleton<IConsumingManager, ConsumingManager>();
+            services.AddHostedService<ConsumeBackgroundService>();
 
             services.AddScoped<IProducer, Producer>();
             services.AddSingleton<IProducingManager, ProducingManager>();
