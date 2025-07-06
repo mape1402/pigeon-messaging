@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [v1.0.4] - 2025-07-06
+
+### Fixed
+
+- 🐛 Corrected payload serialization when producer publishes a message.
+
+------
+
 ## [v1.0.3] - 2025-07-06
 
 ### Fixed
