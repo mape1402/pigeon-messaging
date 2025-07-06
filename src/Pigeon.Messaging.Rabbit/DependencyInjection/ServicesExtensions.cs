@@ -6,6 +6,7 @@
     using Pigeon.Messaging.Rabbit;
     using Pigeon.Messaging.Rabbit.Consuming;
     using Pigeon.Messaging.Rabbit.Producing;
+    using RabbitMQ.Client;
 
     /// <summary>
     /// Extension methods to add RabbitMQ support to the Pigeon messaging infrastructure.
@@ -23,6 +24,7 @@
         {
             builder.AddFeature(ftBuilder =>
             {
+                ftBuilder.Services.AddSingleton<IConnectionFactory>(_ => new ConnectionFactory());
                 ftBuilder.Services.AddSingleton<IConnectionProvider, ConnectionProvider>();
                 ftBuilder.Services.AddSingleton<IMessageBrokerConsumingAdapter, RabbitConsumingAdapter>();
                 ftBuilder.Services.AddSingleton<IMessageBrokerProducingAdapter, RabbitProducingAdapter>();
