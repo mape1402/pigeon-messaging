@@ -8,8 +8,8 @@
 
   <PropertyGroup>
     <PackageId>Pigeon.Messaging</PackageId>   
-    <Description></Description>
-    <PackageTags></PackageTags>
+    <Description>Pigeon is a lightweight, extensible library for .NET (or your chosen platform) that abstracts integration with messaging systems like RabbitMQ, Kafka, Azure Service Bus, and more.</Description>
+    <PackageTags>messaging message-brokers distributed-systems microservices pigeon pub/sub</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>

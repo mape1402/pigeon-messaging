@@ -8,8 +8,8 @@
 
   <PropertyGroup>
     <PackageId>Pigeon.Messaging.Rabbit</PackageId>
-    <Description></Description>
-    <PackageTags></PackageTags>
+    <Description>Official RabbitMQ adapter for Pigeon messaging.</Description>
+    <PackageTags>messaging message-brokers distributed-systems microservices pigeon pub/sub</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>
