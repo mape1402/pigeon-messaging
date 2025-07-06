@@ -12,11 +12,11 @@
 
     <Authors>Mario Perez</Authors>
     <Company>Elysium Coding</Company>
-    <RepositoryUrl></RepositoryUrl>
+    <RepositoryUrl>https://github.com/mape1402/pigeon-messaging</RepositoryUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <PackageProjectUrl></PackageProjectUrl>
+    <PackageProjectUrl>https://github.com/mape1402/pigeon-messaging</PackageProjectUrl>
     <PackageIcon>image.png</PackageIcon>
-    <PackageReleaseNotes></PackageReleaseNotes>
+    <PackageReleaseNotes>https://github.com/mape1402/pigeon-messaging/releases</PackageReleaseNotes>
     <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
 
