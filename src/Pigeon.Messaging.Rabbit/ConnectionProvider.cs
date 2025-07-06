@@ -22,8 +22,15 @@
         /// <summary>
         /// Initializes a new instance of the <see cref="ConnectionProvider"/> class.
         /// </summary>
-        /// <param name="options">The RabbitMQ settings injected via options pattern.</param>
-        /// <exception cref="ArgumentNullException">Thrown if options is null.</exception>
+        /// <param name="factory">
+        /// The <see cref="IConnectionFactory"/> used to create RabbitMQ connections.
+        /// </param>
+        /// <param name="options">
+        /// The RabbitMQ configuration settings injected via the options pattern.
+        /// </param>
+        /// <exception cref="ArgumentNullException">
+        /// Thrown if <paramref name="factory"/> or <paramref name="options"/> is null.
+        /// </exception>
         public ConnectionProvider(IConnectionFactory factory, IOptions<RabbitSettings> options)
         {
             _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
