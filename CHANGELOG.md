@@ -7,7 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [v1.0.1] - 2025-07-05
+
+### Fixed
+
+- 🐛 Corrected pack in publish pipeline.
+
 ## [v1.0.0] - 2025-07-05
+
 ### Added
 - 🎉 First stable release of Pigeon.Messaging core.
 - 🎉 Includes a RabbitMQ adapter in `Pigeon.Messaging.RabbitMq`.

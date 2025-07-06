@@ -38,7 +38,7 @@ jobs:
         run: dotnet test --no-build --configuration Release --verbosity normal
 
       - name: 📦 Pack (for publish)
-        run: dotnet pack src/Pigeon.Messaging/Pigeon.Messaging.csproj --no-build --configuration Release --output ./nupkgs
+        run: dotnet pack Pigeon.Messaging.sln --no-build --configuration Release --output ./nupkgs
 
       - name: 📤 Upload artifacts
         uses: actions/upload-artifact@v4
