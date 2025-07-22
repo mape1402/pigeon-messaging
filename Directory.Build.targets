@@ -1,0 +1,11 @@
+<Project>
+  <ItemGroup>
+    <PackageReference Update="Microsoft.Extensions.Configuration.Binder" Version="9.0.6"/>
+    <PackageReference Update="Microsoft.Extensions.DependencyInjection" Version="9.0.6"/>
+    <PackageReference Update="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.6"/>
+    <PackageReference Update="Microsoft.Extensions.Hosting.Abstractions" Version="9.0.6"/>
+    <PackageReference Update="Microsoft.Extensions.Options" Version="9.0.6"/>
+    <PackageReference Update="RabbitMQ.Client" Version="7.1.2"/>
+    <PackageReference Update="MinVer" Version="6.0.0"/>
+  </ItemGroup>
+</Project>
