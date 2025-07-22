@@ -1,6 +1,7 @@
 ﻿namespace Pigeon.Messaging.RabbitMq.Tests.Consuming
 {
     using Microsoft.Extensions.Logging;
+    using Microsoft.Extensions.Options;
     using NSubstitute;
     using Pigeon.Messaging.Consuming.Configuration;
     using Pigeon.Messaging.Consuming.Management;
@@ -18,8 +19,8 @@
         private readonly IConnectionProvider _connectionProvider = Substitute.For<IConnectionProvider>();
         private readonly IConsumingConfigurator _consumingConfigurator = Substitute.For<IConsumingConfigurator>();
         private readonly ILogger<RabbitConsumingAdapter> _logger = Substitute.For<ILogger<RabbitConsumingAdapter>>();
-
         private readonly IChannel _channel = Substitute.For<IChannel>();
+        private readonly IOptions<GlobalSettings> _options = Options.Create(new GlobalSettings { Domain = "test" });
 
         [Fact]
         public async Task Should_StartConsume_And_RegisterConsumerPerTopic()
@@ -29,7 +30,7 @@
             _consumingConfigurator.GetAllTopics().Returns(topics);
             _connectionProvider.CreateChannelAsync(Arg.Any<CancellationToken>()).Returns(_channel);
 
-            var adapter = new RabbitConsumingAdapter(_connectionProvider, _consumingConfigurator, _logger);
+            var adapter = new RabbitConsumingAdapter(_connectionProvider, _consumingConfigurator, _options, _logger);
 
             // Act
             await adapter.StartConsumeAsync();
@@ -55,7 +56,7 @@
             _consumingConfigurator.GetAllTopics().Returns(new[] { topic, topic });
             _connectionProvider.CreateChannelAsync(Arg.Any<CancellationToken>()).Returns(_channel);
 
-            var adapter = new RabbitConsumingAdapter(_connectionProvider, _consumingConfigurator, _logger);
+            var adapter = new RabbitConsumingAdapter(_connectionProvider, _consumingConfigurator, _options, _logger);
 
             // Act
             await adapter.StartConsumeAsync();
@@ -74,7 +75,7 @@
         public void Should_Invoke_MessageConsumed_WhenMessageReceived()
         {
             // Arrange
-            var adapter = new RabbitConsumingAdapter(_connectionProvider, _consumingConfigurator, _logger);
+            var adapter = new RabbitConsumingAdapter(_connectionProvider, _consumingConfigurator, _options, _logger);
 
             bool eventRaised = false;
             adapter.MessageConsumed += (s, e) =>
@@ -113,7 +114,7 @@
             _consumingConfigurator.GetAllTopics().Returns(new[] { "topic1" });
             _connectionProvider.CreateChannelAsync(Arg.Any<CancellationToken>()).Returns(_channel);
 
-            var adapter = new RabbitConsumingAdapter(_connectionProvider, _consumingConfigurator, _logger);
+            var adapter = new RabbitConsumingAdapter(_connectionProvider, _consumingConfigurator, _options, _logger);
             await adapter.StartConsumeAsync();
 
             // Act

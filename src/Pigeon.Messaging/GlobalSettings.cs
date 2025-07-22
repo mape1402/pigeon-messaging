@@ -17,7 +17,7 @@
         /// for published and consumed messages.
         /// This can be used for multi-tenant isolation or to categorize messages.
         /// </summary>
-        public string Domain { get; internal set; }
+        public string Domain { get; set; }
 
         /// <summary>
         /// Gets or sets the assemblies that should be scanned for
@@ -28,6 +28,6 @@
         /// By default, this is an empty array and must be populated
         /// via the <c>GlobalSettingsBuilder</c> during configuration.
         /// </remarks>
-        public Assembly[] TargetAssemblies { get; internal set; } = Array.Empty<Assembly>();
+        public Assembly[] TargetAssemblies { get; set; } = Array.Empty<Assembly>();
     }
 }

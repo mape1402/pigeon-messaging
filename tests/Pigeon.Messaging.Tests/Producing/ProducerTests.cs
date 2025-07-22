@@ -2,6 +2,7 @@
 using Pigeon.Messaging.Contracts;
 using Pigeon.Messaging.Producing;
 using Pigeon.Messaging.Producing.Management;
+using Microsoft.Extensions.Options;
 
 namespace Pigeon.Messaging.Tests.Producing
 {
@@ -13,9 +14,10 @@ namespace Pigeon.Messaging.Tests.Producing
             var manager = Substitute.For<IProducingManager>();
             var settings = new GlobalSettings { Domain = "test" };
             var interceptors = Enumerable.Empty<IPublishInterceptor>();
+            var options = Options.Create(settings);
 
-            Assert.Throws<ArgumentNullException>(() => new Producer(null, manager, settings));
-            Assert.Throws<ArgumentNullException>(() => new Producer(interceptors, null, settings));
+            Assert.Throws<ArgumentNullException>(() => new Producer(null, manager, options));
+            Assert.Throws<ArgumentNullException>(() => new Producer(interceptors, null, options));
             Assert.Throws<ArgumentNullException>(() => new Producer(interceptors, manager, null));
         }
 
@@ -25,8 +27,9 @@ namespace Pigeon.Messaging.Tests.Producing
             var interceptor = Substitute.For<IPublishInterceptor>();
             var manager = Substitute.For<IProducingManager>();
             var settings = new GlobalSettings { Domain = "test-domain" };
+            var options = Options.Create(settings);
 
-            var producer = new Producer(new[] { interceptor }, manager, settings);
+            var producer = new Producer(new[] { interceptor }, manager, options);
 
             await producer.PublishAsync("msg", "topic");
 
@@ -53,7 +56,8 @@ namespace Pigeon.Messaging.Tests.Producing
             var interceptor = Substitute.For<IPublishInterceptor>();
             var manager = Substitute.For<IProducingManager>();
             var settings = new GlobalSettings { Domain = "test" };
-            return new Producer(new[] { interceptor }, manager, settings);
+            var options = Options.Create(settings);
+            return new Producer(new[] { interceptor }, manager, options);
         }
     }
 }

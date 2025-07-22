@@ -1,6 +1,7 @@
 ﻿namespace Microsoft.Extensions.DependencyInjection
 {
     using Microsoft.Extensions.Configuration;
+    using Microsoft.Extensions.Options;
     using Pigeon.Messaging;
     using Pigeon.Messaging.Consuming.Configuration;
     using Pigeon.Messaging.Consuming.Dispatching;
@@ -54,7 +55,7 @@
                 Domain = messagingSettings.Domain
             };
 
-            services.AddSingleton(GlobalSettings);
+            services.AddSingleton(Options.Create(GlobalSettings));
         }
 
         /// <summary>
