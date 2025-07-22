@@ -1,0 +1,19 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <GenerateDocumentationFile>True</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <PackageId>Pigeon.Messaging.Kafka</PackageId>
+    <Description>Official Kafka adapter for Pigeon messaging.</Description>
+    <PackageTags>kafka messaging message-brokers distributed-systems microservices pigeon pub/sub</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MinVer"/>
+  </ItemGroup>
+
+</Project>

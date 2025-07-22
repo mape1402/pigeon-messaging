@@ -1,6 +1,6 @@
 ﻿<Project>
   <PropertyGroup>
-    <TargetFrameworks>net6.0;net7.0;net8.0;net9.0</TargetFrameworks>
+    <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
     <LangVersion>latest</LangVersion>
     <Nullable>false</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -32,16 +32,6 @@
     <MinVerBuildMetadata>build.{DateTime:yyyyMMddHHmmss}</MinVerBuildMetadata>
     <MinVerIsRelease>false</MinVerIsRelease>
   </PropertyGroup>
-
-  <ItemGroup>
-    <PackageVersion Include="Microsoft.Extensions.Configuration.Binder" Version="9.0.6"/>
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="9.0.6"/>
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.6"/>
-    <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="9.0.6"/>
-    <PackageVersion Include="Microsoft.Extensions.Options" Version="9.0.6"/>
-    <PackageVersion Include="RabbitMQ.Client" Version="7.1.2"/>
-    <PackageVersion Include="MinVer" Version="6.0.0"/>
-  </ItemGroup>
 
   <ItemGroup Condition="'$(IsTestProject)' == 'true'">
     <PackageReference Include="coverlet.collector" Version="6.0.0" />
