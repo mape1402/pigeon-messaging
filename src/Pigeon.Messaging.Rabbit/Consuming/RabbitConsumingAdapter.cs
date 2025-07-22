@@ -1,6 +1,7 @@
 ﻿namespace Pigeon.Messaging.Rabbit.Consuming
 {
     using Microsoft.Extensions.Logging;
+    using Microsoft.Extensions.Options;
     using Pigeon.Messaging.Consuming.Configuration;
     using Pigeon.Messaging.Consuming.Management;
     using RabbitMQ.Client;
@@ -18,6 +19,7 @@
     {
         private readonly IConnectionProvider _connectionProvider;
         private readonly IConsumingConfigurator _consumingConfigurator;
+        private readonly GlobalSettings _globalSettings;
         private readonly ILogger<RabbitConsumingAdapter> _logger;
 
         // Dictionary to keep track of open channels keyed by topic to avoid duplicate consumers
@@ -28,12 +30,15 @@
         /// </summary>
         /// <param name="connectionProvider">Provider for RabbitMQ connections and channels.</param>
         /// <param name="consumingConfigurator">Configuration provider that supplies topics to consume.</param>
+        /// <param name="globalSettings">Global messaging settings for domain and configuration.</param>
         /// <param name="logger">Logger for error and informational messages.</param>
         /// <exception cref="ArgumentNullException">Thrown if any dependency is null.</exception>
-        public RabbitConsumingAdapter(IConnectionProvider connectionProvider, IConsumingConfigurator consumingConfigurator, ILogger<RabbitConsumingAdapter> logger)
+        public RabbitConsumingAdapter(IConnectionProvider connectionProvider, IConsumingConfigurator consumingConfigurator, 
+            IOptions<GlobalSettings> globalSettings, ILogger<RabbitConsumingAdapter> logger)
         {
             _connectionProvider = connectionProvider ?? throw new ArgumentNullException(nameof(connectionProvider));
             _consumingConfigurator = consumingConfigurator ?? throw new ArgumentNullException(nameof(consumingConfigurator));
+            _globalSettings = globalSettings?.Value ?? throw new ArgumentNullException(nameof(globalSettings));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -94,7 +99,7 @@
                 };
 
                 // Start consuming messages on the channel, auto-acknowledge messages
-                await channel.BasicConsumeAsync(topic, autoAck: true, consumer, cancellationToken);
+                await channel.BasicConsumeAsync($"{_globalSettings.Domain}.{topic}", autoAck: true, consumer, cancellationToken);
 
                 _logger.LogInformation($"RabbitConsumingAdapter: Consumer for topic '{topic}' has been configured");
             }

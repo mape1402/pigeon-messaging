@@ -1,5 +1,6 @@
 ﻿namespace Pigeon.Messaging.Producing
 {
+    using Microsoft.Extensions.Options;
     using Pigeon.Messaging;
     using Pigeon.Messaging.Contracts;
     using Pigeon.Messaging.Producing.Management;
@@ -34,11 +35,11 @@
         /// <exception cref="ArgumentNullException">
         /// Thrown if any of the required dependencies are <c>null</c>.
         /// </exception>
-        public Producer(IEnumerable<IPublishInterceptor> interceptors, IProducingManager producingManager, GlobalSettings settings)
+        public Producer(IEnumerable<IPublishInterceptor> interceptors, IProducingManager producingManager, IOptions<GlobalSettings> settings)
         {
             _interceptors = interceptors ?? throw new ArgumentNullException(nameof(interceptors));
             _producingManager = producingManager ?? throw new ArgumentNullException(nameof(producingManager));
-            _settings = settings ?? throw new ArgumentNullException(nameof(settings));
+            _settings = settings?.Value ?? throw new ArgumentNullException(nameof(settings));
         }
 
         /// <summary>
