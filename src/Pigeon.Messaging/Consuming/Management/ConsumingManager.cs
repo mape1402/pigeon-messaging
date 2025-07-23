@@ -1,20 +1,24 @@
 ﻿namespace Pigeon.Messaging.Consuming.Management
 {
     using Microsoft.Extensions.Logging;
+    using Microsoft.Extensions.Options;
     using Pigeon.Messaging.Consuming.Dispatching;
 
     internal class ConsumingManager : IConsumingManager
     {
         private readonly IConsumingDispatcher _dispatcher;
         private readonly IEnumerable<IMessageBrokerConsumingAdapter> _messageBrokerAdapters;
+        private readonly GlobalSettings _globalSettings;
         private readonly ILogger<ConsumingManager> _logger;
 
         private CancellationToken _backgroundCancellationToken;
 
-        public ConsumingManager(IConsumingDispatcher dispatcher, IEnumerable<IMessageBrokerConsumingAdapter> messageBrokerAdapters, ILogger<ConsumingManager> logger)
+        public ConsumingManager(IConsumingDispatcher dispatcher, IEnumerable<IMessageBrokerConsumingAdapter> messageBrokerAdapters, 
+            IOptions<GlobalSettings> globalSettings, ILogger<ConsumingManager> logger)
         {
             _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
             _messageBrokerAdapters = messageBrokerAdapters ?? throw new ArgumentNullException(nameof(messageBrokerAdapters));
+            _globalSettings = globalSettings?.Value ?? throw new ArgumentNullException(nameof(globalSettings));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -58,7 +62,12 @@
 
                     var rawPayload = new RawPayload(e.RawPayload);
 
-                    await _dispatcher.DispatchAsync(e.Topic, rawPayload, linkedCts.Token);
+                    var topic = e.Topic;
+
+                    if (!string.IsNullOrWhiteSpace(_globalSettings.Domain))
+                        topic = topic.Replace($"{_globalSettings.Domain}.", string.Empty);
+
+                    await _dispatcher.DispatchAsync(topic, rawPayload, linkedCts.Token);
                 }
                 catch (Exception ex)
                 {
