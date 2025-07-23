@@ -1,4 +1,4 @@
-﻿namespace Pigeon.Messaging.Kafka
+﻿namespace Pigeon.Messaging.Kafka.Producing
 {
     using Confluent.Kafka;
     using Pigeon.Messaging.Contracts;
