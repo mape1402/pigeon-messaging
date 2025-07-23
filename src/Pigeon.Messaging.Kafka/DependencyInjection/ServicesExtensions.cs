@@ -1,8 +1,8 @@
-﻿namespace Pigeon.Messaging.Kafka.DependencyInjection
+﻿namespace Microsoft.Extensions.DependencyInjection
 {
-    using Microsoft.Extensions.DependencyInjection;
     using Microsoft.Extensions.Options;
     using Pigeon.Messaging.Consuming.Management;
+    using Pigeon.Messaging.Kafka;
     using Pigeon.Messaging.Kafka.Consuming;
     using Pigeon.Messaging.Kafka.Producing;
     using Pigeon.Messaging.Producing.Management;

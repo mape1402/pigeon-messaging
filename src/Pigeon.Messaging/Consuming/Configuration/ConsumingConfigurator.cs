@@ -57,7 +57,7 @@
             => GetConfiguration(topic, SemanticVersion.Default);
 
         public IEnumerable<string> GetAllTopics()
-            => _consumers.Keys.Select(x => x.Topic);
+            => _consumers.Keys.Select(x => x.Topic).Distinct();
 
         private void CheckTopic(string topic)
         {
