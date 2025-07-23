@@ -1,7 +1,9 @@
 ﻿namespace Pigeon.Messaging.Tests.Consuming.Management
 {
     using Microsoft.Extensions.Logging;
+    using Microsoft.Extensions.Options;
     using NSubstitute;
+    using Pigeon.Messaging;
     using Pigeon.Messaging.Consuming;
     using Pigeon.Messaging.Consuming.Dispatching;
     using Pigeon.Messaging.Consuming.Management;
@@ -19,17 +21,17 @@
             ""Metadata"": { ""Key"": { ""Prop"": ""Value"" } }
         }";
 
+        private static IOptions<GlobalSettings> CreateOptions() => Options.Create(new GlobalSettings { Domain = "test-domain" });
+
         [Fact]
         public async Task StartAsync_RegistersEventsAndStartsAdapters()
         {
             var dispatcher = Substitute.For<IConsumingDispatcher>();
-
             var adapter1 = Substitute.For<IMessageBrokerConsumingAdapter>();
             var adapter2 = Substitute.For<IMessageBrokerConsumingAdapter>();
-
             var logger = Substitute.For<ILogger<ConsumingManager>>();
-
-            var manager = new ConsumingManager(dispatcher, [adapter1, adapter2], logger);
+            var options = CreateOptions();
+            var manager = new ConsumingManager(dispatcher, new[] { adapter1, adapter2 }, options, logger);
 
             await manager.StartAsync();
 
@@ -41,15 +43,13 @@
         public async Task StopAsync_UnregistersEventsAndStopsAdapters()
         {
             var dispatcher = Substitute.For<IConsumingDispatcher>();
-
             var adapter = Substitute.For<IMessageBrokerConsumingAdapter>();
             var logger = Substitute.For<ILogger<ConsumingManager>>();
-
-            var manager = new ConsumingManager(dispatcher, new[] { adapter }, logger);
+            var options = CreateOptions();
+            var manager = new ConsumingManager(dispatcher, new[] { adapter }, options, logger);
 
             // Start first to attach event
             await manager.StartAsync();
-
             await manager.StopAsync();
 
             await adapter.Received(1).StopConsumeAsync(Arg.Any<CancellationToken>());
@@ -59,11 +59,10 @@
         public async Task MessageConsumed_InvokesDispatchAsync()
         {
             var dispatcher = Substitute.For<IConsumingDispatcher>();
-
             var adapter = Substitute.For<IMessageBrokerConsumingAdapter>();
             var logger = Substitute.For<ILogger<ConsumingManager>>();
-
-            var manager = new ConsumingManager(dispatcher, [adapter], logger);
+            var options = CreateOptions();
+            var manager = new ConsumingManager(dispatcher, new[] { adapter }, options, logger);
 
             // Start manager to attach event
             await manager.StartAsync();
@@ -79,5 +78,4 @@
             await dispatcher.Received(1).DispatchAsync("topic1", Arg.Any<RawPayload>(), Arg.Any<CancellationToken>());
         }
     }
-
 }
