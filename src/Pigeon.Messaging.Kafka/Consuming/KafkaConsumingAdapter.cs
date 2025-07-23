@@ -60,11 +60,18 @@
             {
                 var config = _configurationProvider.GetConsumerConfig();
                 var consumer = new ConsumerBuilder<Ignore, string>(config).Build();
+
+                if(!_consumers.TryAdd(topic, consumer))
+                {
+                    consumer.Dispose();
+                    _logger.LogWarning("KafkaConsumingAdapter: Consumer for topic '{Topic}' already exists. Skipping creation.", topic);
+                    continue;
+                }
+
                 consumer.Subscribe($"{_globalSettings.Domain}.{topic}");
 
                 var listener = Task.Run(() => Listen(consumer, linkedcts.Token));
 
-                _consumers.TryAdd(topic, consumer);
                 _listeners.TryAdd(topic, listener);
             }
 
@@ -89,7 +96,7 @@
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Unexpected error while waiting for Kafka listeners to stop.");
+                _logger.LogError(ex, "KafkaConsumingAdapter: Unexpected error while waiting for Kafka listeners to stop.");
             }
 
             foreach (var topic in _consumers.Keys)
@@ -101,7 +108,7 @@
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, $"Failed to dispose Kafka consumer for topic {topic}"); 
+                    _logger.LogWarning(ex, $"KafkaConsumingAdapter: Error while stopping processor for topic."); 
                 }
 
                 _listeners[topic] = default;

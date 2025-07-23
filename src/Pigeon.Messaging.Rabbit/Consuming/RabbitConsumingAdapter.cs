@@ -67,7 +67,7 @@
                 if (!_channels.TryAdd(topic, channel))
                 {
                     await channel.DisposeAsync();
-                    _logger.LogWarning($"RabbitConsumingAdapter: Consumer for topic '{topic}' already exists.");
+                    _logger.LogWarning("RabbitConsumingAdapter: Consumer for topic '{Topic}' already exists. Skipping creation.", topic);
                     continue;
                 }
 
@@ -117,10 +117,17 @@
             // Close and dispose each channel if still open
             foreach (var channel in _channels.Values)
             {
-                if (channel.IsOpen)
-                    await channel.CloseAsync(cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    if (channel.IsOpen)
+                        await channel.CloseAsync(cancellationToken).ConfigureAwait(false);
 
-                await channel.DisposeAsync();
+                    await channel.DisposeAsync();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "RabbitConsumingAdapter: Error while stopping processor for topic.");
+                }
             }
 
             // Clear the channels dictionary

@@ -7,6 +7,7 @@
     <PackageReference Update="Microsoft.Extensions.Options" Version="9.0.6"/>
     <PackageReference Update="RabbitMQ.Client" Version="7.1.2"/>
     <PackageReference Update="Confluent.Kafka" Version="2.11.0" />
+    <PackageReference Update="Azure.Messaging.ServiceBus" Version="7.20.1" />
     <PackageReference Update="MinVer" Version="6.0.0"/>
   </ItemGroup>
 </Project>
