@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [v1.0.6] - 2025-07-22
+
+### Fixed
+
+- 🐛 Sanitizes Topic when dispatch new message.
+- 🐛 Corrects namespace for Kafka dependency injection extensions.
+- 🐛 Returns only distinct topics when invoke GetAllTopics by IConsumeConfigurator.
+
+------
+
 ## [v1.0.5] - 2025-07-22
 
 ### Fixed
