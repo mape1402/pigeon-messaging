@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [v1.0.5] - 2025-07-22
+
+### Fixed
+
+- 🐛 Corrected full topic with Domain + Topic.
+
+### Added
+
+- 🎉 New Kafka Adapter.
+
+------
+
 ## [v1.0.4] - 2025-07-06
 
 ### Fixed
