@@ -26,6 +26,7 @@
 
 - Rabbit MQ
 - Kafka 
+- Azure Service Bus
 
 ---
 
@@ -35,6 +36,7 @@
 dotnet add package Pigeon.Messaging
 dotnet add package Pigeon.Messaging.RabbitMq // Or any Message Broker Adapter
 dotnet add package Pigeon.Messaging.Kafka 
+dotnet add package Pigeon.Messaging.Azure.ServiceBus 
 ```
 
 ## 🚀 Quick Start
@@ -216,6 +218,9 @@ builder.Services.AddPigeon(builder.Configuration, config =>
           "SecurityProtocol": "PlainText",
           "SaslMechanism": "Plain",
           "Acks": "All"
+        },
+        "AzureServiceBus": {
+            "ConnectionString": "Endpoint=sb://test/;SharedAccessKeyName=Root;SharedAccessKey=abc"
         }
     }  
   }
@@ -231,5 +236,5 @@ builder.Services.AddPigeon(builder.Configuration, config =>
 
 ## 🛠️ Upcoming Features
 
-- **Support for Azure Service Bus** Add adapters for Azure Service Bus message broker.
 - **Enhanced Management Capabilities** Add health checking, multi-publishing, multi-consuming, failover and more.
+- **Support for Amazon SQS and Mosquitto** Add adapters for Amazon SQS and Mosquitto message brokers.
