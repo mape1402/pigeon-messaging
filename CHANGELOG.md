@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [v1.0.7] - 2025-07-23
+
+- ### Added
+
+  - 🎉 New Azure Service Bus Adapter.
+
+------
+
 ## [v1.0.6] - 2025-07-22
 
 ### Fixed
