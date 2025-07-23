@@ -22,6 +22,11 @@
 
 **Pigeon** is perfect for microservices, distributed architectures, and any application that needs reliable asynchronous communication.
 
+### 🛠️ Supported Brokers
+
+- Rabbit MQ
+- Kafka 
+
 ---
 
 ## 📦 Installation
@@ -29,6 +34,7 @@
 ```bash
 dotnet add package Pigeon.Messaging
 dotnet add package Pigeon.Messaging.RabbitMq // Or any Message Broker Adapter
+dotnet add package Pigeon.Messaging.Kafka 
 ```
 
 ## 🚀 Quick Start
@@ -102,15 +108,15 @@ public class UserHubConsumer : HubConsumer{
     }
     
     // Support for multiple versioning or topics
-    [Consumer("update-user", ["1.0.1"])]
-    [Consumer("update-user", ["1.0.0"])] 
+    [Consumer("update-user", "1.0.1")]
+    [Consumer("update-user", "1.0.0")] 
     public Task UpdateUser(UpdateUserMessage message, CancellationToken cancellationToken = default){
       //DO something ...
 	  return Task.CompletedTask;
     }
 
     // Support for multiple consumers by version 
-	[Consumer("update-user", ["2.0.0"])]
+	[Consumer("update-user", "2.0.0")]
     public Task UpdateUserV2(UpdateUserV2Message message, CancellationToken cancellationToken = default){
       //DO something ...
 	  return Task.CompletedTask;
@@ -201,8 +207,16 @@ builder.Services.AddPigeon(builder.Configuration, config =>
     "Domain": "YourApp.Domain",
     "MessageBrokers": {
         "RabbitMq": {
-            "Url": "amqp://guest:guest@localhost:5672"
-          }
+          "Url": "amqp://guest:guest@localhost:5672"
+        },
+        "Kafka": {
+          "BootstrapServers": "localhost:9092",
+          "UserName": "test",
+          "Password": "test",
+          "SecurityProtocol": "PlainText",
+          "SaslMechanism": "Plain",
+          "Acks": "All"
+        }
     }  
   }
 }
@@ -217,5 +231,5 @@ builder.Services.AddPigeon(builder.Configuration, config =>
 
 ## 🛠️ Upcoming Features
 
-- **Support for Kafka and Azure Service Bus** Add adapters for Kafka and Azure Service Bus message brokers.
+- **Support for Azure Service Bus** Add adapters for Azure Service Bus message broker.
 - **Enhanced Management Capabilities** Add health checking, multi-publishing, multi-consuming, failover and more.
