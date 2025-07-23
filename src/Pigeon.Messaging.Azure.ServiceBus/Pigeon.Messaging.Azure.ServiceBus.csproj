@@ -7,9 +7,9 @@
   </PropertyGroup>
 
   <PropertyGroup>
-    <PackageId>Pigeon.Messaging.Kafka</PackageId>
-    <Description>Official Kafka adapter for Pigeon messaging.</Description>
-    <PackageTags>kafka messaging message-brokers distributed-systems microservices pigeon pub/sub</PackageTags>
+    <PackageId>Pigeon.Messaging.Azure.ServiceBus</PackageId>
+    <Description>Official Azure Service Bus adapter for Pigeon messaging.</Description>
+    <PackageTags>azure servicebus messaging message-brokers distributed-systems microservices pigeon pub/sub</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>
