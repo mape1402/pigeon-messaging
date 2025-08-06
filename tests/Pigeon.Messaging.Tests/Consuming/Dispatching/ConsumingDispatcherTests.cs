@@ -37,6 +37,9 @@
         {
             var consumingConfigurator = Substitute.For<IConsumingConfigurator>();
             var interceptor = Substitute.For<IConsumeInterceptor>();
+            var serializer = Substitute.For<ISerializer>();
+
+            serializer.Deserialize(Arg.Any<string>(), Arg.Any<Type>()).Returns(new TestMessage());
 
             var handlerCalled = false;
 
@@ -55,6 +58,7 @@
             var services = new ServiceCollection();
             services.AddSingleton(consumingConfigurator);
             services.AddScoped(p => interceptor);
+            services.AddSingleton(serializer);
 
             var serviceProvider = services.BuildServiceProvider();
 

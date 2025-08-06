@@ -55,15 +55,12 @@
         /// <returns>A task representing the asynchronous start consume operation.</returns>
         public async ValueTask StartConsumeAsync(CancellationToken cancellationToken = default)
         {
-            // Get all topics to consume from the configurator
             var topics = _consumingConfigurator.GetAllTopics();
 
             foreach (var topic in topics)
             {
-                // Create a new channel for each topic
                 var channel = await _connectionProvider.CreateChannelAsync(cancellationToken);
 
-                // Add channel to dictionary; if topic already exists, dispose the new channel and log warning
                 if (!_channels.TryAdd(topic, channel))
                 {
                     await channel.DisposeAsync();
@@ -71,34 +68,27 @@
                     continue;
                 }
 
-                // Declare the queue to ensure it exists before consuming
                 await channel.QueueDeclareAsync(topic, durable: false, exclusive: false, autoDelete: false, cancellationToken: cancellationToken);
 
-                // Create an asynchronous event-based consumer
                 var consumer = new AsyncEventingBasicConsumer(channel);
 
-                // Register event handler to process received messages
                 consumer.ReceivedAsync += (s, e) =>
                 {
                     try
                     {
-                        // Decode message body from bytes to UTF-8 string
                         var body = e.Body.ToArray();
-                        var message = Encoding.UTF8.GetString(body);
+                        var message = body.FromBytes();
 
-                        // Invoke the MessageConsumed event if there are subscribers
                         MessageConsumed?.Invoke(this, new MessageConsumedEventArgs(e.RoutingKey, message));
                     }
                     catch (Exception ex)
                     {
-                        // Log any error encountered during message processing
                         _logger.LogError(ex, "RabbitConsumingAdapter: Has ocurred an unexpected error while consuming a message.");
                     }
 
                     return Task.CompletedTask;
                 };
 
-                // Start consuming messages on the channel, auto-acknowledge messages
                 await channel.BasicConsumeAsync($"{_globalSettings.Domain}.{topic}", autoAck: true, consumer, cancellationToken);
 
                 _logger.LogInformation($"RabbitConsumingAdapter: Consumer for topic '{topic}' has been configured");
@@ -114,7 +104,6 @@
         /// <returns>A task representing the asynchronous stop operation.</returns>
         public async ValueTask StopConsumeAsync(CancellationToken cancellationToken = default)
         {
-            // Close and dispose each channel if still open
             foreach (var channel in _channels.Values)
             {
                 try
@@ -130,7 +119,6 @@
                 }
             }
 
-            // Clear the channels dictionary
             _channels.Clear();
 
             _logger.LogInformation("RabbitConsumingAdapter has been stopped gracefully");

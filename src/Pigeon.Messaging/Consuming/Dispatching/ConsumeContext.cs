@@ -1,8 +1,8 @@
 ﻿namespace Pigeon.Messaging.Consuming.Dispatching
 {
+    using Microsoft.Extensions.DependencyInjection;
     using Pigeon.Messaging.Contracts;
     using System.Collections.Concurrent;
-    using System.Text.Json;
 
     /// <summary>
     /// Represents the contextual information for processing a consumed message,
@@ -85,13 +85,14 @@
             if (!RawMetadata.TryGetValue(key, out var value))
                 throw new KeyNotFoundException($"Key '{key}' not found.");
 
-            var typedValue = JsonSerializer.Deserialize<T>(value);
+            var serializer = Services.GetRequiredService<ISerializer>();
+            var typedValue = serializer.Deserialize(value, typeof(T));
 
             if(typedValue == null)
                 throw new InvalidCastException($"Cannot cast value of key '{key}' to type '{typeof(T).FullName}'.");
 
             _metadata.TryAdd(key, typedValue);
-            return typedValue!; 
+            return (T)typedValue!; 
         }
     }
 }

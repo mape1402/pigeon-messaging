@@ -23,6 +23,7 @@
                 var configuration = consumingConfigurator.GetConfiguration(topic, rawPayload.MessageVersion);
 
                 var interceptors = scope.ServiceProvider.GetServices<IConsumeInterceptor>();
+                var serializer = scope.ServiceProvider.GetRequiredService<ISerializer>();
 
                 var context = new ConsumeContext
                 {
@@ -33,7 +34,7 @@
                     MessageVersion = configuration.Version,
                     Services = scope.ServiceProvider,
                     Topic = topic,
-                    Message = rawPayload.GetMessage(configuration.MessageType),
+                    Message = rawPayload.GetMessage(configuration.MessageType, serializer),
                     RawMetadata = rawPayload.GetMetadata()
                 };
 

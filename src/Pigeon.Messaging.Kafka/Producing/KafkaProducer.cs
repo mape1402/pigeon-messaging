@@ -15,12 +15,13 @@
         /// Initializes a new instance of the <see cref="KafkaProducer{T}"/> class using the specified configuration provider.
         /// </summary>
         /// <param name="configurationProvider">The provider for Kafka producer configuration settings.</param>
-        public KafkaProducer(IConfigurationProvider configurationProvider)
+        /// <param name="serializer">The serializer used to serialize the wrapped payload.</param>
+        public KafkaProducer(IConfigurationProvider configurationProvider, ISerializer serializer)
         {
             var config = configurationProvider.GetProducerConfig();
 
             _producer = new ProducerBuilder<Null, WrappedPayload<T>>(config)
-                .SetValueSerializer(new JsonSerializer<WrappedPayload<T>>())
+                .SetValueSerializer(new JsonSerializer<WrappedPayload<T>>(serializer))
                 .Build();
         }
 

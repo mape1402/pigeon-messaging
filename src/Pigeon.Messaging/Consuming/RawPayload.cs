@@ -6,28 +6,28 @@
 
     /// <summary>
     /// Represents a lightweight view over a raw JSON payload,
-    /// allowing to extract common envelope information (domain, version, timestamp)
+    /// allowing extraction of common envelope information (domain, version, timestamp)
     /// without fully deserializing the entire message.
     /// </summary>
     public readonly struct RawPayload
     {
         /// <summary>
-        /// The logical domain the message belongs to.
+        /// Gets the logical domain the message belongs to.
         /// </summary>
         public string Domain { get; }
 
         /// <summary>
-        /// The semantic version of the message contract.
+        /// Gets the semantic version of the message contract.
         /// </summary>
         public SemanticVersion MessageVersion { get; }
 
         /// <summary>
-        /// UTC timestamp when the message was created.
+        /// Gets the UTC timestamp when the message was created.
         /// </summary>
         public DateTimeOffset CreatedOnUtc { get; }
 
         /// <summary>
-        /// The original JSON string of the full payload.
+        /// Gets the original JSON string of the full payload.
         /// </summary>
         public string RawJson { get; }
 
@@ -36,6 +36,9 @@
         /// parsing only the required fields from a JSON string.
         /// </summary>
         /// <param name="json">The raw JSON payload string.</param>
+        /// <exception cref="ArgumentNullException">
+        /// Thrown if the input JSON is null or whitespace.
+        /// </exception>
         /// <exception cref="JsonException">
         /// Thrown if any of the expected properties are missing or invalid.
         /// </exception>
@@ -47,7 +50,6 @@
             RawJson = json;
 
             using var document = JsonDocument.Parse(json);
-
             var root = document.RootElement;
 
             if (!root.TryGetProperty("Domain", out var domainProp) || domainProp.ValueKind != JsonValueKind.String)
@@ -70,14 +72,14 @@
         /// Extracts and deserializes the 'Message' part of the payload
         /// to the given type.
         /// </summary>
-        /// <param name="messageType">
-        /// The type to which the 'Message' node should be deserialized.
-        /// </param>
+        /// <param name="messageType">The type to which the 'Message' node should be deserialized.</param>
+        /// <param name="serializer">The serializer to use for deserialization.</param>
         /// <returns>The deserialized message as an <see cref="object"/>.</returns>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="messageType"/> is null.</exception>
         /// <exception cref="JsonException">
         /// Thrown if the 'Message' node is missing or invalid.
         /// </exception>
-        public object GetMessage(Type messageType)
+        public object GetMessage(Type messageType, ISerializer serializer)
         {
             if (messageType == null)
                 throw new ArgumentNullException(nameof(messageType));
@@ -89,20 +91,20 @@
                 throw new JsonException("Missing 'Message' property in payload.");
 
             var rawMessageJson = messageProp.GetRawText();
-            return JsonSerializer.Deserialize(rawMessageJson, messageType);
+            return serializer.Deserialize(rawMessageJson, messageType);
         }
 
         /// <summary>
-        /// Parses the raw JSON payload and extracts the 'RawMetadata' section
-        /// as a dictionary of <see cref="JsonElement"/> values.
+        /// Parses the raw JSON payload and extracts the 'Metadata' section
+        /// as a dictionary of string values containing the raw JSON for each metadata entry.
         /// </summary>
         /// <returns>
-        /// A read-only dictionary containing metadata keys and their raw JSON elements.
-        /// If the 'RawMetadata' node is missing, an empty dictionary is returned.
+        /// A read-only dictionary containing metadata keys and their raw JSON string values.
+        /// If the 'Metadata' node is missing, an empty dictionary is returned.
         /// </returns>
         /// <remarks>
         /// This method does not fully deserialize the metadata values.
-        /// Consumers can use <see cref="JsonElement"/> to deserialize each value
+        /// Consumers can use the raw JSON string to deserialize each value
         /// lazily and safely to the desired type when needed.
         /// </remarks>
         public IReadOnlyDictionary<string, string> GetMetadata()

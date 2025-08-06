@@ -7,6 +7,7 @@
     using Pigeon.Messaging.Consuming.Dispatching;
     using Pigeon.Messaging.Contracts;
     using System.Reflection;
+    using System.Text.Json;
 
     /// <summary>
     /// Provides a fluent builder for configuring global messaging settings,
@@ -56,12 +57,23 @@
             };
 
             services.AddSingleton(Options.Create(GlobalSettings));
+
+            JsonSerializerOptions = new JsonSerializerOptions
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                Converters = { new SemanticVersionJsonConverter() }
+            };
         }
 
         /// <summary>
         /// Gets the global settings for Pigeon, such as domain and assemblies to scan.
         /// </summary>
         public GlobalSettings GlobalSettings { get; }
+
+        /// <summary>
+        /// Gets the JSON serializer options used for serializing and deserializing messages.
+        /// </summary>
+        internal JsonSerializerOptions JsonSerializerOptions { get; }
 
         /// <summary>
         /// Overrides the default domain for published messages.
