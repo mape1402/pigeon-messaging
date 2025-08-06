@@ -62,6 +62,9 @@ builder.Services.AddPigeon(builder.Configuration, config =>
           {
               rabbit.Url = "amqp://guest:guest@localhost:5672";
           });
+})
+.ConfigureJsonOptions(opts => {
+ 	opts.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;   
 });
 
 // Build and run your host
