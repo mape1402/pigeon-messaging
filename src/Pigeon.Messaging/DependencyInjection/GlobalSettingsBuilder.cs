@@ -60,7 +60,6 @@
 
             JsonSerializerOptions = new JsonSerializerOptions
             {
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
                 Converters = { new SemanticVersionJsonConverter() }
             };
         }
