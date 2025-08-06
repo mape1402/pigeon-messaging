@@ -54,7 +54,7 @@
 
             foreach (var topic in topics)
             {
-                var processor = _serviceBusProvider.CreateProcessor($"{_globalSettings.Domain}.{topic}");
+                var processor = _serviceBusProvider.CreateProcessor(topic);
 
                 if(!_processors.TryAdd(topic, processor))
                 {

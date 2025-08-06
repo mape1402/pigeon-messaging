@@ -68,7 +68,7 @@
                     continue;
                 }
 
-                consumer.Subscribe($"{_globalSettings.Domain}.{topic}");
+                consumer.Subscribe(topic);
 
                 var listener = Task.Run(() => Listen(consumer, linkedcts.Token));
 
