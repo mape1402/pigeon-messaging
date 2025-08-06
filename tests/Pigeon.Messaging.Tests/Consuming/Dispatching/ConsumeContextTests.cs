@@ -1,5 +1,6 @@
 ﻿namespace Pigeon.Messaging.Tests.Consuming.Dispatching
 {
+    using NSubstitute;
     using Pigeon.Messaging.Consuming.Dispatching;
     using System;
     using System.Collections.Generic;
@@ -22,22 +23,42 @@
         [Fact]
         public void GetMetadata_ShouldThrow_InvalidCastException_WhenValueCannotBeCast()
         {
+            var name = "Test";
+            var count = 42;
+
+            var obj = new ComplexMetadata { Name = name, Count = count };
+            var json = JsonSerializer.Serialize(obj);
+
+            var serializer = Substitute.For<ISerializer>();
+            serializer.Deserialize(Arg.Any<string>(), Arg.Any<Type>()).Returns(null);
+
+            var serviceProvider = Substitute.For<IServiceProvider>();
+            serviceProvider.GetService(Arg.Any<Type>()).Returns(serializer);
+
             var context = new ConsumeContext
             {
+                Services = serviceProvider,
                 RawMetadata = new Dictionary<string, string>()
                 {
-                    ["key"] = "\"not an int\""
+                    ["key"] = json
                 }
             };
 
-            Assert.Throws<JsonException>(() => context.GetMetadata<int>("key"));
+            Assert.Throws<InvalidCastException>(() => context.GetMetadata<int>("key"));
         }
 
         [Fact]
         public void GetMetadata_ShouldDeserializeAndCacheValue()
         {
+            var serializer = Substitute.For<ISerializer>();
+            serializer.Deserialize(Arg.Any<string>(), Arg.Any<Type>()).Returns(123);
+
+            var serviceProvider = Substitute.For<IServiceProvider>();   
+            serviceProvider.GetService(Arg.Any<Type>()).Returns(serializer);
+
             var context = new ConsumeContext
             {
+                Services = serviceProvider,
                 RawMetadata = new Dictionary<string, string>()
                 {
                     ["key"] = "123"
@@ -55,22 +76,38 @@
         [Fact]
         public void GetMetadata_ShouldDeserializeComplexObject()
         {
-            var obj = new { Name = "Test", Count = 42 };
+            var name = "Test";
+            var count = 42;
+
+            var obj = new ComplexMetadata { Name = name, Count = count };
             var json = JsonSerializer.Serialize(obj);
+
+            var serializer = Substitute.For<ISerializer>();
+            serializer.Deserialize(Arg.Any<string>(), Arg.Any<Type>()).Returns(obj);
+
+            var serviceProvider = Substitute.For<IServiceProvider>();
+            serviceProvider.GetService(Arg.Any<Type>()).Returns(serializer);
 
             var context = new ConsumeContext
             {
+                Services = serviceProvider,
                 RawMetadata = new Dictionary<string, string>()
                 {
                     ["complex"] = json
                 }
             };
 
-            var result = context.GetMetadata<Dictionary<string, JsonElement>>("complex");
+            var result = context.GetMetadata<ComplexMetadata>("complex");
 
-            Assert.Equal("Test", result["Name"].GetString());
-            Assert.Equal(42, result["Count"].GetInt32());
+            Assert.Equal(name, result.Name);
+            Assert.Equal(count, result.Count);
         }
     }
 
+    public class ComplexMetadata
+    {
+        public string Name { get; set; }
+
+        public int Count { get; set; }
+    }
 }

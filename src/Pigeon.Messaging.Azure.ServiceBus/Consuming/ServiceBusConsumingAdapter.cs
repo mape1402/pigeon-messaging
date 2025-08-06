@@ -67,8 +67,8 @@
                 {
                     try
                     {
-                        var body = args.Message.Body;
-                        var json = Encoding.UTF8.GetString(body);
+                        var body = args.Message.Body.ToArray();
+                        var json = body.FromBytes();
 
                         MessageConsumed?.Invoke(this, new MessageConsumedEventArgs(topic, json));
 

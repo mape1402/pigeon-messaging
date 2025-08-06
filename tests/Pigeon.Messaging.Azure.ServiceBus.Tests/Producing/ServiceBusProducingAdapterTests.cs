@@ -14,10 +14,12 @@ namespace Pigeon.Messaging.Azure.ServiceBus.Tests.Producing
             // Arrange
             var provider = Substitute.For<IServiceBusProvider>();
             var logger = Substitute.For<ILogger<ServiceBusProducingAdapter>>();
+            var serializer = Substitute.For<ISerializer>();
+            serializer.Serialize(Arg.Any<object>()).Returns("{}");
             var sender = Substitute.For<ServiceBusSender>();
             provider.GetSender("topic").Returns(sender);
             var payload = new WrappedPayload<string> { Message = "test" };
-            var adapter = new ServiceBusProducingAdapter(provider, logger);
+            var adapter = new ServiceBusProducingAdapter(provider, serializer, logger);
 
             // Act
             await adapter.PublishMessageAsync(payload, "topic");
@@ -32,10 +34,12 @@ namespace Pigeon.Messaging.Azure.ServiceBus.Tests.Producing
             // Arrange
             var provider = Substitute.For<IServiceBusProvider>();
             var logger = Substitute.For<ILogger<ServiceBusProducingAdapter>>();
+            var serializer = Substitute.For<ISerializer>();
+            serializer.Serialize(Arg.Any<object>()).Returns("{}");
             var sender = Substitute.For<ServiceBusSender>();
             provider.GetSender("topic").Returns(sender);
             var payload = new WrappedPayload<string> { Message = "test" };
-            var adapter = new ServiceBusProducingAdapter(provider, logger);
+            var adapter = new ServiceBusProducingAdapter(provider, serializer, logger);
             var exception = new Exception("fail");
             sender.SendMessageAsync(Arg.Any<ServiceBusMessage>(), Arg.Any<CancellationToken>()).Returns<Task>(_ => throw exception);
 

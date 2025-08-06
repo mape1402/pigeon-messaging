@@ -1,5 +1,6 @@
 ﻿using Pigeon.Messaging.Consuming;
 using Pigeon.Messaging.Contracts;
+using NSubstitute;
 using System.Text.Json;
 
 namespace Pigeon.Messaging.Tests.Consuming
@@ -34,7 +35,9 @@ namespace Pigeon.Messaging.Tests.Consuming
         public void GetMessage_Should_Deserialize_Message()
         {
             var payload = new RawPayload(ValidJson);
-            var result = payload.GetMessage(typeof(Message));
+            var serializer = Substitute.For<ISerializer>();
+            serializer.Deserialize(Arg.Any<string>(), typeof(Message)).Returns(x => System.Text.Json.JsonSerializer.Deserialize<Message>((string)x[0]));
+            var result = payload.GetMessage(typeof(Message), serializer);
 
             Assert.IsType<Message>(result);
             Assert.Equal("Hello", ((Message)result).Text);

@@ -5,8 +5,6 @@
     using Pigeon.Messaging.Producing.Management;
     using RabbitMQ.Client;
     using System.Collections.Concurrent;
-    using System.Text;
-    using System.Text.Json;
     using System.Threading;
     using System.Threading.Tasks;
 
@@ -17,6 +15,7 @@
     internal class RabbitProducingAdapter : IMessageBrokerProducingAdapter
     {
         private readonly IConnectionProvider _connectionProvider;
+        private readonly ISerializer _serializer;
         private readonly ILogger<RabbitProducingAdapter> _logger;
 
         // Tracks topics that have already been declared to avoid redundant declarations
@@ -32,11 +31,13 @@
         /// Initializes a new instance of the <see cref="RabbitProducingAdapter"/> class.
         /// </summary>
         /// <param name="connectionProvider">Provider for RabbitMQ connections and channels.</param>
+        /// <param name="serializer">Serializer for converting messages to JSON format.</param>
         /// <param name="logger">Logger instance for error and info logging.</param>
         /// <exception cref="ArgumentNullException">Thrown if any dependency is null.</exception>
-        public RabbitProducingAdapter(IConnectionProvider connectionProvider, ILogger<RabbitProducingAdapter> logger)
+        public RabbitProducingAdapter(IConnectionProvider connectionProvider, ISerializer serializer, ILogger<RabbitProducingAdapter> logger)
         {
             _connectionProvider = connectionProvider ?? throw new ArgumentNullException(nameof(connectionProvider));
+            _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -54,38 +55,27 @@
         public async ValueTask PublishMessageAsync<T>(WrappedPayload<T> payload, string topic, CancellationToken cancellationToken = default)
             where T : class
         {
-            // Acquire the semaphore to ensure exclusive access to the channel for publishing
             await _channelLock.WaitAsync(cancellationToken);
 
             try
             {
-                // Create or reuse the channel if it's closed
                 if (_channel == null || !_channel.IsOpen)
                     _channel = await _connectionProvider.CreateChannelAsync(cancellationToken);
 
-                // Declare the topic (queue) once to avoid redundant declarations
                 if (_registeredTopics.TryAdd(topic, 0))
                     await _channel.QueueDeclareAsync(topic, durable: false, exclusive: false, autoDelete: false, cancellationToken: cancellationToken);
 
-                // Serialize the payload to JSON and encode as UTF-8 bytes
-                var serializerOptions = new JsonSerializerOptions();
-                serializerOptions.Converters.Add(new SemanticVersionJsonConverter());
+                var body = _serializer.SerializeAsBytes(payload);
 
-                var payloadJson = JsonSerializer.Serialize(payload, serializerOptions);
-                var body = Encoding.UTF8.GetBytes(payloadJson);
-
-                // Publish the message to the topic with default exchange (empty string)
                 await _channel.BasicPublishAsync(string.Empty, topic, false, new BasicProperties(), body,  cancellationToken);
             }
             catch (Exception ex)
             {
-                // Log any exceptions and rethrow
                 _logger.LogError(ex, "Error while publishing message using Rabbit Adapter.");
                 throw;
             }
             finally
             {
-                // Release the semaphore to allow other concurrent calls to publish
                 _channelLock.Release();
             }
         }

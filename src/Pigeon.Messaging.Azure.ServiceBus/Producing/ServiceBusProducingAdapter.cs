@@ -13,17 +13,20 @@
     internal class ServiceBusProducingAdapter : IMessageBrokerProducingAdapter
     {
         private readonly IServiceBusProvider _serviceBusProvider;
+        private readonly ISerializer _serializer;
         private readonly ILogger<ServiceBusProducingAdapter> _logger;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="ServiceBusProducingAdapter"/> class.
         /// </summary>
         /// <param name="serviceBusProvider">The provider used to resolve Service Bus senders.</param>
+        /// <param name="serializer">The serializer used for serializing messages to JSON.</param>
         /// <param name="logger">The logger for logging publishing operations and errors.</param>
         /// <exception cref="ArgumentNullException">Thrown if any dependency is null.</exception>
-        public ServiceBusProducingAdapter(IServiceBusProvider serviceBusProvider, ILogger<ServiceBusProducingAdapter> logger)
+        public ServiceBusProducingAdapter(IServiceBusProvider serviceBusProvider, ISerializer serializer, ILogger<ServiceBusProducingAdapter> logger)
         {
             _serviceBusProvider = serviceBusProvider ?? throw new ArgumentNullException(nameof(serviceBusProvider));
+            this._serializer = serializer;
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -40,12 +43,7 @@
             try
             {
                 var sender = _serviceBusProvider.GetSender(topic);
-
-                var jsonOptions = new JsonSerializerOptions();
-                jsonOptions.Converters.Add(new SemanticVersionJsonConverter());
-
-                var json = JsonSerializer.Serialize(payload, jsonOptions);
-                var bytes = Encoding.UTF8.GetBytes(json);
+                var bytes = _serializer.SerializeAsBytes(payload);
 
                 ServiceBusMessage message = new(bytes);
 

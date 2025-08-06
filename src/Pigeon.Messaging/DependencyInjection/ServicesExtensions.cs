@@ -9,6 +9,7 @@
     using Pigeon.Messaging.Contracts;
     using Pigeon.Messaging.Producing;
     using Pigeon.Messaging.Producing.Management;
+    using System.Text.Json;
 
     /// <summary>
     /// Provides extension methods for registering the Pigeon messaging infrastructure
@@ -57,6 +58,8 @@
 
             // Apply user configuration via the callback.
             config(settingsBuilder);
+
+            services.AddSingleton<ISerializer>(p => new DefaultSerializer(settingsBuilder.JsonSerializerOptions));
 
             // Scan assemblies for consumers and register them.
             new ConsumerScanner(services, consumingConfigurator)
@@ -139,6 +142,36 @@
             where T : class
         {
             builder.GlobalSettingsBuilder.AddConsumeHandler(topic, handler);
+            return builder;
+        }
+
+        /// <summary>
+        /// Registers a custom JSON serializer implementation for use in the messaging infrastructure.
+        /// </summary>
+        /// <typeparam name="TSerializer">The serializer type implementing <see cref="ISerializer"/>.</typeparam>
+        /// <param name="builder">The Pigeon service builder.</param>
+        /// <returns>The same <see cref="IPigeonServiceBuilder"/> instance for chaining.</returns>
+        public static IPigeonServiceBuilder AddJsonSerializer<TSerializer>(
+            this IPigeonServiceBuilder builder)
+            where TSerializer : class, ISerializer
+        {
+            builder.GlobalSettingsBuilder.AddService<ISerializer, TSerializer>(ServiceLifetime.Singleton);
+            return builder;
+        }
+
+        /// <summary>
+        /// Configures the global <see cref="JsonSerializerOptions"/> used for message serialization and deserialization.
+        /// </summary>
+        /// <param name="builder">The Pigeon service builder.</param>
+        /// <param name="configure">An action to configure the <see cref="JsonSerializerOptions"/>.</param>
+        /// <returns>The same <see cref="IPigeonServiceBuilder"/> instance for chaining.</returns>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="configure"/> is null.</exception>
+        public static IPigeonServiceBuilder ConfigureJsonOptions(this IPigeonServiceBuilder builder, Action<JsonSerializerOptions> configure)
+        {
+            if (configure == null)
+                throw new ArgumentNullException(nameof(configure));
+
+            configure(builder.GlobalSettingsBuilder.JsonSerializerOptions);
             return builder;
         }
     }
