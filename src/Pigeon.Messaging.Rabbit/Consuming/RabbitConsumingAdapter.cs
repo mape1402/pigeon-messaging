@@ -7,7 +7,6 @@
     using RabbitMQ.Client;
     using RabbitMQ.Client.Events;
     using System.Collections.Concurrent;
-    using System.Text;
     using System.Threading;
     using System.Threading.Tasks;
 
@@ -89,7 +88,7 @@
                     return Task.CompletedTask;
                 };
 
-                await channel.BasicConsumeAsync($"{_globalSettings.Domain}.{topic}", autoAck: true, consumer, cancellationToken);
+                await channel.BasicConsumeAsync(topic, autoAck: true, consumer, cancellationToken);
 
                 _logger.LogInformation($"RabbitConsumingAdapter: Consumer for topic '{topic}' has been configured");
             }

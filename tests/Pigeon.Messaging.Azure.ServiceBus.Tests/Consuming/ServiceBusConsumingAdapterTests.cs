@@ -15,16 +15,15 @@ namespace Pigeon.Messaging.Azure.ServiceBus.Tests.Consuming
             // Arrange
             var domain = "domain";
             var topic = "topic1";
-            var fullTopic = $"{domain}.{topic}";
 
             var configurator = Substitute.For<IConsumingConfigurator>();
             configurator.GetAllTopics().Returns([ topic ]);
 
             var processor = new ServiceBusClient("Endpoint=sb://test/;SharedAccessKeyName=Root;SharedAccessKey=abc")
-                .CreateProcessor(fullTopic, new ServiceBusProcessorOptions());
+                .CreateProcessor(topic, new ServiceBusProcessorOptions());
 
             var provider = Substitute.For<IServiceBusProvider>();
-            provider.CreateProcessor(fullTopic).Returns(processor);
+            provider.CreateProcessor(topic).Returns(processor);
 
             var logger = Substitute.For<ILogger<ServiceBusConsumingAdapter>>();
             var options = Options.Create(new GlobalSettings { Domain = domain });
@@ -42,16 +41,15 @@ namespace Pigeon.Messaging.Azure.ServiceBus.Tests.Consuming
             // Arrange
             var domain = "domain";
             var topic = "topic1";
-            var fullTopic = $"{domain}.{topic}";
 
             var configurator = Substitute.For<IConsumingConfigurator>();
             configurator.GetAllTopics().Returns([topic]);
 
             var processor = new ServiceBusClient("Endpoint=sb://test/;SharedAccessKeyName=Root;SharedAccessKey=abc")
-                .CreateProcessor(fullTopic, new ServiceBusProcessorOptions());
+                .CreateProcessor(topic, new ServiceBusProcessorOptions());
 
             var provider = Substitute.For<IServiceBusProvider>();
-            provider.CreateProcessor(fullTopic).Returns(processor);
+            provider.CreateProcessor(topic).Returns(processor);
 
             var logger = Substitute.For<ILogger<ServiceBusConsumingAdapter>>();
             var options = Options.Create(new GlobalSettings { Domain = domain });
