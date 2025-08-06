@@ -7,11 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [v1.0.9] - 2025-08-06
+
+### Added
+
+- 🎉 Add JsonSerializer Options.
+
+### Fixed
+
+- 🐛 Remove full topic building.
+
+------
+
 ## [v1.0.8] - 2025-07-23
 
-- ### Added
+### Added
 
-  - 🎉 New Azure Service Bus Adapter.
+- 🎉 New Azure Service Bus Adapter.
 
 ------
 
