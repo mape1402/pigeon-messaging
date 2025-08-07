@@ -10,6 +10,16 @@
     public interface IConsumingConfigurator
     {
         /// <summary>
+        /// Occurs when a new topic is created in the configuration.
+        /// </summary>
+        event EventHandler<TopicEventArgs> TopicCreated;
+
+        /// <summary>
+        /// Occurs when a topic is removed from the configuration.
+        /// </summary>
+        event EventHandler<TopicEventArgs> TopicRemoved;
+
+        /// <summary>
         /// Registers a consumer handler for a specific topic and semantic version.
         /// </summary>
         /// <typeparam name="T">The type of the expected message payload.</typeparam>

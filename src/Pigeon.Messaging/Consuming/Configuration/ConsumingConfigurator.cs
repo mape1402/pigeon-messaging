@@ -9,6 +9,10 @@
     {
         private readonly ConcurrentDictionary<(string Topic, SemanticVersion Version), ConsumerConfiguration> _consumers = new();
 
+        public event EventHandler<TopicEventArgs> TopicCreated;
+
+        public event EventHandler<TopicEventArgs> TopicRemoved;
+
         public IConsumingConfigurator AddConsumer<T>(string topic, SemanticVersion version, ConsumeHandler<T> handler) where T : class
         {
             CheckTopic(topic);
@@ -25,6 +29,8 @@
             if (!_consumers.TryAdd((topic, version), consumerConfig))
                 throw new InvalidOperationException($"A consumer for topic '{topic}' with version '{version}' is already registered.");
 
+            TopicCreated?.Invoke(this, new TopicEventArgs(topic));
+
             return this;
         }
 
@@ -36,6 +42,9 @@
             CheckTopic(topic);
 
             _consumers.TryRemove((topic, version), out _);
+
+            if(!_consumers.Keys.Any(x => x.Topic == topic))
+                TopicRemoved?.Invoke(this, new TopicEventArgs(topic));
 
             return this;
         }

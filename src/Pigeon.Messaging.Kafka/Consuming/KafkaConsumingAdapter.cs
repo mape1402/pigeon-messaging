@@ -23,6 +23,9 @@
         private readonly ConcurrentDictionary<string, IConsumer<Ignore, string>> _consumers = new();
         private CancellationTokenSource _cancellationTokenSource;
 
+        private readonly EventHandler<TopicEventArgs> _onTopicCreated;
+        private readonly EventHandler<TopicEventArgs> _onTopicRemoved;
+
         /// <summary>
         /// Initializes a new instance of the <see cref="KafkaConsumingAdapter"/> class.
         /// </summary>
@@ -38,6 +41,9 @@
             _configurationProvider = configurationProvider ?? throw new ArgumentNullException(nameof(configurationProvider));
             _globalSettings = globalSettings.Value ?? throw new ArgumentNullException(nameof(globalSettings));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+
+            _onTopicCreated = (s, e) => StartNewConsumer(e.Topic);
+            _onTopicRemoved = (s, e) => StopConsumer(e.Topic);
         }
 
         /// <summary>
@@ -52,28 +58,15 @@
         /// <returns>A <see cref="ValueTask"/> representing the asynchronous start operation.</returns>
         public ValueTask StartConsumeAsync(CancellationToken cancellationToken = default)
         {
+            _consumingConfigurator.TopicCreated += _onTopicCreated;
+            _consumingConfigurator.TopicRemoved += _onTopicRemoved;
+
             var topics = _consumingConfigurator.GetAllTopics();
-            _cancellationTokenSource = new CancellationTokenSource();
-            var linkedcts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _cancellationTokenSource.Token);
+            var cts = new CancellationTokenSource();
+            _cancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, cts.Token);
 
             foreach (var topic in topics)
-            {
-                var config = _configurationProvider.GetConsumerConfig();
-                var consumer = new ConsumerBuilder<Ignore, string>(config).Build();
-
-                if(!_consumers.TryAdd(topic, consumer))
-                {
-                    consumer.Dispose();
-                    _logger.LogWarning("KafkaConsumingAdapter: Consumer for topic '{Topic}' already exists. Skipping creation.", topic);
-                    continue;
-                }
-
-                consumer.Subscribe(topic);
-
-                var listener = Task.Run(() => Listen(consumer, linkedcts.Token));
-
-                _listeners.TryAdd(topic, listener);
-            }
+                StartNewConsumer(topic);
 
             _logger.LogInformation("KafkaConsumingAdapter has been initialized");
 
@@ -87,7 +80,10 @@
         /// <returns>A <see cref="ValueTask"/> representing the asynchronous stop operation.</returns>
         public async ValueTask StopConsumeAsync(CancellationToken cancellationToken = default)
         {
-            if(_cancellationTokenSource != null)
+            _consumingConfigurator.TopicCreated -= _onTopicCreated;
+            _consumingConfigurator.TopicRemoved -= _onTopicRemoved;
+
+            if (_cancellationTokenSource != null)
                 _cancellationTokenSource.Cancel();
 
             try
@@ -100,19 +96,7 @@
             }
 
             foreach (var topic in _consumers.Keys)
-            {
-                try
-                {
-                    _consumers[topic].Close();
-                    _consumers[topic].Dispose();
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, $"KafkaConsumingAdapter: Error while stopping processor for topic."); 
-                }
-
-                _listeners[topic] = default;
-            }
+                StopConsumer(topic);
 
             _consumers.Clear();
             _listeners.Clear();
@@ -138,6 +122,43 @@
                 {
                     _logger.LogError(ex, "KafkaConsumingAdapter: Has ocurred an unexpected error while consuming a message.");
                 }
+            }
+        }
+
+        private void StartNewConsumer(string topic)
+        {
+            var config = _configurationProvider.GetConsumerConfig();
+            var consumer = new ConsumerBuilder<Ignore, string>(config).Build();
+
+            if (!_consumers.TryAdd(topic, consumer))
+            {
+                consumer.Dispose();
+                _logger.LogWarning("KafkaConsumingAdapter: Consumer for topic '{Topic}' already exists. Skipping creation.", topic);
+                return;
+            }
+
+            consumer.Subscribe(topic);
+
+            var listener = Task.Run(() => Listen(consumer, _cancellationTokenSource.Token));
+
+            _listeners.TryAdd(topic, listener);
+        }
+
+        private void StopConsumer(string topic)
+        {
+            if (!_consumers.TryRemove(topic, out var consumer))
+                return;
+
+            try
+            {
+                consumer.Close();
+                consumer.Dispose();
+
+                _listeners[topic] = default;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "KafkaConsumingAdapter: Error while stopping processor for topic '{Topic}'", topic);
             }
         }
     }
