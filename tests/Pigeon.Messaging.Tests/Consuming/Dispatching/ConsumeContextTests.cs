@@ -1,7 +1,9 @@
 ﻿namespace Pigeon.Messaging.Tests.Consuming.Dispatching
 {
     using NSubstitute;
+    using Pigeon.Messaging.Consuming;
     using Pigeon.Messaging.Consuming.Dispatching;
+    using Pigeon.Messaging.Contracts;
     using System;
     using System.Collections.Generic;
     using System.Text.Json;
@@ -102,6 +104,53 @@
             Assert.Equal(name, result.Name);
             Assert.Equal(count, result.Count);
         }
+
+
+        [Fact]
+        public void GetMetadata_ShouldDeserializeComplexObject2()
+        {
+            var rawPayload = new RawPayload(json);
+
+            var jsonOptions = new JsonSerializerOptions
+            {
+                Converters = { new SemanticVersionJsonConverter() },
+            };
+
+            var serializer = new DefaultSerializer(jsonOptions);
+
+            var serviceProvider = Substitute.For<IServiceProvider>();
+            serviceProvider.GetService(Arg.Any<Type>()).Returns(serializer);
+
+            var context = new ConsumeContext
+            {
+                Services = serviceProvider,
+                RawMetadata = rawPayload.GetMetadata()
+            };
+
+            var result = context.GetMetadata<ComplexMetadata>("Metadata");
+
+            Assert.Equal("demo", result.Name);
+            Assert.Equal(1, result.Count);
+        }
+
+        private string json =
+            @"{
+                ""Domain"":""Test"",
+                ""MessageVersion"":""1.0.0"",
+                ""CreatedOnUtc"":""2025-08-12T02:04:06.4751931+00:00"",
+                ""Message"":{
+                    ""EventId"":""01K2E0A7NA956VVW29M0XH827T"",
+                    ""Source"":""Demo"",
+                    ""CreatedOn"":""2025-08-12T02:03:57.9946041\u002B00:00"",
+                    ""CorrelationId"":null
+                },
+                ""Metadata"":{
+                    ""Metadata"":{
+                        ""Name"":""demo"",
+                        ""Count"":1
+                    }
+                }
+            }";
     }
 
     public class ComplexMetadata
