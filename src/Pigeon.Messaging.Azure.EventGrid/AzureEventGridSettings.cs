@@ -16,8 +16,8 @@ namespace Pigeon.Messaging.Azure.EventGrid
         public string AccessKey { get; set; }
 
         /// <summary>
-        /// Gets or sets the webhook endpoint URL for receiving events.
+        /// Gets or sets the endpoint URI for the Service Bus.
         /// </summary>
-        public string WebhookEndpoint { get; set; }
+        public string ServiceBusEndPoint { get; set; }
     }
 }

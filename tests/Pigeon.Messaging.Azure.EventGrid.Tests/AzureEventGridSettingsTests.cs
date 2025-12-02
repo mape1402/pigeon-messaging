@@ -11,17 +11,17 @@ namespace Pigeon.Messaging.Azure.EventGrid.Tests
             var settings = new AzureEventGridSettings();
             var topicEndpoint = "https://test.eventgrid.azure.net/api/events";
             var accessKey = "test-access-key";
-            var webhookEndpoint = "https://test-webhook.com/events";
+            var serviceBusEndPoint = "Endpoint=sb://test.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=testkey";
 
             // Act
             settings.TopicEndpoint = topicEndpoint;
             settings.AccessKey = accessKey;
-            settings.WebhookEndpoint = webhookEndpoint;
+            settings.ServiceBusEndPoint = serviceBusEndPoint;
 
             // Assert
             Assert.Equal(topicEndpoint, settings.TopicEndpoint);
             Assert.Equal(accessKey, settings.AccessKey);
-            Assert.Equal(webhookEndpoint, settings.WebhookEndpoint);
+            Assert.Equal(serviceBusEndPoint, settings.ServiceBusEndPoint);
         }
 
         [Fact]
@@ -33,7 +33,7 @@ namespace Pigeon.Messaging.Azure.EventGrid.Tests
             // Assert
             Assert.Null(settings.TopicEndpoint);
             Assert.Null(settings.AccessKey);
-            Assert.Null(settings.WebhookEndpoint);
+            Assert.Null(settings.ServiceBusEndPoint);
         }
     }
 }

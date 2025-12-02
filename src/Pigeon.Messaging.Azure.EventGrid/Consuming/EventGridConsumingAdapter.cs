@@ -1,5 +1,6 @@
 ﻿namespace Pigeon.Messaging.Azure.EventGrid.Consuming
 {
+    using global::Azure.Messaging.ServiceBus;
     using Microsoft.Extensions.Logging;
     using Microsoft.Extensions.Options;
     using Pigeon.Messaging.Consuming.Configuration;
@@ -17,7 +18,8 @@
         private readonly GlobalSettings _globalSettings;
         private readonly ILogger<EventGridConsumingAdapter> _logger;
 
-        private readonly ConcurrentDictionary<string, IEventGridSubscription> _subscriptions = new();
+        private readonly ConcurrentDictionary<string, ServiceBusProcessor> _processors = new();
+
         private readonly EventHandler<TopicEventArgs> _onTopicCreated;
         private readonly EventHandler<TopicEventArgs> _onTopicRemoved;
 
@@ -37,8 +39,8 @@
             _globalSettings = globalSettings?.Value ?? throw new ArgumentNullException(nameof(globalSettings));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
-            _onTopicCreated = async (s, e) => await StartNewSubscription(e.Topic, CancellationToken.None);
-            _onTopicRemoved = async (s, e) => await StopSubscription(e.Topic, CancellationToken.None);
+            _onTopicCreated = async (s, e) => await StartNewProcessor(e.Topic, CancellationToken.None);
+            _onTopicRemoved = async (s, e) => await StopProcessor(e.Topic, CancellationToken.None);
         }
 
         /// <summary>
@@ -59,7 +61,7 @@
             var topics = _consumingConfigurator.GetAllTopics();
 
             foreach (var topic in topics)
-                await StartNewSubscription(topic, cancellationToken);
+                await StartNewProcessor(topic, cancellationToken);
 
             _logger.LogInformation("AzureEventGridConsumingAdapter has been initialized");
         }
@@ -74,70 +76,64 @@
             _consumingConfigurator.TopicCreated -= _onTopicCreated;
             _consumingConfigurator.TopicRemoved -= _onTopicRemoved;
 
-            foreach (var topic in _subscriptions.Keys)
-                await StopSubscription(topic, cancellationToken);
+            foreach (var topic in _processors.Keys)
+                await StopProcessor(topic, cancellationToken);
 
-            _subscriptions.Clear();
+            _processors.Clear();
 
             _logger.LogInformation("AzureEventGridConsumingAdapter has been stopped gracefully");
         }
 
-        private async Task StartNewSubscription(string topic, CancellationToken cancellationToken = default)
+        private async Task StartNewProcessor(string topic, CancellationToken cancellationToken = default)
         {
-            try
-            {
-                var subscription = _eventGridProvider.CreateSubscription(topic);
+            var processor = _eventGridProvider.CreateProcessor(topic);
 
-                if (!_subscriptions.TryAdd(topic, subscription))
+            if (!_processors.TryAdd(topic, processor))
+            {
+                await processor.DisposeAsync();
+                _logger.LogWarning("AzureServiceBusConsumingAdapter: Processor for topic '{Topic}' already exists. Skipping creation.", topic);
+                return;
+            }
+
+            processor.ProcessMessageAsync += async args =>
+            {
+                try
                 {
-                    await subscription.DisposeAsync();
-                    _logger.LogWarning("AzureEventGridConsumingAdapter: Subscription for topic '{Topic}' already exists. Skipping creation.", topic);
-                    return;
+                    var body = args.Message.Body.ToArray();
+                    var json = body.FromBytes();
+
+                    MessageConsumed?.Invoke(this, new MessageConsumedEventArgs(topic, json));
+
+                    await args.CompleteMessageAsync(args.Message, cancellationToken);
                 }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "AzureServiceBusConsumingAdapter: Has ocurred an unexpected error while consuming a message.");
+                }
+            };
 
-                subscription.CloudEventReceived += OnCloudEventReceived;
-                await subscription.StartAsync(cancellationToken);
-
-                _logger.LogInformation("AzureEventGridConsumingAdapter: Started subscription for topic '{Topic}'.", topic);
-            }
-            catch (Exception ex)
+            processor.ProcessErrorAsync += args =>
             {
-                _logger.LogError(ex, "AzureEventGridConsumingAdapter: Error starting subscription for topic '{Topic}'.", topic);
-            }
+                _logger.LogError(args.Exception, "AzureServiceBusConsumingAdapter: An error occurred while processing messages.");
+                return Task.CompletedTask;
+            };
+
+            await processor.StartProcessingAsync(cancellationToken);
         }
 
-        private async Task StopSubscription(string topic, CancellationToken cancellationToken = default)
+        private async Task StopProcessor(string topic, CancellationToken cancellationToken = default)
         {
-            if (!_subscriptions.TryRemove(topic, out var subscription))
+            if (!_processors.TryRemove(topic, out var processor))
                 return;
 
             try
             {
-                subscription.CloudEventReceived -= OnCloudEventReceived;
-                await subscription.StopAsync(cancellationToken);
-                await subscription.DisposeAsync();
-
-                _logger.LogInformation("AzureEventGridConsumingAdapter: Stopped subscription for topic '{Topic}'.", topic);
+                await processor.StopProcessingAsync(cancellationToken);
+                await processor.DisposeAsync();
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "AzureEventGridConsumingAdapter: Error while stopping subscription for topic '{Topic}'", topic);
-            }
-        }
-
-        private void OnCloudEventReceived(object sender, CloudEventReceivedEventArgs e)
-        {
-            try
-            {
-                var cloudEvent = e.CloudEvent;
-                var json = cloudEvent.Data.ToString();
-                var topic = cloudEvent.Subject ?? cloudEvent.EventType;
-
-                MessageConsumed?.Invoke(this, new MessageConsumedEventArgs(topic, json));
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "AzureEventGridConsumingAdapter: Has occurred an unexpected error while processing cloud event.");
+                _logger.LogError(ex, "AzureServiceBusConsumingAdapter: Error while stopping processor for topic '{Topic}'", topic);
             }
         }
     }
