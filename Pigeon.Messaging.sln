@@ -29,6 +29,14 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pigeon.Messaging.Azure.Serv
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pigeon.Messaging.Azure.ServiceBus.Tests", "tests\Pigeon.Messaging.Azure.ServiceBus.Tests\Pigeon.Messaging.Azure.ServiceBus.Tests.csproj", "{3888D8D5-5F58-42A3-8616-FD13E01210EB}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pigeon.Messaging.Azure.EventGrid", "src\Pigeon.Messaging.Azure.EventGrid\Pigeon.Messaging.Azure.EventGrid.csproj", "{334545AB-9ABD-40C8-9530-48AFEE1C812E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pigeon.Messaging.Azure.EventHub", "src\Pigeon.Messaging.Azure.EventHub\Pigeon.Messaging.Azure.EventHub.csproj", "{7BBE7833-BAED-4160-9D02-CAF111672BD0}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pigeon.Messaging.Azure.EventGrid.Tests", "tests\Pigeon.Messaging.Azure.EventGrid.Tests\Pigeon.Messaging.Azure.EventGrid.Tests.csproj", "{00C28057-F0DE-4642-B5B1-1A42BF1237E9}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pigeon.Messaging.Azure.EventHub.Tests", "tests\Pigeon.Messaging.Azure.EventHub.Tests\Pigeon.Messaging.Azure.EventHub.Tests.csproj", "{705A964E-5A56-4ACC-ACF9-E772D071A555}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -67,6 +75,22 @@ Global
 		{3888D8D5-5F58-42A3-8616-FD13E01210EB}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{3888D8D5-5F58-42A3-8616-FD13E01210EB}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{3888D8D5-5F58-42A3-8616-FD13E01210EB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{334545AB-9ABD-40C8-9530-48AFEE1C812E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{334545AB-9ABD-40C8-9530-48AFEE1C812E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{334545AB-9ABD-40C8-9530-48AFEE1C812E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{334545AB-9ABD-40C8-9530-48AFEE1C812E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7BBE7833-BAED-4160-9D02-CAF111672BD0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7BBE7833-BAED-4160-9D02-CAF111672BD0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7BBE7833-BAED-4160-9D02-CAF111672BD0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7BBE7833-BAED-4160-9D02-CAF111672BD0}.Release|Any CPU.Build.0 = Release|Any CPU
+		{00C28057-F0DE-4642-B5B1-1A42BF1237E9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{00C28057-F0DE-4642-B5B1-1A42BF1237E9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{00C28057-F0DE-4642-B5B1-1A42BF1237E9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{00C28057-F0DE-4642-B5B1-1A42BF1237E9}.Release|Any CPU.Build.0 = Release|Any CPU
+		{705A964E-5A56-4ACC-ACF9-E772D071A555}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{705A964E-5A56-4ACC-ACF9-E772D071A555}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{705A964E-5A56-4ACC-ACF9-E772D071A555}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{705A964E-5A56-4ACC-ACF9-E772D071A555}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -80,6 +104,10 @@ Global
 		{3460E2CA-29A6-45C0-BA55-26B8F5FF7298} = {E888E2D4-A105-4B19-8A53-86DFDA724740}
 		{7B891139-1181-40AD-9DDB-5A6CB77C66F2} = {6711B2C7-0746-4A45-8E61-BA235480C06A}
 		{3888D8D5-5F58-42A3-8616-FD13E01210EB} = {E888E2D4-A105-4B19-8A53-86DFDA724740}
+		{334545AB-9ABD-40C8-9530-48AFEE1C812E} = {6711B2C7-0746-4A45-8E61-BA235480C06A}
+		{7BBE7833-BAED-4160-9D02-CAF111672BD0} = {6711B2C7-0746-4A45-8E61-BA235480C06A}
+		{00C28057-F0DE-4642-B5B1-1A42BF1237E9} = {E888E2D4-A105-4B19-8A53-86DFDA724740}
+		{705A964E-5A56-4ACC-ACF9-E772D071A555} = {E888E2D4-A105-4B19-8A53-86DFDA724740}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {3F2B5274-3B0F-4F73-B211-9BD128E1AF56}

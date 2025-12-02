@@ -27,6 +27,8 @@
 - Rabbit MQ
 - Kafka 
 - Azure Service Bus
+- Azure Event Grid
+- Azure Event Hub
 
 ---
 
@@ -37,6 +39,8 @@ dotnet add package Pigeon.Messaging
 dotnet add package Pigeon.Messaging.RabbitMq // Or any Message Broker Adapter
 dotnet add package Pigeon.Messaging.Kafka 
 dotnet add package Pigeon.Messaging.Azure.ServiceBus 
+dotnet add package Pigeon.Messaging.Azure.EventGrid 
+dotnet add package Pigeon.Messaging.Azure.EventHub 
 ```
 
 ## 🚀 Quick Start

@@ -1,0 +1,24 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <GenerateDocumentationFile>True</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <PackageId>Pigeon.Messaging.Azure.EventGrid</PackageId>
+    <Description>Official Azure EventGrid adapter for Pigeon messaging.</Description>
+    <PackageTags>azure eventgrid messaging message-brokers distributed-systems microservices pigeon pub/sub</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Azure.Messaging.EventGrid" />
+    <PackageReference Include="MinVer" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Pigeon.Messaging\Pigeon.Messaging.csproj" />
+  </ItemGroup>
+
+</Project>
