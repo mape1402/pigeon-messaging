@@ -8,6 +8,8 @@
     <PackageReference Update="RabbitMQ.Client" Version="7.1.2"/>
     <PackageReference Update="Confluent.Kafka" Version="2.11.0" />
     <PackageReference Update="Azure.Messaging.ServiceBus" Version="7.20.1" />
+    <PackageReference Update="Azure.Messaging.EventGrid" Version="4.21.0" />
+    <PackageReference Update="Azure.Messaging.EventHubs" Version="5.11.5" />
     <PackageReference Update="MinVer" Version="6.0.0"/>
   </ItemGroup>
 </Project>
