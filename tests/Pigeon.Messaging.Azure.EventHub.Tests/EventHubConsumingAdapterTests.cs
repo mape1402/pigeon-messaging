@@ -65,7 +65,7 @@ namespace Pigeon.Messaging.Azure.EventHub.Tests.Consuming
             var adapter = new EventHubConsumingAdapter(configurator, provider, options, logger);
 
             // Act
-            adapter.StartConsumeAsync();
+            await adapter.StartConsumeAsync();
             await adapter.StopConsumeAsync();
 
             // Assert
@@ -203,7 +203,7 @@ namespace Pigeon.Messaging.Azure.EventHub.Tests.Consuming
             var adapter = new EventHubConsumingAdapter(configurator, provider, options, logger);
 
             // Act
-            adapter.StartConsumeAsync();
+            await adapter.StartConsumeAsync();
             await adapter.StopConsumeAsync();
 
             // Assert - Verificar que se logueó el error
