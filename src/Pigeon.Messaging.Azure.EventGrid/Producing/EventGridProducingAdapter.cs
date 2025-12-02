@@ -40,6 +40,8 @@
         {
             try
             {
+                topic = SanitizeTopicName(topic);
+
                 var client = _eventGridProvider.GetClient(topic);
                 var eventData = CreateEventGridData(payload, topic);
 
@@ -68,5 +70,8 @@
                 EventTime = payload.CreatedOnUtc
             };
         }
+
+        private string SanitizeTopicName(string topic)
+            => topic.Replace(".", "-").Replace("_", "-");
     }
 }
