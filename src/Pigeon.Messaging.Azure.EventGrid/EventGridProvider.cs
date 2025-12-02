@@ -64,7 +64,13 @@ namespace Pigeon.Messaging.Azure.EventGrid
         {
             return _publisherClients.GetOrAdd(topic, _ =>
             {
-                var client = new EventGridPublisherClient(new Uri(_settings.TopicEndpoint), new AzureKeyCredential(_settings.AccessKey));
+                if(!_settings.TopicRouting.TryGetValue(topic, out var routingKey))
+                    throw new InvalidOperationException($"No routing key configured for topic '{topic}'. Please ensure the topic is defined in the TopicRouting configuration.");
+
+                if (!_settings.Endpoints.TryGetValue(routingKey, out var endpoint))
+                    throw new InvalidOperationException($"Event Grid topic '{topic}' is not configured in the settings. Please ensure the topic is defined in the Endpoints configuration.");
+
+                var client = new EventGridPublisherClient(new Uri(endpoint.Url), new AzureKeyCredential(endpoint.AccessKey));
                 return new EventGridPublisher(_settings, topic, client);
             });
         }

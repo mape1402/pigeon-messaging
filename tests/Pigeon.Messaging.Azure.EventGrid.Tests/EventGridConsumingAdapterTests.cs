@@ -152,5 +152,7 @@ namespace Pigeon.Messaging.Azure.EventGrid.Tests.Consuming
             provider.Received(1).CreateProcessor("topic1");
             await processor.Received(1).StartProcessingAsync(Arg.Any<CancellationToken>());
         }
+
+        private record TestMessage(string data);
     }
 }

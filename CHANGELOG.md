@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ------
 
+## [v1.1.3] - 2025-12-02
+
+### Added
+
+- 🎉 Add multiple TopicEndpoints configuration.
+
+### Fixed
+
+- 🐛 Sanitize event when EventGridConsuming adapter receives new message.
+
+------
+
 ## [v1.1.2] - 2025-12-02
 
 ### Fixed

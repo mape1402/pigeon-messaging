@@ -40,12 +40,10 @@
         {
             try
             {
-                topic = SanitizeTopicName(topic);
-
                 var client = _eventGridProvider.GetClient(topic);
                 var eventData = CreateEventGridData(payload, topic);
 
-                await client.PublishCloudEventsAsync(new[] { eventData }, cancellationToken);
+                await client.PublishCloudEventsAsync([ eventData ], cancellationToken);
 
                 _logger.LogInformation("EventGrid: Message published to topic '{Topic}' successfully.", topic);
             }
@@ -70,8 +68,5 @@
                 EventTime = payload.CreatedOnUtc
             };
         }
-
-        private string SanitizeTopicName(string topic)
-            => topic.Replace(".", "-").Replace("_", "-");
     }
 }

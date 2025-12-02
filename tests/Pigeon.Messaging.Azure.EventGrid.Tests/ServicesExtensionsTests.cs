@@ -1,7 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using NSubstitute;
-using Pigeon.Messaging.Azure.EventGrid;
 using Pigeon.Messaging.Azure.EventGrid.Consuming;
 using Pigeon.Messaging.Azure.EventGrid.Producing;
 using Pigeon.Messaging.Consuming.Management;
@@ -41,17 +40,30 @@ namespace Pigeon.Messaging.Azure.EventGrid.Tests.DependencyInjection
             var messagingSettings = new MessagingSettings { MessageBrokers = new() };
             
             var globalSettingsBuilder = new GlobalSettingsBuilder(services, mockConfiguration, mockConsumingConfigurator, messagingSettings);
-            var customEndpoint = "https://custom.eventgrid.azure.net/api/events";
 
             // Act
-            globalSettingsBuilder.UseAzureEventGrid(options => options.TopicEndpoint = customEndpoint);
+            globalSettingsBuilder.UseAzureEventGrid(options => 
+            {
+                options.ServiceBusEndPoint = "Endpoint=sb://custom.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=customkey";
+                options.TopicRouting = new Dictionary<string, string> { ["test"] = "endpoint1" };
+                options.Endpoints = new Dictionary<string, Endpoint>
+                {
+                    ["endpoint1"] = new Endpoint
+                    {
+                        Url = "https://custom.eventgrid.azure.net/api/events",
+                        AccessKey = "custom-key"
+                    }
+                };
+            });
 
             // Assert: should have IOptions<AzureEventGridSettings>
             var serviceProvider = services.BuildServiceProvider();
             var options = serviceProvider.GetService<IOptions<AzureEventGridSettings>>();
 
             Assert.NotNull(options);
-            Assert.Equal(customEndpoint, options.Value.TopicEndpoint);
+            Assert.NotNull(options.Value.ServiceBusEndPoint);
+            Assert.NotNull(options.Value.TopicRouting);
+            Assert.NotNull(options.Value.Endpoints);
         }
 
         [Fact]
@@ -66,7 +78,10 @@ namespace Pigeon.Messaging.Azure.EventGrid.Tests.DependencyInjection
             var globalSettingsBuilder = new GlobalSettingsBuilder(services, mockConfiguration, mockConsumingConfigurator, messagingSettings);
 
             // Act
-            var result = globalSettingsBuilder.UseAzureEventGrid(options => options.TopicEndpoint = "https://test.eventgrid.azure.net/api/events");
+            var result = globalSettingsBuilder.UseAzureEventGrid(options => 
+            {
+                options.ServiceBusEndPoint = "Endpoint=sb://test.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=testkey";
+            });
 
             // Assert
             Assert.Same(globalSettingsBuilder, result);
