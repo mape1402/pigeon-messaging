@@ -22,6 +22,11 @@ namespace Pigeon.Messaging.Azure.EventGrid
         /// Gets or sets the endpoint URI for the Service Bus.
         /// </summary>
         public string ServiceBusEndPoint { get; set; }
+
+        /// <summary>
+        /// Gets or sets the default endpoint used for connecting to the service.
+        /// </summary>
+        public string DefaultEndpoint { get; set; }
     }
 
     /// <summary>

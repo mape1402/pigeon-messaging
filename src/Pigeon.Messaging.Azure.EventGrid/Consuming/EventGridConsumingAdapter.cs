@@ -92,7 +92,7 @@
             if (!_processors.TryAdd(topic, processor))
             {
                 await processor.DisposeAsync();
-            _logger.LogWarning("AzureServiceBusConsumingAdapter: Processor for topic '{Topic}' already exists. Skipping creation.", topic);
+                _logger.LogWarning("AzureServiceBusConsumingAdapter: Processor for topic '{Topic}' already exists. Skipping creation.", topic);
                 return;
             }
 
@@ -103,21 +103,21 @@
                     var body = args.Message.Body.ToArray();
                     var json = body.FromBytes();
 
-                var @event = JsonSerializer.Deserialize<EventData>(json, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
-
-                MessageConsumed?.Invoke(this, new MessageConsumedEventArgs(topic, @event.Data));
+                    var @event = JsonSerializer.Deserialize<EventData>(json, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+    
+                    MessageConsumed?.Invoke(this, new MessageConsumedEventArgs(topic, @event.Data));
 
                     await args.CompleteMessageAsync(args.Message, cancellationToken);
                 }
                 catch (Exception ex)
                 {
-                _logger.LogError(ex, "AzureServiceBusConsumingAdapter: Has ocurred an unexpected error while consuming a message.");
+                    _logger.LogError(ex, "AzureServiceBusConsumingAdapter: Has ocurred an unexpected error while consuming a message.");
                 }
             };
 
             processor.ProcessErrorAsync += args =>
             {
-            _logger.LogError(args.Exception, "AzureServiceBusConsumingAdapter: An error occurred while processing messages.");
+                _logger.LogError(args.Exception, "AzureServiceBusConsumingAdapter: An error occurred while processing messages.");
                 return Task.CompletedTask;
             };
 
