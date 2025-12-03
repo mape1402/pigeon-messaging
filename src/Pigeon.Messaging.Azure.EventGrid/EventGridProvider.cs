@@ -65,7 +65,13 @@ namespace Pigeon.Messaging.Azure.EventGrid
             return _publisherClients.GetOrAdd(topic, _ =>
             {
                 if(!_settings.TopicRouting.TryGetValue(topic, out var routingKey))
-                    throw new InvalidOperationException($"No routing key configured for topic '{topic}'. Please ensure the topic is defined in the TopicRouting configuration.");
+                {
+                    if(string.IsNullOrWhiteSpace(_settings.DefaultEndpoint))
+                        throw new InvalidOperationException($"No routing key found for topic '{topic}', and no default endpoint is configured.");
+
+                    if (!_settings.TopicRouting.TryGetValue(_settings.DefaultEndpoint, out routingKey))
+                        throw new InvalidOperationException($"No routing key found for topic '{topic}', and the default endpoint '{_settings.DefaultEndpoint}' is not configured in TopicRouting.");
+                }
 
                 if (!_settings.Endpoints.TryGetValue(routingKey, out var endpoint))
                     throw new InvalidOperationException($"Event Grid topic '{topic}' is not configured in the settings. Please ensure the topic is defined in the Endpoints configuration.");

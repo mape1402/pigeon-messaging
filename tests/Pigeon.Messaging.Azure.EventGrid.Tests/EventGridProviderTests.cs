@@ -89,7 +89,7 @@ namespace Pigeon.Messaging.Azure.EventGrid.Tests
 
             // Act & Assert
             var ex = Assert.Throws<InvalidOperationException>(() => provider.GetClient("unknown-topic"));
-            Assert.Contains("No routing key configured for topic", ex.Message);
+            Assert.Contains("No routing key found for topic ", ex.Message);
         }
 
         [Fact]

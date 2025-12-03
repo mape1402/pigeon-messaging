@@ -227,7 +227,24 @@ builder.Services.AddPigeon(builder.Configuration, config =>
           "Acks": "All"
         },
         "AzureServiceBus": {
-            "ConnectionString": "Endpoint=sb://test/;SharedAccessKeyName=Root;SharedAccessKey=abc"
+          "ConnectionString": "Endpoint=sb://test/;SharedAccessKeyName=Root;SharedAccessKey=abc"
+        },
+        "AzureEventGrid": {
+          "ServiceBusEndpoint": "",
+          "Endpoints": {
+            "Greeting": {
+              "Url": "Endpoint=sb://test/;SharedAccessKeyName=Root;SharedAccessKey=abc",
+              "AccessKey": "xxxxxxtz5jzC609xxxxxiR8qgJmrMbxxxxxxcHz9k5pa70tMmVjMJxxxxxLACREanaxxxxxxAABAZExxxxx"
+            },
+            "Users": {
+              "Url": "Endpoint=sb://test/;SharedAccessKeyName=Root;SharedAccessKey=abc",
+              "AccessKey": "xxxxxxtz5jzC609xxxxxiR8qgJmrMbxxxxxxcHz9k5pa70tMmVjMJxxxxxLACREanaxxxxxxAABAZExxxxx"
+            }
+          },
+          "TopicRouting": {
+            "commands.demo.hello-world": "Greeting",
+            "events.demo.user-created": "Users"
+          }
         }
     }  
   }
