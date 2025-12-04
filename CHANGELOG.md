@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ------
 
+## [v1.1.5] - 2025-12-04
+
+### Fixed
+
+- 🐛 Fix endpoint research into routing topic for AzureEventGrid adapter. 
+
+------
+
 ## [v1.1.4] - 2025-12-03
 
 ### Added
