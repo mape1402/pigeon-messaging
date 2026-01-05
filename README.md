@@ -245,7 +245,10 @@ builder.Services.AddPigeon(builder.Configuration, config =>
             "commands.demo.hello-world": "Greeting",
             "events.demo.user-created": "Users"
           }
-        }
+        },
+        "AzureEventHub": {
+          "ConnectionString": "Endpoint=sb://tests/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=abc"
+        },
     }  
   }
 }
