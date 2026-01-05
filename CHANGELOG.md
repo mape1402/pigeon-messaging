@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ------
 
+## [v1.1.7] - 2026-01-05
+
+### Fixed
+
+- 🐛 Revert sanitization for Event Hub names.
+
+------
+
 ## [v1.1.6] - 2026-01-05
 
 ### Fixed
