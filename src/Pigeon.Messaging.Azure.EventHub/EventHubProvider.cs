@@ -58,19 +58,14 @@ namespace Pigeon.Messaging.Azure.EventHub
         /// <inheritdoc />
         public EventHubProducerClient GetProducer(string hubName)
         {
-            hubName = SanitizeHubName(hubName);
             return _producers.GetOrAdd(hubName, name => new EventHubProducerClient(_settings.ConnectionString, name));
         }
 
         /// <inheritdoc />
         public IEventHubProcessor CreateProcessor(string hubName)
         {
-            hubName = SanitizeHubName(hubName);
             return new EventHubProcessor(_settings, hubName);
         }
-
-        private string SanitizeHubName(string hubName)
-            => hubName.Replace(".", "-").Replace("_", "-");
     }
 
     /// <summary>
