@@ -50,5 +50,23 @@
                 throw;
             }
         }
+
+        public async ValueTask PublishRawMessageAsync<T>(T message, string topic, CancellationToken cancellationToken = default) where T : class
+        {
+            try
+            {
+                var kafkaProducer = _serviceProvider.GetRequiredService<IKafkaProducer<T>>();
+                var result = await kafkaProducer.PublishRawAsync(message, topic, cancellationToken);
+
+                _logger.LogInformation("Kafka: Raw message published to topic '{Topic}' with offset {Offset} and partition {Partition}.",
+                    topic, result.Offset, result.Partition);
+
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error while publishing raw message using Kafka Adapter.");
+                throw;
+            }
+        }
     }
 }

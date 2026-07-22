@@ -10,6 +10,7 @@
     internal class KafkaProducer<T> : IKafkaProducer<T> where T : class
     {
         private readonly IProducer<Null, WrappedPayload<T>> _producer;
+        private readonly IProducer<Null, T> _rawProducer;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="KafkaProducer{T}"/> class using the specified configuration provider.
@@ -22,6 +23,10 @@
 
             _producer = new ProducerBuilder<Null, WrappedPayload<T>>(config)
                 .SetValueSerializer(new JsonSerializer<WrappedPayload<T>>(serializer))
+                .Build();
+
+            _rawProducer = new ProducerBuilder<Null, T>(config)
+                .SetValueSerializer(new JsonSerializer<T>(serializer))
                 .Build();
         }
 
@@ -40,6 +45,23 @@
             };
 
             return _producer.ProduceAsync(topic, message, cancellationToken);
+        }
+
+        /// <summary>
+        /// Publishes a raw payload message to the specified Kafka topic asynchronously.
+        /// </summary>
+        /// <param name="payload">The message payload to publish directly.</param>
+        /// <param name="topic">The Kafka topic to which the message will be published.</param>
+        /// <param name="cancellationToken">A cancellation token to observe while waiting for the task to complete.</param>
+        /// <returns>A task that represents the asynchronous publish operation. The task result contains the Kafka delivery result.</returns>
+        public Task<DeliveryResult<Null, T>> PublishRawAsync(T payload, string topic, CancellationToken cancellationToken = default)
+        {
+            var message = new Message<Null, T>
+            {
+                Value = payload
+            };
+
+            return _rawProducer.ProduceAsync(topic, message, cancellationToken);
         }
     }
 }

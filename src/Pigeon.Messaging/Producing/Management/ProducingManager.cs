@@ -14,5 +14,8 @@
 
         public ValueTask PushAsync<T>(WrappedPayload<T> payload, string topic, CancellationToken cancellationToken = default) where T : class
             => _producingAdapter.PublishMessageAsync(payload, topic, cancellationToken);
+
+        public ValueTask PushRawAsync<T>(T message, string topic, CancellationToken cancellationToken = default) where T : class
+            => _producingAdapter.PublishRawMessageAsync(message, topic, cancellationToken);
     }
 }

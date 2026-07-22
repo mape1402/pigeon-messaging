@@ -63,6 +63,20 @@
             => PublishAsync(message, topic, SemanticVersion.Default, cancellationToken);
 
         /// <summary>
+        /// <inheritdoc/>
+        /// </summary>
+        public virtual async ValueTask PublishRawAsync<T>(T message, string topic, CancellationToken cancellationToken = default) where T : class
+        {
+            if (message is null)
+                throw new ArgumentNullException(nameof(message));
+
+            if (string.IsNullOrWhiteSpace(topic))
+                throw new ArgumentException("Topic cannot be null or empty.", nameof(topic));
+
+            await _producingManager.PushRawAsync(message, topic, cancellationToken);
+        }
+
+        /// <summary>
         /// Defines the core logic for publishing a message.
         /// Applies all registered interceptors, wraps the payload with metadata and versioning,
         /// and delegates the final push to the producing manager.

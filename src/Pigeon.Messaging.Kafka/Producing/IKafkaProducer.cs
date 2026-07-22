@@ -17,5 +17,14 @@
         /// <param name="cancellationToken">A cancellation token to observe while waiting for the task to complete.</param>
         /// <returns>A task that represents the asynchronous publish operation. The task result contains the Kafka delivery result.</returns>
         Task<DeliveryResult<Null, WrappedPayload<T>>> PublishAsync(WrappedPayload<T> payload, string topic, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Publishes a raw payload message to the specified Kafka topic asynchronously.
+        /// </summary>
+        /// <param name="message">The message payload to publish directly.</param>
+        /// <param name="topic">The Kafka topic to which the message will be published.</param>
+        /// <param name="cancellationToken">A cancellation token to observe while waiting for the task to complete.</param>
+        /// <returns>A task that represents the asynchronous publish operation. The task result contains the Kafka delivery result.</returns>
+        Task<DeliveryResult<Null, T>> PublishRawAsync(T message, string topic, CancellationToken cancellationToken = default);
     }
 }

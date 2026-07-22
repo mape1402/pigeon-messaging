@@ -54,6 +54,13 @@
         /// <exception cref="Exception">Any exception during publishing is logged and rethrown.</exception>
         public async ValueTask PublishMessageAsync<T>(WrappedPayload<T> payload, string topic, CancellationToken cancellationToken = default)
             where T : class
+            => await PublishCoreAsync(payload, topic, cancellationToken);
+
+        public async ValueTask PublishRawMessageAsync<T>(T message, string topic, CancellationToken cancellationToken = default)
+            where T : class
+            => await PublishCoreAsync(message, topic, cancellationToken);
+
+        private async ValueTask PublishCoreAsync(object payload, string topic, CancellationToken cancellationToken = default)
         {
             await _channelLock.WaitAsync(cancellationToken);
 
