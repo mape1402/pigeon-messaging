@@ -1,56 +1,175 @@
-name: Tag & Release
+name: Release to NuGet
 
 on:
-  push:
-    branches:
-      - "main"
-    paths: 
-      - 'src/**'
-      - 'Pelican.sln'
-      - 'Directory.Build.props'
-      - 'CHANGELOG.md'
+  workflow_dispatch:
+
+env:
+  CHANGELOG_PATH: CHANGELOG.md
+  CONFIGURATION: Release
+  DOTNET_TARGET: Pigeon.Messaging.sln
+  NUGET_OUTPUT: ./nupkgs
+  NUGET_SOURCE: https://api.nuget.org/v3/index.json
+  NUGET_USER: ${{ vars.NUGET_USER }}
+  RELEASE_BRANCH_PATTERN: ^releases/v[0-9]+\.[0-9]+\.[0-9]+$
+  RELEASE_BRANCH_PREFIX: releases/
+  RELEASE_NOTES_PATH: release_notes.txt
 
 jobs:
-  tag-and-release:
+  release:
     runs-on: ubuntu-latest
     permissions:
-      contents: write  # necesario para crear y subir tags
+      contents: write
+      id-token: write
 
     steps:
-      - name: ⬇️ Checkout code
-        uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # necesario para crear y subir tags
+          fetch-depth: 0
 
-      - name: 🏷 Get tag from CHANGELOG.md
-        id: changelog
+      - name: Validate release branch
+        id: version
+        shell: bash
         run: |
-          TAG_LINE=$(grep -m1 -E '^## \[v[0-9]+\.[0-9]+\.[0-9]+\]' CHANGELOG.md)
-          TAG=$(echo "$TAG_LINE" | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+')
+          BRANCH="${GITHUB_REF_NAME}"
 
-          echo "TAG=$TAG"
-          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          if [[ ! "$BRANCH" =~ $RELEASE_BRANCH_PATTERN ]]; then
+            echo "Production releases must run from a branch matching $RELEASE_BRANCH_PATTERN. Current branch: $BRANCH"
+            exit 1
+          fi
 
-          # Paso 2: Extraer contenido entre esta línea y la siguiente línea que comience con ##
+          TAG="${BRANCH#"$RELEASE_BRANCH_PREFIX"}"
+          VERSION="${TAG#v}"
+
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Validate CHANGELOG entry
+        shell: bash
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          TAG_LINE=$(grep -m1 -E "^## \\[$TAG\\]" "$CHANGELOG_PATH" || true)
+
+          if [[ -z "$TAG_LINE" ]]; then
+            echo "$CHANGELOG_PATH must contain a section for $TAG before deploying."
+            exit 1
+          fi
+
           awk -v tag_line="$TAG_LINE" '
             $0 == tag_line { in_section=1; next }
             in_section && /^## / { exit }
             in_section
-          ' CHANGELOG.md > release_notes.txt
+          ' "$CHANGELOG_PATH" > "$RELEASE_NOTES_PATH"
 
-      - name: 🔖 Create Git tag and push
+          if [[ ! -s "$RELEASE_NOTES_PATH" ]]; then
+            echo "$CHANGELOG_PATH section for $TAG is empty."
+            exit 1
+          fi
+
+      - name: Install .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            9.0.x
+            10.0.x
+
+      - name: Restore
+        run: dotnet restore "$DOTNET_TARGET"
+
+      - name: Build
+        run: >
+          dotnet build "$DOTNET_TARGET"
+          --no-restore
+          --configuration "$CONFIGURATION"
+          /p:Version=${{ steps.version.outputs.version }}
+          /p:PackageVersion=${{ steps.version.outputs.version }}
+          /p:MinVerVersionOverride=${{ steps.version.outputs.version }}
+
+      - name: Test
+        run: dotnet test "$DOTNET_TARGET" --no-build --configuration "$CONFIGURATION" --verbosity normal
+
+      - name: Pack NuGet packages
+        run: >
+          dotnet pack "$DOTNET_TARGET"
+          --no-build
+          --configuration "$CONFIGURATION"
+          --output "$NUGET_OUTPUT"
+          /p:Version=${{ steps.version.outputs.version }}
+          /p:PackageVersion=${{ steps.version.outputs.version }}
+          /p:MinVerVersionOverride=${{ steps.version.outputs.version }}
+
+      - name: Create or update release tag
+        shell: bash
         run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          HEAD_SHA="$(git rev-parse HEAD)"
+
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
-          git tag ${{ steps.changelog.outputs.tag }}
-          git push origin ${{ steps.changelog.outputs.tag }}
 
-      - name: 📝 Create Draft Release
-        uses: softprops/action-gh-release@v1
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            git fetch --force origin "refs/tags/$TAG:refs/tags/$TAG"
+            TAG_SHA="$(git rev-list -n 1 "$TAG")"
+
+            if [[ "$TAG_SHA" == "$HEAD_SHA" ]]; then
+              echo "Tag $TAG already points to $HEAD_SHA. Nothing to update."
+            else
+              echo "Tag $TAG points to $TAG_SHA and will be moved to $HEAD_SHA."
+              git tag --force "$TAG" "$HEAD_SHA"
+              git push --force origin "refs/tags/$TAG"
+            fi
+          else
+            git tag --force "$TAG" "$HEAD_SHA"
+            git push origin "refs/tags/$TAG"
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.changelog.outputs.tag }}
-          name: ${{ steps.changelog.outputs.tag }}
-          body_path: release_notes.txt
-          draft: true
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ${{ steps.version.outputs.tag }}
+          body_path: ${{ env.RELEASE_NOTES_PATH }}
+          draft: false
+          prerelease: false
+          files: |
+            ${{ env.NUGET_OUTPUT }}/*.nupkg
+            ${{ env.NUGET_OUTPUT }}/*.snupkg
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Validate NuGet trusted publishing user
+        shell: bash
+        run: |
+          if [[ -z "$NUGET_USER" ]]; then
+            echo "Repository variable NUGET_USER must be set to the nuget.org username that created the Trusted Publishing policy."
+            echo "This is not necessarily the package owner, organization, GitHub repository owner, or policy name."
+            exit 1
+          fi
+
+      - name: NuGet trusted publishing login
+        uses: NuGet/login@v1
+        id: nuget_login
+        with:
+          user: ${{ env.NUGET_USER }}
+
+      - name: Push to NuGet
+        shell: bash
+        run: |
+          shopt -s nullglob
+
+          packages=("$NUGET_OUTPUT"/*.nupkg)
+          symbols=("$NUGET_OUTPUT"/*.snupkg)
+
+          if (( ${#packages[@]} == 0 )); then
+            echo "No .nupkg files were found in $NUGET_OUTPUT."
+            exit 1
+          fi
+
+          for package in "${packages[@]}"; do
+            dotnet nuget push "$package" -k ${{ steps.nuget_login.outputs.NUGET_API_KEY }} -s "$NUGET_SOURCE" --skip-duplicate
+          done
+
+          for symbol in "${symbols[@]}"; do
+            dotnet nuget push "$symbol" -k ${{ steps.nuget_login.outputs.NUGET_API_KEY }} -s "$NUGET_SOURCE" --skip-duplicate
+          done
