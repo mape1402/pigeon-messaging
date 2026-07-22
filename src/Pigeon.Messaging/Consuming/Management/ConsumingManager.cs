@@ -67,7 +67,10 @@
                     if (!string.IsNullOrWhiteSpace(_globalSettings.Domain))
                         topic = topic.Replace($"{_globalSettings.Domain}.", string.Empty);
 
-                    await _dispatcher.DispatchAsync(topic, rawPayload, linkedCts.Token);
+                    if (e.Subscription == Configuration.ConsumerEndpoint.DefaultSubscription)
+                        await _dispatcher.DispatchAsync(topic, rawPayload, linkedCts.Token);
+                    else
+                        await _dispatcher.DispatchAsync(topic, e.Subscription, rawPayload, linkedCts.Token);
                 }
                 catch (Exception ex)
                 {

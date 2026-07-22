@@ -1,7 +1,9 @@
 ﻿namespace Pigeon.Messaging.Rabbit.Producing
 {
     using Microsoft.Extensions.Logging;
+    using Microsoft.Extensions.Options;
     using Pigeon.Messaging.Contracts;
+    using Pigeon.Messaging.Producing;
     using Pigeon.Messaging.Producing.Management;
     using RabbitMQ.Client;
     using System.Collections.Concurrent;
@@ -16,6 +18,7 @@
     {
         private readonly IConnectionProvider _connectionProvider;
         private readonly ISerializer _serializer;
+        private readonly RabbitSettings _settings;
         private readonly ILogger<RabbitProducingAdapter> _logger;
 
         // Tracks topics that have already been declared to avoid redundant declarations
@@ -34,10 +37,11 @@
         /// <param name="serializer">Serializer for converting messages to JSON format.</param>
         /// <param name="logger">Logger instance for error and info logging.</param>
         /// <exception cref="ArgumentNullException">Thrown if any dependency is null.</exception>
-        public RabbitProducingAdapter(IConnectionProvider connectionProvider, ISerializer serializer, ILogger<RabbitProducingAdapter> logger)
+        public RabbitProducingAdapter(IConnectionProvider connectionProvider, ISerializer serializer, IOptions<RabbitSettings> settings, ILogger<RabbitProducingAdapter> logger)
         {
             _connectionProvider = connectionProvider ?? throw new ArgumentNullException(nameof(connectionProvider));
             _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
+            _settings = settings?.Value ?? throw new ArgumentNullException(nameof(settings));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -54,13 +58,21 @@
         /// <exception cref="Exception">Any exception during publishing is logged and rethrown.</exception>
         public async ValueTask PublishMessageAsync<T>(WrappedPayload<T> payload, string topic, CancellationToken cancellationToken = default)
             where T : class
-            => await PublishCoreAsync(payload, topic, cancellationToken);
+            => await PublishMessageAsync(payload, PublishingRoute.ForTopic(topic), cancellationToken);
+
+        public async ValueTask PublishMessageAsync<T>(WrappedPayload<T> payload, PublishingRoute route, CancellationToken cancellationToken = default)
+            where T : class
+            => await PublishCoreAsync(payload, route, cancellationToken);
 
         public async ValueTask PublishRawMessageAsync<T>(T message, string topic, CancellationToken cancellationToken = default)
             where T : class
-            => await PublishCoreAsync(message, topic, cancellationToken);
+            => await PublishRawMessageAsync(message, PublishingRoute.ForTopic(topic), cancellationToken);
 
-        private async ValueTask PublishCoreAsync(object payload, string topic, CancellationToken cancellationToken = default)
+        public async ValueTask PublishRawMessageAsync<T>(T message, PublishingRoute route, CancellationToken cancellationToken = default)
+            where T : class
+            => await PublishCoreAsync(message, route, cancellationToken);
+
+        private async ValueTask PublishCoreAsync(object payload, PublishingRoute route, CancellationToken cancellationToken = default)
         {
             await _channelLock.WaitAsync(cancellationToken);
 
@@ -69,12 +81,17 @@
                 if (_channel == null || !_channel.IsOpen)
                     _channel = await _connectionProvider.CreateChannelAsync(cancellationToken);
 
-                if (_registeredTopics.TryAdd(topic, 0))
-                    await _channel.QueueDeclareAsync(topic, durable: false, exclusive: false, autoDelete: false, cancellationToken: cancellationToken);
+                var exchange = ResolveExchange(route);
+
+                if (!string.IsNullOrWhiteSpace(exchange))
+                    await _channel.ExchangeDeclareAsync(exchange, _settings.ExchangeType, durable: _settings.DurableExchange, autoDelete: false, cancellationToken: cancellationToken);
+
+                if (string.IsNullOrWhiteSpace(exchange) && _registeredTopics.TryAdd(route.Topic, 0))
+                    await _channel.QueueDeclareAsync(route.Topic, durable: false, exclusive: false, autoDelete: false, cancellationToken: cancellationToken);
 
                 var body = _serializer.SerializeAsBytes(payload);
 
-                await _channel.BasicPublishAsync(string.Empty, topic, false, new BasicProperties(), body,  cancellationToken);
+                await _channel.BasicPublishAsync(exchange, route.RoutingKey, false, new BasicProperties(), body,  cancellationToken);
             }
             catch (Exception ex)
             {
@@ -86,5 +103,10 @@
                 _channelLock.Release();
             }
         }
+
+        private string ResolveExchange(PublishingRoute route)
+            => !string.IsNullOrWhiteSpace(route.Exchange)
+                ? route.Exchange
+                : _settings.Exchange ?? string.Empty;
     }
 }

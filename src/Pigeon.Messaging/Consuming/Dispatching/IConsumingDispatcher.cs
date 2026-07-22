@@ -25,5 +25,27 @@
         /// A <see cref="Task"/> representing the asynchronous handling operation.
         /// </returns>
         Task DispatchAsync(string topic, RawPayload rawPayload, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Dispatches a raw payload asynchronously by resolving the appropriate
+        /// consumer configuration for the given topic, message version, and subscription.
+        /// </summary>
+        /// <param name="topic">
+        /// The topic or channel that the message was received from.
+        /// </param>
+        /// <param name="subscription">
+        /// The subscription, queue name, or consumer group that received the message.
+        /// </param>
+        /// <param name="rawPayload">
+        /// The raw payload containing minimal header information extracted
+        /// from the original message, including domain, version, and timestamp.
+        /// </param>
+        /// <param name="cancellationToken">
+        /// A token to observe for cancellation requests.
+        /// </param>
+        /// <returns>
+        /// A <see cref="Task"/> representing the asynchronous handling operation.
+        /// </returns>
+        Task DispatchAsync(string topic, string subscription, RawPayload rawPayload, CancellationToken cancellationToken = default);
     }
 }

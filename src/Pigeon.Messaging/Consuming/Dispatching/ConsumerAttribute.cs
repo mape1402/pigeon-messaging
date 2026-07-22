@@ -37,6 +37,18 @@
         }
 
         /// <summary>
+        /// Initializes a new instance of the <see cref="ConsumerAttribute"/> class
+        /// with the specified topic, semantic version, and subscription.
+        /// </summary>
+        /// <param name="topic">The topic name to subscribe the consumer method to.</param>
+        /// <param name="version">The semantic version of the message contract.</param>
+        /// <param name="subscription">The subscription, queue name, or consumer group for this consumer.</param>
+        public ConsumerAttribute(string topic, string version, string subscription) : this(topic, version)
+        {
+            Subscription = subscription;
+        }
+
+        /// <summary>
         /// Gets the topic name this consumer method subscribes to.
         /// </summary>
         public string Topic { get; }
@@ -45,5 +57,10 @@
         /// Gets the semantic version string of the message contract this consumer method handles.
         /// </summary>
         public string Version { get; }
+
+        /// <summary>
+        /// Gets or sets the subscription, queue name, or consumer group for this consumer.
+        /// </summary>
+        public string Subscription { get; set; }
     }
 }

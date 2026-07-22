@@ -30,5 +30,13 @@
         /// <param name="topic">The name of the topic.</param>
         /// <returns>A Service Bus processor.</returns>
         ServiceBusProcessor CreateProcessor(string topic);
+
+        /// <summary>
+        /// Creates a Service Bus processor for the specified topic subscription.
+        /// </summary>
+        /// <param name="topic">The name of the topic.</param>
+        /// <param name="subscription">The name of the subscription.</param>
+        /// <returns>A Service Bus processor.</returns>
+        ServiceBusProcessor CreateProcessor(string topic, string subscription);
     }
 }

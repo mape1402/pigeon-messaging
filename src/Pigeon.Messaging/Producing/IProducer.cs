@@ -23,6 +23,21 @@
         ValueTask PublishAsync<T>(T message, string topic, SemanticVersion version, CancellationToken cancellationToken = default) where T : class;
 
         /// <summary>
+        /// Publishes a message asynchronously to an exchange using a routing key with an explicit semantic version.
+        /// </summary>
+        /// <typeparam name="T">The type of the message payload.</typeparam>
+        /// <param name="message">The message instance to publish.</param>
+        /// <param name="exchange">The broker exchange or equivalent routing channel.</param>
+        /// <param name="routingKey">The routing key used to deliver the message to matching consumers.</param>
+        /// <param name="version">The semantic version of the message contract.</param>
+        /// <param name="cancellationToken">
+        /// A token to monitor for cancellation requests.
+        /// This allows the operation to be cancelled before completion.
+        /// </param>
+        /// <returns>A ValueTask representing the asynchronous operation.</returns>
+        ValueTask PublishAsync<T>(T message, string exchange, string routingKey, SemanticVersion version, CancellationToken cancellationToken = default) where T : class;
+
+        /// <summary>
         /// Publishes a message asynchronously to a given topic without specifying a version.
         /// The publisher may apply a default version or no versioning at all.
         /// </summary>
@@ -49,5 +64,20 @@
         /// </param>
         /// <returns>A ValueTask representing the asynchronous operation.</returns>
         ValueTask PublishRawAsync<T>(T message, string topic, CancellationToken cancellationToken = default) where T : class;
+
+        /// <summary>
+        /// Publishes a raw message asynchronously to an exchange using a routing key without wrapping it
+        /// in a <see cref="WrappedPayload{T}"/>.
+        /// </summary>
+        /// <typeparam name="T">The type of the message payload.</typeparam>
+        /// <param name="message">The message instance to publish.</param>
+        /// <param name="exchange">The broker exchange or equivalent routing channel.</param>
+        /// <param name="routingKey">The routing key used to deliver the message to matching consumers.</param>
+        /// <param name="cancellationToken">
+        /// A token to monitor for cancellation requests.
+        /// This allows the operation to be cancelled before completion.
+        /// </param>
+        /// <returns>A ValueTask representing the asynchronous operation.</returns>
+        ValueTask PublishRawAsync<T>(T message, string exchange, string routingKey, CancellationToken cancellationToken = default) where T : class;
     }
 }

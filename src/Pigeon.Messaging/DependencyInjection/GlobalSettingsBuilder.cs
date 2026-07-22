@@ -199,6 +199,22 @@
         }
 
         /// <summary>
+        /// Registers a new consumer handler for a topic, version, and subscription.
+        /// </summary>
+        /// <typeparam name="T">The message type.</typeparam>
+        /// <param name="topic">The topic name.</param>
+        /// <param name="version">The semantic version of the message.</param>
+        /// <param name="subscription">The subscription, queue name, or consumer group.</param>
+        /// <param name="handler">The handler delegate to invoke when a message is consumed.</param>
+        /// <returns>The same <see cref="GlobalSettingsBuilder"/> instance for chaining.</returns>
+        internal GlobalSettingsBuilder AddConsumeHandler<T>(string topic, SemanticVersion version, string subscription, ConsumeHandler<T> handler)
+            where T : class
+        {
+            _consumingConfigurator.AddConsumer(topic, version, subscription, handler);
+            return this;
+        }
+
+        /// <summary>
         /// Registers a new consumer handler for a topic using the default version.
         /// </summary>
         /// <typeparam name="T">The message type.</typeparam>
@@ -211,5 +227,6 @@
             _consumingConfigurator.AddConsumer(topic, handler);
             return this;
         }
+
     }
 }

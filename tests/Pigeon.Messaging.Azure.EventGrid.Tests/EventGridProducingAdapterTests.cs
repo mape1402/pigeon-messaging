@@ -4,6 +4,7 @@ using NSubstitute;
 using Pigeon.Messaging.Azure.EventGrid;
 using Pigeon.Messaging.Azure.EventGrid.Producing;
 using Pigeon.Messaging.Contracts;
+using Pigeon.Messaging.Producing;
 using global::Azure.Messaging.EventGrid;
 
 namespace Pigeon.Messaging.Azure.EventGrid.Tests.Producing
@@ -119,6 +120,44 @@ namespace Pigeon.Messaging.Azure.EventGrid.Tests.Producing
             serializer.DidNotReceive().Serialize(Arg.Any<WrappedPayload<TestMessage>>());
             await publisher.Received(1).PublishCloudEventsAsync(
                 Arg.Is<IEnumerable<EventGridEvent>>(events => events.Count() == 1),
+                Arg.Any<CancellationToken>());
+        }
+
+        [Fact]
+        public async Task PublishMessageAsync_Should_Use_Route_For_EventGrid_Event()
+        {
+            // Arrange
+            var provider = Substitute.For<IEventGridProvider>();
+            var logger = Substitute.For<ILogger<EventGridProducingAdapter>>();
+            var serializer = Substitute.For<ISerializer>();
+            var publisher = Substitute.For<IEventGridPublisher>();
+            var route = PublishingRoute.ForExchange("events", "user.created");
+
+            serializer.Serialize(Arg.Any<object>()).Returns("{\"message\":\"test\"}");
+            provider.GetClient("user.created").Returns(publisher);
+            publisher.PublishCloudEventsAsync(Arg.Any<IEnumerable<EventGridEvent>>(), Arg.Any<CancellationToken>())
+                .Returns(Task.CompletedTask);
+
+            var payload = new WrappedPayload<TestMessage>
+            {
+                Message = new TestMessage { Content = "Test" },
+                Domain = "test-domain",
+                MessageVersion = new SemanticVersion(1, 0, 0),
+                CreatedOnUtc = DateTimeOffset.UtcNow,
+                Metadata = new Dictionary<string, object>()
+            };
+            var adapter = new EventGridProducingAdapter(provider, serializer, logger);
+
+            // Act
+            await adapter.PublishMessageAsync(payload, route);
+
+            // Assert
+            provider.Received(1).GetClient("user.created");
+            await publisher.Received(1).PublishCloudEventsAsync(
+                Arg.Is<IEnumerable<EventGridEvent>>(events =>
+                    events.Single().Subject == "user.created" &&
+                    events.Single().EventType == "user.created.1.0.0" &&
+                    events.Single().Topic == "events"),
                 Arg.Any<CancellationToken>());
         }
 

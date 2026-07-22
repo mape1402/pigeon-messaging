@@ -1,8 +1,10 @@
-﻿namespace Pigeon.Messaging.RabbitMq.Tests.Producing
+namespace Pigeon.Messaging.RabbitMq.Tests.Producing
 {
     using Microsoft.Extensions.Logging;
+    using Microsoft.Extensions.Options;
     using NSubstitute;
     using Pigeon.Messaging.Contracts;
+    using Pigeon.Messaging.Producing;
     using Pigeon.Messaging.Rabbit;
     using Pigeon.Messaging.Rabbit.Producing;
     using RabbitMQ.Client;
@@ -17,12 +19,14 @@
         private readonly IConnectionProvider _connectionProvider;
         private readonly ILogger<RabbitProducingAdapter> _logger;
         private readonly IChannel _channel;
+        private readonly IOptions<RabbitSettings> _options;
 
         public RabbitProducingAdapterTests()
         {
             _connectionProvider = Substitute.For<IConnectionProvider>();
             _logger = Substitute.For<ILogger<RabbitProducingAdapter>>();
             _channel = Substitute.For<IChannel>();
+            _options = Options.Create(new RabbitSettings());
         }
 
         [Fact]
@@ -33,7 +37,7 @@
             _connectionProvider.CreateChannelAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult(_channel));
             var serializer = Substitute.For<ISerializer>();
             serializer.Serialize(Arg.Any<object>()).Returns("{}");
-            var adapter = new RabbitProducingAdapter(_connectionProvider, serializer, _logger);
+            var adapter = new RabbitProducingAdapter(_connectionProvider, serializer, _options, _logger);
             var payload = new WrappedPayload<SampleMessage>()
             {
                 CreatedOnUtc = DateTimeOffset.UtcNow,
@@ -71,7 +75,7 @@
             _connectionProvider.CreateChannelAsync(Arg.Any<CancellationToken>()).Returns(_channel);
             var serializer = Substitute.For<ISerializer>();
             serializer.Serialize(Arg.Any<object>()).Returns("{}");
-            var adapter = new RabbitProducingAdapter(_connectionProvider, serializer, _logger);
+            var adapter = new RabbitProducingAdapter(_connectionProvider, serializer, _options, _logger);
             var payload = new WrappedPayload<SampleMessage>()
             {
                 CreatedOnUtc = DateTimeOffset.UtcNow,
@@ -95,7 +99,7 @@
             _connectionProvider.CreateChannelAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult(_channel));
             var serializer = Substitute.For<ISerializer>();
             serializer.Serialize(Arg.Any<object>()).Returns("{}");
-            var adapter = new RabbitProducingAdapter(_connectionProvider, serializer, _logger);
+            var adapter = new RabbitProducingAdapter(_connectionProvider, serializer, _options, _logger);
             var message = SampleMessage.Instance;
 
             await adapter.PublishRawMessageAsync(message, "raw-topic");
@@ -119,7 +123,7 @@
             _connectionProvider.CreateChannelAsync(Arg.Any<CancellationToken>()).Returns(_channel);
             var serializer = Substitute.For<ISerializer>();
             serializer.Serialize(Arg.Any<object>()).Returns("{}");
-            var adapter = new RabbitProducingAdapter(_connectionProvider, serializer, _logger);
+            var adapter = new RabbitProducingAdapter(_connectionProvider, serializer, _options, _logger);
 
             // Force internal _channel
             adapter.GetType().GetField("_channel", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
@@ -150,7 +154,7 @@
             _connectionProvider.CreateChannelAsync(Arg.Any<CancellationToken>()).Returns(_channel);
             var serializer = Substitute.For<ISerializer>();
             serializer.Serialize(Arg.Any<object>()).Returns("{}");
-            var adapter = new RabbitProducingAdapter(_connectionProvider, serializer, _logger);
+            var adapter = new RabbitProducingAdapter(_connectionProvider, serializer, _options, _logger);
             var payload = new WrappedPayload<SampleMessage>()
             {
                 CreatedOnUtc = DateTimeOffset.UtcNow,
@@ -174,7 +178,7 @@
             _connectionProvider.CreateChannelAsync(Arg.Any<CancellationToken>()).Returns(_channel);
             var serializer = Substitute.For<ISerializer>();
             serializer.Serialize(Arg.Any<object>()).Returns("{}");
-            var adapter = new RabbitProducingAdapter(_connectionProvider, serializer, _logger);
+            var adapter = new RabbitProducingAdapter(_connectionProvider, serializer, _options, _logger);
             var payload = new WrappedPayload<SampleMessage>()
             {
                 CreatedOnUtc = DateTimeOffset.UtcNow,
@@ -192,6 +196,45 @@
                     .Returns(ValueTask.CompletedTask);
 
             await adapter.PublishMessageAsync(payload, "queue"); // should NOT deadlock
+        }
+
+        [Fact]
+        public async Task Should_Publish_Message_To_Exchange_With_RoutingKey()
+        {
+            // Arrange
+            _channel.IsOpen.Returns(true);
+            _connectionProvider.CreateChannelAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult(_channel));
+            var serializer = Substitute.For<ISerializer>();
+            serializer.Serialize(Arg.Any<object>()).Returns("{}");
+            var options = Options.Create(new RabbitSettings
+            {
+                ExchangeType = "topic",
+                DurableExchange = true
+            });
+            var adapter = new RabbitProducingAdapter(_connectionProvider, serializer, options, _logger);
+            var payload = new WrappedPayload<SampleMessage>
+            {
+                CreatedOnUtc = DateTimeOffset.UtcNow,
+                Domain = "domain",
+                Message = SampleMessage.Instance,
+                MessageVersion = SemanticVersion.Default,
+                Metadata = new ReadOnlyDictionary<string, object>(new Dictionary<string, object>())
+            };
+            var route = PublishingRoute.ForExchange("events", "user.created");
+
+            // Act
+            await adapter.PublishMessageAsync(payload, route);
+
+            // Assert
+            await _channel.Received(1).ExchangeDeclareAsync("events", "topic", true, false, null, false, Arg.Any<CancellationToken>());
+            await _channel.DidNotReceive().QueueDeclareAsync("user.created", Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<IDictionary<string, object>>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
+            await _channel.Received(1).BasicPublishAsync(
+                "events",
+                "user.created",
+                Arg.Any<bool>(),
+                Arg.Any<BasicProperties>(),
+                Arg.Any<ReadOnlyMemory<byte>>(),
+                Arg.Any<CancellationToken>());
         }
 
         class SampleMessage

@@ -50,6 +50,35 @@ namespace Pigeon.Messaging.Tests.Consuming.Configuration
         }
 
         [Fact]
+        public void AddConsumer_Should_Allow_Same_Topic_And_Version_With_Different_Subscriptions()
+        {
+            var topic = "test-topic";
+            var version = SemanticVersion.Default;
+
+            _configurator.AddConsumer<DummyMessage>(topic, version, "billing", DummyHandler);
+            _configurator.AddConsumer<DummyMessage>(topic, version, "notifications", DummyHandler);
+
+            var billing = _configurator.GetConfiguration(topic, version, "billing");
+            var notifications = _configurator.GetConfiguration(topic, version, "notifications");
+
+            Assert.Equal("billing", billing.Subscription);
+            Assert.Equal("notifications", notifications.Subscription);
+            Assert.NotSame(billing, notifications);
+        }
+
+        [Fact]
+        public void GetAllEndpoints_Should_Return_Registered_Topic_Subscription_Pairs()
+        {
+            _configurator.AddConsumer<DummyMessage>("user.created", SemanticVersion.Default, "billing", DummyHandler);
+            _configurator.AddConsumer<DummyMessage>("user.created", SemanticVersion.Default, "notifications", DummyHandler);
+
+            var endpoints = _configurator.GetAllEndpoints().ToList();
+
+            Assert.Contains(endpoints, endpoint => endpoint.Topic == "user.created" && endpoint.Subscription == "billing");
+            Assert.Contains(endpoints, endpoint => endpoint.Topic == "user.created" && endpoint.Subscription == "notifications");
+        }
+
+        [Fact]
         public void AddConsumer_Should_Throw_When_Handler_Is_Null()
         {
             var topic = "test-topic";

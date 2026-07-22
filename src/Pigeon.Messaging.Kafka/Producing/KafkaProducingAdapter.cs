@@ -3,6 +3,7 @@
     using Microsoft.Extensions.DependencyInjection;
     using Microsoft.Extensions.Logging;
     using Pigeon.Messaging.Contracts;
+    using Pigeon.Messaging.Producing;
     using Pigeon.Messaging.Producing.Management;
 
     /// <summary>
@@ -34,14 +35,17 @@
         /// <param name="cancellationToken">A cancellation token to observe while waiting for the task to complete.</param>
         /// <returns>A <see cref="ValueTask"/> representing the asynchronous publish operation.</returns>
         public async ValueTask PublishMessageAsync<T>(WrappedPayload<T> payload, string topic, CancellationToken cancellationToken = default) where T : class
+            => await PublishMessageAsync(payload, PublishingRoute.ForTopic(topic), cancellationToken);
+
+        public async ValueTask PublishMessageAsync<T>(WrappedPayload<T> payload, PublishingRoute route, CancellationToken cancellationToken = default) where T : class
         {
             try
             {
                 var kafkaProducer = _serviceProvider.GetRequiredService<IKafkaProducer<T>>();
-                var result = await kafkaProducer.PublishAsync(payload, topic, cancellationToken);
+                var result = await kafkaProducer.PublishAsync(payload, route.Topic, cancellationToken);
 
                 _logger.LogInformation("Kafka: Message published to topic '{Topic}' with offset {Offset} and partition {Partition}.",
-                    topic, result.Offset, result.Partition);
+                    route.Topic, result.Offset, result.Partition);
 
             }
             catch (Exception ex)
@@ -52,14 +56,17 @@
         }
 
         public async ValueTask PublishRawMessageAsync<T>(T message, string topic, CancellationToken cancellationToken = default) where T : class
+            => await PublishRawMessageAsync(message, PublishingRoute.ForTopic(topic), cancellationToken);
+
+        public async ValueTask PublishRawMessageAsync<T>(T message, PublishingRoute route, CancellationToken cancellationToken = default) where T : class
         {
             try
             {
                 var kafkaProducer = _serviceProvider.GetRequiredService<IKafkaProducer<T>>();
-                var result = await kafkaProducer.PublishRawAsync(message, topic, cancellationToken);
+                var result = await kafkaProducer.PublishRawAsync(message, route.Topic, cancellationToken);
 
                 _logger.LogInformation("Kafka: Raw message published to topic '{Topic}' with offset {Offset} and partition {Partition}.",
-                    topic, result.Offset, result.Partition);
+                    route.Topic, result.Offset, result.Partition);
 
             }
             catch (Exception ex)

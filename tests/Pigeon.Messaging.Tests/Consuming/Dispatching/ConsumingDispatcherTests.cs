@@ -70,6 +70,45 @@
             Assert.True(handlerCalled);
         }
 
+        [Fact]
+        public async Task DispatchAsync_Should_Resolve_Handler_By_Subscription()
+        {
+            var consumingConfigurator = Substitute.For<IConsumingConfigurator>();
+            var interceptor = Substitute.For<IConsumeInterceptor>();
+            var serializer = Substitute.For<ISerializer>();
+
+            serializer.Deserialize(Arg.Any<string>(), Arg.Any<Type>()).Returns(new TestMessage());
+
+            ConsumeContext capturedContext = null;
+            var consumerConfig = new ConsumerConfiguration<TestMessage>((ctx, message) =>
+            {
+                capturedContext = ctx;
+                return Task.CompletedTask;
+            })
+            {
+                Topic = "test-topic",
+                Version = SemanticVersion.Default,
+                Subscription = "billing"
+            };
+
+            consumingConfigurator
+                .GetConfiguration("test-topic", SemanticVersion.Default, "billing")
+                .Returns(consumerConfig);
+
+            var services = new ServiceCollection();
+            services.AddSingleton(consumingConfigurator);
+            services.AddScoped(p => interceptor);
+            services.AddSingleton(serializer);
+
+            var dispatcher = new ConsumingDispatcher(services.BuildServiceProvider());
+
+            await dispatcher.DispatchAsync("test-topic", "billing", new RawPayload(ValidJson), CancellationToken.None);
+
+            Assert.NotNull(capturedContext);
+            Assert.Equal("billing", capturedContext.Subscription);
+            await interceptor.Received(1).Intercept(Arg.Any<ConsumeContext>());
+        }
+
         private class TestMessage { }
     }
 }

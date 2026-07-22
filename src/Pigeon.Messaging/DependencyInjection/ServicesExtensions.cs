@@ -125,6 +125,30 @@
         }
 
         /// <summary>
+        /// Registers a custom consume handler for a specific topic, version, and subscription.
+        /// </summary>
+        /// <typeparam name="T">
+        /// The type of message that the handler consumes.
+        /// </typeparam>
+        /// <param name="builder">The Pigeon service builder.</param>
+        /// <param name="topic">The topic name that the handler should listen to.</param>
+        /// <param name="version">The semantic version of the message contract.</param>
+        /// <param name="subscription">The subscription, queue name, or consumer group for this handler.</param>
+        /// <param name="handler">The delegate that handles incoming messages.</param>
+        /// <returns>The same <see cref="IPigeonServiceBuilder"/> instance for chaining.</returns>
+        public static IPigeonServiceBuilder AddConsumeHandler<T>(
+            this IPigeonServiceBuilder builder,
+            string topic,
+            SemanticVersion version,
+            string subscription,
+            ConsumeHandler<T> handler)
+            where T : class
+        {
+            builder.GlobalSettingsBuilder.AddConsumeHandler(topic, version, subscription, handler);
+            return builder;
+        }
+
+        /// <summary>
         /// Registers a custom consume handler for a specific topic
         /// using the default semantic version.
         /// </summary>
@@ -144,6 +168,7 @@
             builder.GlobalSettingsBuilder.AddConsumeHandler(topic, handler);
             return builder;
         }
+
 
         /// <summary>
         /// Registers a custom JSON serializer implementation for use in the messaging infrastructure.

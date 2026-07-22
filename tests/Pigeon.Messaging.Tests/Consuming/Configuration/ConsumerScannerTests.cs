@@ -33,6 +33,23 @@ public class ConsumerScannerTests
     }
 
     [Fact]
+    public void Scan_ShouldRegisterConsumerSubscription()
+    {
+        // Arrange
+        var scanner = new ConsumerScanner(_services, _subConfigurator);
+
+        // Act
+        scanner.ScanHubConsumers([typeof(SubscriptionConsumer)]);
+
+        // Assert
+        _subConfigurator.Received(1).AddConsumer<SampleMessage>(
+            "sample-topic",
+            SemanticVersion.Parse("1.0.0"),
+            "billing",
+            Arg.Any<ConsumeHandler<SampleMessage>>());
+    }
+
+    [Fact]
     public void Scan_ShouldIgnoreAbstractConsumers()
     {
         // Arrange
@@ -81,6 +98,12 @@ public class ConsumerScannerTests
     private class SampleConsumer : HubConsumer
     {
         [Consumer("sample-topic", "1.0.0")]
+        public Task Handle(SampleMessage message, CancellationToken cancellationToken) => Task.CompletedTask;
+    }
+
+    private class SubscriptionConsumer : HubConsumer
+    {
+        [Consumer("sample-topic", "1.0.0", "billing")]
         public Task Handle(SampleMessage message, CancellationToken cancellationToken) => Task.CompletedTask;
     }
 

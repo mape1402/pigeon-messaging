@@ -23,6 +23,14 @@ namespace Pigeon.Messaging.Azure.EventHub
         /// <param name="hubName">The name of the event hub.</param>
         /// <returns>An Event Hub processor.</returns>
         IEventHubProcessor CreateProcessor(string hubName);
+
+        /// <summary>
+        /// Creates an Event Hub processor for the specified hub name and consumer group.
+        /// </summary>
+        /// <param name="hubName">The name of the event hub.</param>
+        /// <param name="consumerGroup">The consumer group to use.</param>
+        /// <returns>An Event Hub processor.</returns>
+        IEventHubProcessor CreateProcessor(string hubName, string consumerGroup);
     }
 
     /// <summary>
@@ -66,6 +74,12 @@ namespace Pigeon.Messaging.Azure.EventHub
         {
             return new EventHubProcessor(_settings, hubName);
         }
+
+        /// <inheritdoc />
+        public IEventHubProcessor CreateProcessor(string hubName, string consumerGroup)
+        {
+            return new EventHubProcessor(_settings, hubName, consumerGroup);
+        }
     }
 
     /// <summary>
@@ -75,13 +89,20 @@ namespace Pigeon.Messaging.Azure.EventHub
     {
         private readonly AzureEventHubSettings _settings;
         private readonly string _hubName;
+        private readonly string _consumerGroup;
         private EventHubConsumerClient _consumerClient;
         private readonly CancellationTokenSource _cancellationTokenSource;
 
         public EventHubProcessor(AzureEventHubSettings settings, string hubName)
+            : this(settings, hubName, settings.ConsumerGroup)
+        {
+        }
+
+        public EventHubProcessor(AzureEventHubSettings settings, string hubName, string consumerGroup)
         {
             _settings = settings ?? throw new ArgumentNullException(nameof(settings));
             _hubName = hubName ?? throw new ArgumentNullException(nameof(hubName));
+            _consumerGroup = string.IsNullOrWhiteSpace(consumerGroup) ? settings.ConsumerGroup : consumerGroup;
             _cancellationTokenSource = new CancellationTokenSource();
         }
 
@@ -90,7 +111,7 @@ namespace Pigeon.Messaging.Azure.EventHub
             // Initialize consumer client if not already done
             if (_consumerClient == null)
             {
-                _consumerClient = new EventHubConsumerClient(_settings.ConsumerGroup, _settings.ConnectionString, _hubName);
+                _consumerClient = new EventHubConsumerClient(_consumerGroup, _settings.ConnectionString, _hubName);
             }
 
             var linkedToken = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _cancellationTokenSource.Token).Token;

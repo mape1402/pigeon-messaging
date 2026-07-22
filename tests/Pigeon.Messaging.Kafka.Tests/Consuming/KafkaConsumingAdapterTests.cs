@@ -39,6 +39,31 @@ namespace Pigeon.Messaging.Kafka.Tests.Consuming
         }
 
         [Fact]
+        public async Task StartConsumeAsync_Should_Use_Subscription_As_ConsumerGroup()
+        {
+            // Arrange
+            var consumingConfigurator = Substitute.For<IConsumingConfigurator>();
+            consumingConfigurator.GetAllEndpoints().Returns([new ConsumerEndpoint("user.created", "billing")]);
+            var configProvider = Substitute.For<IConfigurationProvider>();
+            configProvider.GetConsumerConfig("billing").Returns(new ConsumerConfig
+            {
+                BootstrapServers = "localhost:9092",
+                GroupId = "billing"
+            });
+            var globalSettings = Options.Create(new GlobalSettings { Domain = "domain" });
+            var logger = Substitute.For<ILogger<KafkaConsumingAdapter>>();
+            var adapter = new KafkaConsumingAdapter(consumingConfigurator, configProvider, globalSettings, logger);
+
+            // Act
+            await adapter.StartConsumeAsync();
+            await adapter.StopConsumeAsync();
+
+            // Assert
+            configProvider.Received(1).GetConsumerConfig("billing");
+            configProvider.DidNotReceive().GetConsumerConfig();
+        }
+
+        [Fact]
         public async Task Listen_Should_Invoke_MessageConsumed_On_Consume()
         {
             // Arrange

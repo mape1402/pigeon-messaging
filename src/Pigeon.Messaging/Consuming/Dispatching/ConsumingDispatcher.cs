@@ -13,6 +13,9 @@
         }
 
         public async Task DispatchAsync(string topic, RawPayload rawPayload, CancellationToken cancellationToken = default)
+            => await DispatchAsync(topic, Configuration.ConsumerEndpoint.DefaultSubscription, rawPayload, cancellationToken);
+
+        public async Task DispatchAsync(string topic, string subscription, RawPayload rawPayload, CancellationToken cancellationToken = default)
         {
             if(string.IsNullOrWhiteSpace(topic))
                 throw new ArgumentNullException(nameof(topic));
@@ -20,7 +23,8 @@
             using (var scope = _serviceProvider.CreateScope())
             {
                 var consumingConfigurator = scope.ServiceProvider.GetRequiredService<IConsumingConfigurator>();
-                var configuration = consumingConfigurator.GetConfiguration(topic, rawPayload.MessageVersion);
+                var configuration = consumingConfigurator.GetConfiguration(topic, rawPayload.MessageVersion, subscription);
+                configuration ??= consumingConfigurator.GetConfiguration(topic, rawPayload.MessageVersion);
 
                 var interceptors = scope.ServiceProvider.GetServices<IConsumeInterceptor>();
                 var serializer = scope.ServiceProvider.GetRequiredService<ISerializer>();
@@ -33,6 +37,7 @@
                     MessageType = configuration.MessageType,
                     MessageVersion = configuration.Version,
                     Services = scope.ServiceProvider,
+                    Subscription = configuration.Subscription,
                     Topic = topic,
                     Message = rawPayload.GetMessage(configuration.MessageType, serializer),
                     RawMetadata = rawPayload.GetMetadata()

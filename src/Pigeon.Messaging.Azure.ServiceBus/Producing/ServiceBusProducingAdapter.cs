@@ -3,6 +3,7 @@
     using global::Azure.Messaging.ServiceBus;
     using Microsoft.Extensions.Logging;
     using Pigeon.Messaging.Contracts;
+    using Pigeon.Messaging.Producing;
     using Pigeon.Messaging.Producing.Management;
     using System.Text;
     using System.Text.Json;
@@ -39,19 +40,26 @@
         /// <param name="cancellationToken">A cancellation token to observe while waiting for the task to complete.</param>
         /// <returns>A <see cref="ValueTask"/> representing the asynchronous publish operation.</returns>
         public async ValueTask PublishMessageAsync<T>(WrappedPayload<T> payload, string topic, CancellationToken cancellationToken = default) where T : class
-            => await PublishCoreAsync(payload, topic, cancellationToken);
+            => await PublishMessageAsync(payload, PublishingRoute.ForTopic(topic), cancellationToken);
+
+        public async ValueTask PublishMessageAsync<T>(WrappedPayload<T> payload, PublishingRoute route, CancellationToken cancellationToken = default) where T : class
+            => await PublishCoreAsync(payload, route, cancellationToken);
 
         public async ValueTask PublishRawMessageAsync<T>(T message, string topic, CancellationToken cancellationToken = default) where T : class
-            => await PublishCoreAsync(message, topic, cancellationToken);
+            => await PublishRawMessageAsync(message, PublishingRoute.ForTopic(topic), cancellationToken);
 
-        private async ValueTask PublishCoreAsync(object payload, string topic, CancellationToken cancellationToken = default)
+        public async ValueTask PublishRawMessageAsync<T>(T message, PublishingRoute route, CancellationToken cancellationToken = default) where T : class
+            => await PublishCoreAsync(message, route, cancellationToken);
+
+        private async ValueTask PublishCoreAsync(object payload, PublishingRoute route, CancellationToken cancellationToken = default)
         {
             try
             {
-                var sender = _serviceBusProvider.GetSender(topic);
+                var sender = _serviceBusProvider.GetSender(route.Topic);
                 var bytes = _serializer.SerializeAsBytes(payload);
 
                 ServiceBusMessage message = new(bytes);
+                AddRouteProperties(message, route);
 
                 await sender.SendMessageAsync(message, cancellationToken);
 
@@ -61,6 +69,14 @@
                 _logger.LogError(ex, "Error while publishing message using Azure Service Bus Adapter.");
                 throw;
             }
+        }
+
+        private static void AddRouteProperties(ServiceBusMessage message, PublishingRoute route)
+        {
+            message.ApplicationProperties["RoutingKey"] = route.RoutingKey;
+
+            if (!string.IsNullOrWhiteSpace(route.Exchange))
+                message.ApplicationProperties["Exchange"] = route.Exchange;
         }
     }
 }

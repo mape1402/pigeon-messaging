@@ -41,5 +41,9 @@
         /// <inheritdoc />
         public ServiceBusProcessor CreateProcessor(string topic)
             => _client.CreateProcessor(topic, new ServiceBusProcessorOptions());
+
+        /// <inheritdoc />
+        public ServiceBusProcessor CreateProcessor(string topic, string subscription)
+            => _client.CreateProcessor(topic, subscription, new ServiceBusProcessorOptions());
     }
 }
