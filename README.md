@@ -1,6 +1,6 @@
-# 🕊️ Pigeon.Messaging
+# Pigeon.Messaging
 
-**Simple. Fast. Broker-agnostic messaging for .NET**
+**Simple. Fast. Broker-agnostic messaging for .NET.**
 
 [![Build](https://github.com/mape1402/pigeon-messaging/actions/workflows/publish.yaml/badge.svg)](https://github.com/mape1402/pigeon-messaging/actions/workflows/publish.yaml)
 [![NuGet](https://img.shields.io/nuget/v/Pigeon.Messaging.svg)](https://www.nuget.org/packages/Pigeon.Messaging/)
@@ -8,260 +8,263 @@
 
 ---
 
-**Pigeon** is a lightweight, extensible library for .NET (or your chosen platform) that abstracts integration with messaging systems like RabbitMQ, Kafka, Azure Service Bus, and more. Its goal is to simplify publishing and consuming messages through a unified, decoupled API, so you can switch message brokers without rewriting your business logic.
+**Pigeon** is a lightweight, extensible library for .NET that abstracts integration with messaging systems like RabbitMQ, Kafka, Azure Service Bus, Azure Event Grid, and Azure Event Hub.
+
+Its goal is to simplify publishing and consuming messages through a unified, decoupled API, so you can switch message brokers without rewriting your business logic.
 
 ---
 
-## ✨ Features
+## Features
 
-- ✅ **Consistent API** for multiple message brokers
-- ⚙️ **Fluent and flexible configuration**
-- 📬 **Supports common messaging patterns** 
-- 🔌 **Easily extensible** with adapters for new brokers
-- 🪶 **Lightweight** with minimal dependencies
+- **Consistent API** for multiple message brokers.
+- **Fluent configuration** through `IServiceCollection`.
+- **Publish and consume workflows** with topic and semantic-version support.
+- **Consumer discovery** through `HubConsumer` and `ConsumerAttribute`.
+- **Publish and consume interceptors** for metadata, tracing, security context, sagas, and other cross-cutting behavior.
+- **Broker adapters** that keep business code independent from the transport.
+- **Lightweight core package** with adapter packages for each broker.
 
-**Pigeon** is perfect for microservices, distributed architectures, and any application that needs reliable asynchronous communication.
+Pigeon is a good fit for microservices, distributed architectures, and applications that need reliable asynchronous communication without coupling domain code to a specific broker SDK.
 
-### 🛠️ Supported Brokers
+## Supported Brokers
 
-- Rabbit MQ
-- Kafka 
+- RabbitMQ
+- Kafka
 - Azure Service Bus
 - Azure Event Grid
 - Azure Event Hub
 
 ---
 
-## 📦 Installation
+## Installation
+
+Install the core package and one or more broker adapters:
 
 ```bash
 dotnet add package Pigeon.Messaging
-dotnet add package Pigeon.Messaging.RabbitMq // Or any Message Broker Adapter
-dotnet add package Pigeon.Messaging.Kafka 
-dotnet add package Pigeon.Messaging.Azure.ServiceBus 
-dotnet add package Pigeon.Messaging.Azure.EventGrid 
-dotnet add package Pigeon.Messaging.Azure.EventHub 
+dotnet add package Pigeon.Messaging.Rabbit
+dotnet add package Pigeon.Messaging.Kafka
+dotnet add package Pigeon.Messaging.Azure.ServiceBus
+dotnet add package Pigeon.Messaging.Azure.EventGrid
+dotnet add package Pigeon.Messaging.Azure.EventHub
 ```
 
-## 🚀 Quick Start
+## Quick Start
 
-### ⚙️ Configure Pigeon
+### Configure Pigeon
 
-Register the Pigeon infrastructure in your `Program.cs` (or `Startup.cs`):
+Register Pigeon in your `Program.cs` or `Startup.cs`:
 
-```c#
+```csharp
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Pigeon.Messaging;
 using Pigeon.Messaging.Rabbit;
-using System.Reflection;
+using System.Text.Json;
 
 var builder = Host.CreateApplicationBuilder(args);
 
-// Register Pigeon with RabbitMQ
-builder.Services.AddPigeon(builder.Configuration, config =>
-{
-    config.SetDomain("YourApp.Domain")
-          .UseRabbitMq(rabbit =>
-          {
-              rabbit.Url = "amqp://guest:guest@localhost:5672";
-          });
-})
-.ConfigureJsonOptions(opts => {
- 	opts.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;   
-});
+builder.Services
+    .AddPigeon(builder.Configuration, config =>
+    {
+        config.SetDomain("YourApp.Domain")
+              .UseRabbitMq(rabbit =>
+              {
+                  rabbit.Url = "amqp://guest:guest@localhost:5672";
+              });
+    })
+    .ConfigureJsonOptions(options =>
+    {
+        options.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+    });
 
-// Build and run your host
 var app = builder.Build();
 await app.RunAsync();
 ```
 
-### 📨 Define a Consumer
+### Define a Consumer
 
-Create a message contract and a consumer handler:
+Create a message contract and register a handler:
 
-```c#
-public class HelloWorldMessage { }
-
-builder.Services.AddPigeon(builder.Configuration, config =>
+```csharp
+public class HelloWorldMessage
 {
-    ...
-})
-.AddConsumer<HelloWorldMessage>("hello-world", "1.0.0", (context, message) => {
-    // Do something with the message ...
-    return Task.CompletedTask;
-})
+    public string Text { get; set; }
+}
+
+builder.Services
+    .AddPigeon(builder.Configuration, config =>
+    {
+        config.SetDomain("YourApp.Domain")
+              .UseRabbitMq();
+    })
+    .AddConsumeHandler<HelloWorldMessage>(
+        topic: "hello-world",
+        version: "1.0.0",
+        handler: (context, message) =>
+        {
+            return Task.CompletedTask;
+        });
 ```
 
-A simple way to create and register your consumers is by using `HubConsumer`. This way, you can group related consumers into a single class.
+You can also group related consumers in a `HubConsumer` and register them by scanning assemblies:
 
-```c#
+```csharp
 public class CreateUserMessage { }
-public class UpdateUserMessage {}
-public class UpdateUserV2Message {}
+public class UpdateUserMessage { }
+public class UpdateUserV2Message { }
 
-public class UserHubConsumer : HubConsumer{
-    
-    // Support Dependency Injection
-    public UserHubConsumer(IAnyService service){
-      //...
-      // Consuming Context Access by property Context
-	 Console.WriteLine($"Received new message. Topic: {Context.Topic} Version: {Context.MessageVersion} From: {Context.From}");
+public class UserHubConsumer : HubConsumer
+{
+    private readonly IAnyService _service;
+
+    public UserHubConsumer(IAnyService service)
+    {
+        _service = service;
     }
-    
-    // Easy consumer by attribute declaration
+
     [Consumer("create-user", "1.0.0")]
-    public Task CreateUser(CreateUserMessage message, CancellationToken cancellationToken = default){
-       //DO something ...
-	  return Task.CompletedTask;
-    }
-    
-    // Support for multiple versioning or topics
-    [Consumer("update-user", "1.0.1")]
-    [Consumer("update-user", "1.0.0")] 
-    public Task UpdateUser(UpdateUserMessage message, CancellationToken cancellationToken = default){
-      //DO something ...
-	  return Task.CompletedTask;
+    public Task CreateUser(CreateUserMessage message, CancellationToken cancellationToken = default)
+    {
+        return Task.CompletedTask;
     }
 
-    // Support for multiple consumers by version 
-	[Consumer("update-user", "2.0.0")]
-    public Task UpdateUserV2(UpdateUserV2Message message, CancellationToken cancellationToken = default){
-      //DO something ...
-	  return Task.CompletedTask;
+    [Consumer("update-user", "1.0.0")]
+    [Consumer("update-user", "1.0.1")]
+    public Task UpdateUser(UpdateUserMessage message, CancellationToken cancellationToken = default)
+    {
+        return Task.CompletedTask;
+    }
+
+    [Consumer("update-user", "2.0.0")]
+    public Task UpdateUserV2(UpdateUserV2Message message, CancellationToken cancellationToken = default)
+    {
+        return Task.CompletedTask;
     }
 }
 ```
 
-Simple registration for Dependency Injection:
+Register consumers discovered in an assembly:
 
-```c#
+```csharp
 builder.Services.AddPigeon(builder.Configuration, config =>
 {
-    config.ScanConsumersFromAssemblies(typeof(UserHubConsumer).Assembly);
+    config.ScanConsumersFromAssemblies(typeof(UserHubConsumer).Assembly)
+          .UseRabbitMq();
 });
 ```
 
-### 📤 Publish a Message
+### Publish a Message
 
-Resolve the `IProducer` and send a message:
+Resolve `IProducer` and publish a message to a topic:
 
-```c#
+```csharp
 var producer = app.Services.GetRequiredService<IProducer>();
 
-await producer.PublishAsync(new MyMessage { Text = "Hello, Pigeon!" }, topic: "my-topic");
+await producer.PublishAsync(
+    new HelloWorldMessage { Text = "Hello, Pigeon!" },
+    topic: "hello-world");
 ```
 
-### 🛡️ Add Interceptors (Optional)
+### Add Interceptors
 
-Pigeon lets you add interceptors to run logic before or after producing/consuming:
+Interceptors let you attach and read metadata around publishing and consuming.
 
-```c#
-public class MyMetadata{
-    public string SomeValue { get; set; }
-}
-
-public class MyPublishInterceptor : IPublishInterceptor{
-    
-    // Support Dependency Injection
-    public MyPublishInterceptor(IMyService service){
-        
-    }
-    
-    public ValueTask Intercept(PublishContext context, CancellationToken cancellationToken = default){	   
-      // Do something...
-      var myMetadata = new MyMetadata{
-        SomeValue = "Attach extra information to your messages such as tracing, SAGAS information, security information, etc."  
-      };
-        
-      context.AddMetadata("MyMetadata", myMetadata);
-        
-      return ValueTask.CompletedTask;
-    }
-}
-
-public class MyConsumeInterceptor : IConsumeInterceptor{
-    
-    // Support Dependency Injection
-    public MyConsumeInterceptor(IMyService service){
-        
-    }
-    
-    public ValueTask Intercept(ConsumeContext context, CancellationToken cancellationToken = default){
-      var myMetadata = context.GetMetadata<MyMetadata>("MyMetadata");
-	   
-      // Do something...
-        
-      return ValueTask.CompletedTask;
-    }
-}
-```
-
-```C#
-builder.Services.AddPigeon(builder.Configuration, config =>
+```csharp
+public class TraceMetadata
 {
-    config.UseRabbitMq();
+    public string CorrelationId { get; set; }
+}
 
-    // Add custom interceptors
-})
-.AddConsumeInterceptor<MyConsumeInterceptor>()
-.AddPublishInterceptor<MyPublishInterceptor>();
+public class TracePublishInterceptor : IPublishInterceptor
+{
+    public ValueTask Intercept(PublishContext context, CancellationToken cancellationToken = default)
+    {
+        context.AddMetadata("Trace", new TraceMetadata
+        {
+            CorrelationId = Guid.NewGuid().ToString("N")
+        });
+
+        return ValueTask.CompletedTask;
+    }
+}
+
+public class TraceConsumeInterceptor : IConsumeInterceptor
+{
+    public ValueTask Intercept(ConsumeContext context, CancellationToken cancellationToken = default)
+    {
+        var trace = context.GetMetadata<TraceMetadata>("Trace");
+        return ValueTask.CompletedTask;
+    }
+}
 ```
 
-### 📚 Sample `appsettings.json`
+Register interceptors after calling `AddPigeon`:
+
+```csharp
+builder.Services
+    .AddPigeon(builder.Configuration, config =>
+    {
+        config.UseRabbitMq();
+    })
+    .AddConsumeInterceptor<TraceConsumeInterceptor>()
+    .AddPublishInterceptor<TracePublishInterceptor>();
+```
+
+### Sample `appsettings.json`
 
 ```json
 {
   "Pigeon": {
     "Domain": "YourApp.Domain",
     "MessageBrokers": {
-        "RabbitMq": {
-          "Url": "amqp://guest:guest@localhost:5672"
-        },
-        "Kafka": {
-          "BootstrapServers": "localhost:9092",
-          "UserName": "test",
-          "Password": "test",
-          "SecurityProtocol": "PlainText",
-          "SaslMechanism": "Plain",
-          "Acks": "All"
-        },
-        "AzureServiceBus": {
-          "ConnectionString": "Endpoint=sb://test/;SharedAccessKeyName=Root;SharedAccessKey=abc"
-        },
-        "AzureEventGrid": {
-          "ServiceBusEndpoint": "",
-          "Endpoints": {
-            "Greeting": {
-              "Url": "Endpoint=sb://test/;SharedAccessKeyName=Root;SharedAccessKey=abc",
-              "AccessKey": "xxxxxxtz5jzC609xxxxxiR8qgJmrMbxxxxxxcHz9k5pa70tMmVjMJxxxxxLACREanaxxxxxxAABAZExxxxx"
-            },
-            "Users": {
-              "Url": "Endpoint=sb://test/;SharedAccessKeyName=Root;SharedAccessKey=abc",
-              "AccessKey": "xxxxxxtz5jzC609xxxxxiR8qgJmrMbxxxxxxcHz9k5pa70tMmVjMJxxxxxLACREanaxxxxxxAABAZExxxxx"
-            }
+      "RabbitMq": {
+        "Url": "amqp://guest:guest@localhost:5672"
+      },
+      "Kafka": {
+        "BootstrapServers": "localhost:9092",
+        "UserName": "test",
+        "Password": "test",
+        "SecurityProtocol": "PlainText",
+        "SaslMechanism": "Plain",
+        "Acks": "All"
+      },
+      "AzureServiceBus": {
+        "ConnectionString": "Endpoint=sb://test/;SharedAccessKeyName=Root;SharedAccessKey=abc"
+      },
+      "AzureEventGrid": {
+        "ServiceBusEndpoint": "",
+        "Endpoints": {
+          "Greeting": {
+            "Url": "https://example.eventgrid.azure.net/api/events",
+            "AccessKey": "event-grid-access-key"
           },
-          "TopicRouting": {
-            "commands.demo.hello-world": "Greeting",
-            "events.demo.user-created": "Users"
+          "Users": {
+            "Url": "https://example-users.eventgrid.azure.net/api/events",
+            "AccessKey": "event-grid-access-key"
           }
         },
-        "AzureEventHub": {
-          "ConnectionString": "Endpoint=sb://tests/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=abc"
-        },
-    }  
+        "TopicRouting": {
+          "commands.demo.hello-world": "Greeting",
+          "events.demo.user-created": "Users"
+        }
+      },
+      "AzureEventHub": {
+        "ConnectionString": "Endpoint=sb://tests/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=abc"
+      }
+    }
   }
 }
 ```
 
-### 🧩 Extensible by Design
+## Extensible by Design
 
-✅ Pluggable broker adapters (RabbitMQ by default)
- ✅ Automatic consumer scanning by `ConsumerAttribute`
- ✅ Built-in support for versioning and interceptors
- ✅ Clean separation of concerns: `ConsumingManager`, `ProducingManager`, adapters, interceptors
+- Pluggable broker adapters.
+- Automatic consumer scanning by `ConsumerAttribute`.
+- Built-in support for message versioning and interceptors.
+- Clean separation of concerns through `ConsumingManager`, `ProducingManager`, adapters, and interceptors.
 
-## 🛠️ Upcoming Features
+## Upcoming Features
 
 - **Enhanced Management Capabilities** Add health checking, multi-publishing, multi-consuming, failover and more.
 - **Support for Amazon SQS and Mosquitto** Add adapters for Amazon SQS and Mosquitto message brokers.
