@@ -55,6 +55,32 @@ namespace Pigeon.Messaging.Kafka.Tests.Producing
             var ex = await Assert.ThrowsAsync<Exception>(async () => await adapter.PublishMessageAsync(payload, topic));
             Assert.Equal("fail", ex.Message);
         }
+
+        [Fact]
+        public async Task PublishRawMessageAsync_Should_Call_Raw_Producer()
+        {
+            // Arrange
+            var serviceProvider = Substitute.For<IServiceProvider>();
+            var logger = Substitute.For<ILogger<KafkaProducingAdapter>>();
+            var producer = Substitute.For<IKafkaProducer<SampleMessage>>();
+            var message = new SampleMessage();
+            var topic = "test-topic";
+            var deliveryResult = new Confluent.Kafka.DeliveryResult<Confluent.Kafka.Null, SampleMessage>
+            {
+                Offset = new Confluent.Kafka.Offset(1),
+                Partition = new Confluent.Kafka.Partition(2)
+            };
+            producer.PublishRawAsync(message, topic, Arg.Any<CancellationToken>()).Returns(Task.FromResult(deliveryResult));
+            serviceProvider.GetService<IKafkaProducer<SampleMessage>>().Returns(producer);
+            var adapter = new KafkaProducingAdapter(serviceProvider, logger);
+
+            // Act
+            await adapter.PublishRawMessageAsync(message, topic);
+
+            // Assert
+            await producer.Received(1).PublishRawAsync(message, topic, Arg.Any<CancellationToken>());
+            await producer.DidNotReceive().PublishAsync(Arg.Any<WrappedPayload<SampleMessage>>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+        }
     }
 
     // Dummy message for testing

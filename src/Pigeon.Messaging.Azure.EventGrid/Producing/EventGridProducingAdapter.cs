@@ -54,6 +54,24 @@
             }
         }
 
+        public async ValueTask PublishRawMessageAsync<T>(T message, string topic, CancellationToken cancellationToken = default) where T : class
+        {
+            try
+            {
+                var client = _eventGridProvider.GetClient(topic);
+                var eventData = CreateRawEventGridData(message, topic);
+
+                await client.PublishCloudEventsAsync([eventData], cancellationToken);
+
+                _logger.LogInformation("EventGrid: Raw message published to topic '{Topic}' successfully.", topic);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error while publishing raw message using Azure Event Grid Adapter.");
+                throw;
+            }
+        }
+
         private EventGridEvent CreateEventGridData<T>(WrappedPayload<T> payload, string topic) where T : class
         {
             var jsonData = _serializer.Serialize(payload);
@@ -66,6 +84,21 @@
             {
                 Id = Guid.NewGuid().ToString(),
                 EventTime = payload.CreatedOnUtc
+            };
+        }
+
+        private EventGridEvent CreateRawEventGridData<T>(T message, string topic) where T : class
+        {
+            var jsonData = _serializer.Serialize(message);
+
+            return new EventGridEvent(
+                subject: topic,
+                eventType: topic,
+                dataVersion: "1.0",
+                data: jsonData)
+            {
+                Id = Guid.NewGuid().ToString(),
+                EventTime = DateTimeOffset.UtcNow
             };
         }
     }

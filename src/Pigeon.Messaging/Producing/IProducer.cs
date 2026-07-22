@@ -35,5 +35,19 @@
         /// </param>
         /// <returns>A ValueTask representing the asynchronous operation.</returns>
         ValueTask PublishAsync<T>(T message, string topic, CancellationToken cancellationToken = default) where T : class;
+
+        /// <summary>
+        /// Publishes a raw message asynchronously to a given topic without wrapping it
+        /// in a <see cref="Contracts.WrappedPayload{T}"/>.
+        /// </summary>
+        /// <typeparam name="T">The type of the message payload.</typeparam>
+        /// <param name="message">The message instance to publish.</param>
+        /// <param name="topic">The target topic or channel.</param>
+        /// <param name="cancellationToken">
+        /// A token to monitor for cancellation requests.
+        /// This allows the operation to be cancelled before completion.
+        /// </param>
+        /// <returns>A ValueTask representing the asynchronous operation.</returns>
+        ValueTask PublishRawAsync<T>(T message, string topic, CancellationToken cancellationToken = default) where T : class;
     }
 }

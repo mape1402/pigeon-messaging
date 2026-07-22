@@ -89,6 +89,29 @@
         }
 
         [Fact]
+        public async Task PublishRawMessageAsync_Should_Serialize_Raw_Message()
+        {
+            _channel.IsOpen.Returns(true);
+            _connectionProvider.CreateChannelAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult(_channel));
+            var serializer = Substitute.For<ISerializer>();
+            serializer.Serialize(Arg.Any<object>()).Returns("{}");
+            var adapter = new RabbitProducingAdapter(_connectionProvider, serializer, _logger);
+            var message = SampleMessage.Instance;
+
+            await adapter.PublishRawMessageAsync(message, "raw-topic");
+
+            serializer.Received(1).Serialize(message);
+            serializer.DidNotReceive().Serialize(Arg.Any<WrappedPayload<SampleMessage>>());
+            await _channel.Received(1).BasicPublishAsync(
+                string.Empty,
+                "raw-topic",
+                Arg.Any<bool>(),
+                Arg.Any<BasicProperties>(),
+                Arg.Any<ReadOnlyMemory<byte>>(),
+                Arg.Any<CancellationToken>());
+        }
+
+        [Fact]
         public async Task Should_Create_New_Channel_When_Existing_Channel_IsClosed()
         {
             // Arrange: _channel.IsOpen returns false

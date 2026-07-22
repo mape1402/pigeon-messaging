@@ -59,6 +59,29 @@
             }
         }
 
+        public async ValueTask PublishRawMessageAsync<T>(T message, string topic, CancellationToken cancellationToken = default) where T : class
+        {
+            try
+            {
+                var producer = _eventHubProvider.GetProducer(topic);
+                var eventData = CreateRawEventData(message);
+
+                using var eventBatch = await producer.CreateBatchAsync(cancellationToken);
+
+                if (!eventBatch.TryAdd(eventData))
+                    throw new InvalidOperationException($"The raw event data for topic '{topic}' is too large to fit in a batch.");
+
+                await producer.SendAsync(eventBatch, cancellationToken);
+
+                _logger.LogInformation("EventHub: Raw message published to hub '{Topic}' successfully.", topic);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error while publishing raw message using Azure Event Hub Adapter.");
+                throw;
+            }
+        }
+
         private EventData CreateEventData<T>(WrappedPayload<T> payload) where T : class
         {
             var bytes = _serializer.SerializeAsBytes(payload);
@@ -70,6 +93,12 @@
             eventData.Properties.Add("CreatedOnUtc", payload.CreatedOnUtc.ToString("O"));
 
             return eventData;
+        }
+
+        private EventData CreateRawEventData<T>(T message) where T : class
+        {
+            var bytes = _serializer.SerializeAsBytes(message);
+            return new EventData(bytes);
         }
     }
 }

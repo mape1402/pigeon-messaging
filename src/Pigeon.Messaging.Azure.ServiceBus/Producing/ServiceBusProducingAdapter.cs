@@ -39,6 +39,12 @@
         /// <param name="cancellationToken">A cancellation token to observe while waiting for the task to complete.</param>
         /// <returns>A <see cref="ValueTask"/> representing the asynchronous publish operation.</returns>
         public async ValueTask PublishMessageAsync<T>(WrappedPayload<T> payload, string topic, CancellationToken cancellationToken = default) where T : class
+            => await PublishCoreAsync(payload, topic, cancellationToken);
+
+        public async ValueTask PublishRawMessageAsync<T>(T message, string topic, CancellationToken cancellationToken = default) where T : class
+            => await PublishCoreAsync(message, topic, cancellationToken);
+
+        private async ValueTask PublishCoreAsync(object payload, string topic, CancellationToken cancellationToken = default)
         {
             try
             {

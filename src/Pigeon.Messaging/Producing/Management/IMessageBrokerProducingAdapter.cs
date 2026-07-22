@@ -27,5 +27,26 @@
         /// A <see cref="ValueTask"/> representing the asynchronous publish operation.
         /// </returns>
         ValueTask PublishMessageAsync<T>(WrappedPayload<T> payload, string topic, CancellationToken cancellationToken = default) where T : class;
+
+        /// <summary>
+        /// Publishes a raw message payload to the specified topic or queue without
+        /// wrapping it in Pigeon metadata.
+        /// </summary>
+        /// <typeparam name="T">
+        /// The type of the message payload.
+        /// </typeparam>
+        /// <param name="message">
+        /// The strongly typed message that will be delivered directly to the broker.
+        /// </param>
+        /// <param name="topic">
+        /// The target topic, queue, or routing key where the message should be published.
+        /// </param>
+        /// <param name="cancellationToken">
+        /// A cancellation token that can be used to cancel the publish operation.
+        /// </param>
+        /// <returns>
+        /// A <see cref="ValueTask"/> representing the asynchronous publish operation.
+        /// </returns>
+        ValueTask PublishRawMessageAsync<T>(T message, string topic, CancellationToken cancellationToken = default) where T : class;
     }
 }

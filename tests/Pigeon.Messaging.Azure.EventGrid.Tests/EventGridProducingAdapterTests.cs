@@ -95,6 +95,34 @@ namespace Pigeon.Messaging.Azure.EventGrid.Tests.Producing
         }
 
         [Fact]
+        public async Task PublishRawMessageAsync_Should_Send_Raw_Message()
+        {
+            // Arrange
+            var provider = Substitute.For<IEventGridProvider>();
+            var logger = Substitute.For<ILogger<EventGridProducingAdapter>>();
+            var serializer = Substitute.For<ISerializer>();
+            var publisher = Substitute.For<IEventGridPublisher>();
+            var message = new TestMessage { Content = "Test" };
+
+            serializer.Serialize(Arg.Any<object>()).Returns("{\"content\":\"Test\"}");
+            provider.GetClient("test-topic").Returns(publisher);
+            publisher.PublishCloudEventsAsync(Arg.Any<IEnumerable<EventGridEvent>>(), Arg.Any<CancellationToken>())
+                .Returns(Task.CompletedTask);
+
+            var adapter = new EventGridProducingAdapter(provider, serializer, logger);
+
+            // Act
+            await adapter.PublishRawMessageAsync(message, "test-topic");
+
+            // Assert
+            serializer.Received(1).Serialize(message);
+            serializer.DidNotReceive().Serialize(Arg.Any<WrappedPayload<TestMessage>>());
+            await publisher.Received(1).PublishCloudEventsAsync(
+                Arg.Is<IEnumerable<EventGridEvent>>(events => events.Count() == 1),
+                Arg.Any<CancellationToken>());
+        }
+
+        [Fact]
         public void Constructor_Should_Throw_ArgumentNullException_For_Null_Dependencies()
         {
             // Arrange
