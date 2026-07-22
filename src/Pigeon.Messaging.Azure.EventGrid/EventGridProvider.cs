@@ -24,6 +24,14 @@ namespace Pigeon.Messaging.Azure.EventGrid
         /// <param name="topic">The name of the topic from which messages will be processed. Cannot be null or empty.</param>
         /// <returns>A <see cref="ServiceBusProcessor"/> configured to process messages from the specified topic.</returns>
         ServiceBusProcessor CreateProcessor(string topic);
+
+        /// <summary>
+        /// Creates a <see cref="ServiceBusProcessor"/> for processing messages from the specified topic subscription.
+        /// </summary>
+        /// <param name="topic">The name of the topic from which messages will be processed.</param>
+        /// <param name="subscription">The subscription to process.</param>
+        /// <returns>A <see cref="ServiceBusProcessor"/> configured to process messages from the specified topic subscription.</returns>
+        ServiceBusProcessor CreateProcessor(string topic, string subscription);
     }
 
     /// <summary>
@@ -84,6 +92,10 @@ namespace Pigeon.Messaging.Azure.EventGrid
         /// <inheritdoc />
         public ServiceBusProcessor CreateProcessor(string topic)
             => _client.CreateProcessor(topic, new ServiceBusProcessorOptions());
+
+        /// <inheritdoc />
+        public ServiceBusProcessor CreateProcessor(string topic, string subscription)
+            => _client.CreateProcessor(topic, subscription, new ServiceBusProcessorOptions());
     }
 
     /// <summary>

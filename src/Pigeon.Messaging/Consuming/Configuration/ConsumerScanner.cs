@@ -82,7 +82,7 @@
                         var version = SemanticVersion.Parse(attr.Version);
 
                         // Register the consumer handler and DI service
-                        RegisterConsumer(consumerType, method, messageType, attr.Topic, version);
+                        RegisterConsumer(consumerType, method, messageType, attr.Topic, version, attr.Subscription);
                     }
                 }
             }
@@ -97,7 +97,7 @@
         /// <param name="messageType">Type of the message parameter.</param>
         /// <param name="topic">Topic name to subscribe.</param>
         /// <param name="version">Message semantic version.</param>
-        private void RegisterConsumer(Type consumerType, MethodInfo method, Type messageType, string topic, SemanticVersion version)
+        private void RegisterConsumer(Type consumerType, MethodInfo method, Type messageType, string topic, SemanticVersion version, string subscription)
         {
             // Create generic handler delegate type ConsumeHandler<TMessage>
             var handlerType = typeof(ConsumeHandler<>).MakeGenericType(messageType);
@@ -105,14 +105,16 @@
             // Build delegate instance pointing to method
             var handlerDelegate = BuildHandlerDelegate(consumerType, method, messageType);
 
-            // Get the generic AddConsumer<TMessage> method on IConsumingConfigurator
+            var hasSubscription = !string.IsNullOrWhiteSpace(subscription);
             var addConsumerMethod = typeof(IConsumingConfigurator)
                 .GetMethods()
-                .First(m => m.Name == "AddConsumer" && m.GetParameters().Length == 3)
+                .First(m => m.Name == "AddConsumer" && m.GetParameters().Length == (hasSubscription ? 4 : 3))
                 .MakeGenericMethod(messageType);
 
-            // Invoke AddConsumer(topic, version, handlerDelegate)
-            addConsumerMethod.Invoke(_configurator, new object[] { topic, version, handlerDelegate });
+            if (hasSubscription)
+                addConsumerMethod.Invoke(_configurator, new object[] { topic, version, subscription, handlerDelegate });
+            else
+                addConsumerMethod.Invoke(_configurator, new object[] { topic, version, handlerDelegate });
 
             // Register consumer class in DI container as scoped
             _services.AddScoped(consumerType);

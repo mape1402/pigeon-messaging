@@ -3,6 +3,7 @@
     using global::Azure.Messaging.EventGrid;
     using Microsoft.Extensions.Logging;
     using Pigeon.Messaging.Contracts;
+    using Pigeon.Messaging.Producing;
     using Pigeon.Messaging.Producing.Management;
 
     /// <summary>
@@ -37,15 +38,18 @@
         /// <param name="cancellationToken">A cancellation token to observe while waiting for the task to complete.</param>
         /// <returns>A <see cref="ValueTask"/> representing the asynchronous publish operation.</returns>
         public async ValueTask PublishMessageAsync<T>(WrappedPayload<T> payload, string topic, CancellationToken cancellationToken = default) where T : class
+            => await PublishMessageAsync(payload, PublishingRoute.ForTopic(topic), cancellationToken);
+
+        public async ValueTask PublishMessageAsync<T>(WrappedPayload<T> payload, PublishingRoute route, CancellationToken cancellationToken = default) where T : class
         {
             try
             {
-                var client = _eventGridProvider.GetClient(topic);
-                var eventData = CreateEventGridData(payload, topic);
+                var client = _eventGridProvider.GetClient(route.Topic);
+                var eventData = CreateEventGridData(payload, route);
 
                 await client.PublishCloudEventsAsync([ eventData ], cancellationToken);
 
-                _logger.LogInformation("EventGrid: Message published to topic '{Topic}' successfully.", topic);
+                _logger.LogInformation("EventGrid: Message published to topic '{Topic}' successfully.", route.Topic);
             }
             catch (Exception ex)
             {
@@ -55,15 +59,18 @@
         }
 
         public async ValueTask PublishRawMessageAsync<T>(T message, string topic, CancellationToken cancellationToken = default) where T : class
+            => await PublishRawMessageAsync(message, PublishingRoute.ForTopic(topic), cancellationToken);
+
+        public async ValueTask PublishRawMessageAsync<T>(T message, PublishingRoute route, CancellationToken cancellationToken = default) where T : class
         {
             try
             {
-                var client = _eventGridProvider.GetClient(topic);
-                var eventData = CreateRawEventGridData(message, topic);
+                var client = _eventGridProvider.GetClient(route.Topic);
+                var eventData = CreateRawEventGridData(message, route);
 
                 await client.PublishCloudEventsAsync([eventData], cancellationToken);
 
-                _logger.LogInformation("EventGrid: Raw message published to topic '{Topic}' successfully.", topic);
+                _logger.LogInformation("EventGrid: Raw message published to topic '{Topic}' successfully.", route.Topic);
             }
             catch (Exception ex)
             {
@@ -72,33 +79,35 @@
             }
         }
 
-        private EventGridEvent CreateEventGridData<T>(WrappedPayload<T> payload, string topic) where T : class
+        private EventGridEvent CreateEventGridData<T>(WrappedPayload<T> payload, PublishingRoute route) where T : class
         {
             var jsonData = _serializer.Serialize(payload);
             
             return new EventGridEvent(
-                subject: topic,
-                eventType: $"{topic}.{payload.MessageVersion}",
+                subject: route.RoutingKey,
+                eventType: $"{route.RoutingKey}.{payload.MessageVersion}",
                 dataVersion: payload.MessageVersion.ToString(),
                 data: jsonData)
             {
                 Id = Guid.NewGuid().ToString(),
-                EventTime = payload.CreatedOnUtc
+                EventTime = payload.CreatedOnUtc,
+                Topic = route.Exchange
             };
         }
 
-        private EventGridEvent CreateRawEventGridData<T>(T message, string topic) where T : class
+        private EventGridEvent CreateRawEventGridData<T>(T message, PublishingRoute route) where T : class
         {
             var jsonData = _serializer.Serialize(message);
 
             return new EventGridEvent(
-                subject: topic,
-                eventType: topic,
+                subject: route.RoutingKey,
+                eventType: route.RoutingKey,
                 dataVersion: "1.0",
                 data: jsonData)
             {
                 Id = Guid.NewGuid().ToString(),
-                EventTime = DateTimeOffset.UtcNow
+                EventTime = DateTimeOffset.UtcNow,
+                Topic = route.Exchange
             };
         }
     }

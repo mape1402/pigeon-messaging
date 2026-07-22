@@ -7,15 +7,19 @@
 
     internal class ConsumingConfigurator : IConsumingConfigurator
     {
-        private readonly ConcurrentDictionary<(string Topic, SemanticVersion Version), ConsumerConfiguration> _consumers = new();
+        private readonly ConcurrentDictionary<(string Topic, SemanticVersion Version, string Subscription), ConsumerConfiguration> _consumers = new();
 
         public event EventHandler<TopicEventArgs> TopicCreated;
 
         public event EventHandler<TopicEventArgs> TopicRemoved;
 
         public IConsumingConfigurator AddConsumer<T>(string topic, SemanticVersion version, ConsumeHandler<T> handler) where T : class
+            => AddConsumer(topic, version, ConsumerEndpoint.DefaultSubscription, handler);
+
+        public IConsumingConfigurator AddConsumer<T>(string topic, SemanticVersion version, string subscription, ConsumeHandler<T> handler) where T : class
         {
             CheckTopic(topic);
+            subscription = NormalizeSubscription(subscription);
 
             if(handler == null)
                 throw new ArgumentNullException(nameof(handler));
@@ -23,13 +27,14 @@
             var consumerConfig = new ConsumerConfiguration<T>(handler)
             {
                 Topic = topic,
-                Version = version
+                Version = version,
+                Subscription = subscription
             };
 
-            if (!_consumers.TryAdd((topic, version), consumerConfig))
-                throw new InvalidOperationException($"A consumer for topic '{topic}' with version '{version}' is already registered.");
+            if (!_consumers.TryAdd((topic, version, subscription), consumerConfig))
+                throw new InvalidOperationException($"A consumer for topic '{topic}' with version '{version}' and subscription '{subscription}' is already registered.");
 
-            TopicCreated?.Invoke(this, new TopicEventArgs(topic));
+            TopicCreated?.Invoke(this, new TopicEventArgs(topic, subscription));
 
             return this;
         }
@@ -41,7 +46,7 @@
         {
             CheckTopic(topic);
 
-            _consumers.TryRemove((topic, version), out _);
+            _consumers.TryRemove((topic, version, ConsumerEndpoint.DefaultSubscription), out _);
 
             if(!_consumers.Keys.Any(x => x.Topic == topic))
                 TopicRemoved?.Invoke(this, new TopicEventArgs(topic));
@@ -53,13 +58,17 @@
             => RemoveConsumer(topic, SemanticVersion.Default);
 
         public ConsumerConfiguration GetConfiguration(string topic, SemanticVersion version)
+            => GetConfiguration(topic, version, ConsumerEndpoint.DefaultSubscription);
+
+        public ConsumerConfiguration GetConfiguration(string topic, SemanticVersion version, string subscription)
         {
             CheckTopic(topic);
+            subscription = NormalizeSubscription(subscription);
 
-            if(_consumers.TryGetValue((topic, version), out var configuration))
+            if(_consumers.TryGetValue((topic, version, subscription), out var configuration))
                 return configuration;
 
-            throw new InvalidOperationException($"Consumer with Topic '{topic}' and Version '{version}' doesn't exist in current context.");
+            throw new InvalidOperationException($"Consumer with Topic '{topic}', Version '{version}', and Subscription '{subscription}' doesn't exist in current context.");
         }
 
         public ConsumerConfiguration GetConfiguration(string topic)
@@ -68,10 +77,18 @@
         public IEnumerable<string> GetAllTopics()
             => _consumers.Keys.Select(x => x.Topic).Distinct();
 
+        public IEnumerable<ConsumerEndpoint> GetAllEndpoints()
+            => _consumers.Keys
+                .Select(x => new ConsumerEndpoint(x.Topic, x.Subscription))
+                .DistinctBy(x => x.Key);
+
         private void CheckTopic(string topic)
         {
             if (string.IsNullOrWhiteSpace(topic))
                 throw new ArgumentException("Topic cannot be null or empty.", nameof(topic));
         }
+
+        private static string NormalizeSubscription(string subscription)
+            => string.IsNullOrWhiteSpace(subscription) ? ConsumerEndpoint.DefaultSubscription : subscription;
     }
 }

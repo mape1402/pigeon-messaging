@@ -34,7 +34,34 @@ namespace Pigeon.Messaging.Tests.Producing
             await producer.PublishAsync("msg", "topic");
 
             await interceptor.Received(1).Intercept(Arg.Any<PublishContext>());
-            await manager.Received(1).PushAsync(Arg.Any<WrappedPayload<string>>(), "topic", CancellationToken.None);
+            await manager.Received(1).PushAsync(
+                Arg.Any<WrappedPayload<string>>(),
+                Arg.Is<PublishingRoute>(route =>
+                    route.Topic == "topic" &&
+                    route.RoutingKey == "topic" &&
+                    route.Exchange == string.Empty),
+                CancellationToken.None);
+        }
+
+        [Fact]
+        public async Task PublishAsync_Should_Call_Manager_With_Exchange_Route()
+        {
+            var interceptor = Substitute.For<IPublishInterceptor>();
+            var manager = Substitute.For<IProducingManager>();
+            var settings = new GlobalSettings { Domain = "test-domain" };
+            var options = Options.Create(settings);
+            var producer = new Producer(new[] { interceptor }, manager, options);
+
+            await producer.PublishAsync("msg", "events", "user.created", "1.0.0");
+
+            await interceptor.Received(1).Intercept(Arg.Any<PublishContext>());
+            await manager.Received(1).PushAsync(
+                Arg.Any<WrappedPayload<string>>(),
+                Arg.Is<PublishingRoute>(route =>
+                    route.Topic == "user.created" &&
+                    route.RoutingKey == "user.created" &&
+                    route.Exchange == "events"),
+                CancellationToken.None);
         }
 
         [Fact]
@@ -49,8 +76,35 @@ namespace Pigeon.Messaging.Tests.Producing
             await producer.PublishRawAsync("msg", "topic");
 
             await interceptor.DidNotReceive().Intercept(Arg.Any<PublishContext>());
-            await manager.Received(1).PushRawAsync("msg", "topic", CancellationToken.None);
+            await manager.Received(1).PushRawAsync(
+                "msg",
+                Arg.Is<PublishingRoute>(route =>
+                    route.Topic == "topic" &&
+                    route.RoutingKey == "topic" &&
+                    route.Exchange == string.Empty),
+                CancellationToken.None);
             await manager.DidNotReceive().PushAsync(Arg.Any<WrappedPayload<string>>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+        }
+
+        [Fact]
+        public async Task PublishRawAsync_Should_Call_Manager_With_Exchange_Route()
+        {
+            var interceptor = Substitute.For<IPublishInterceptor>();
+            var manager = Substitute.For<IProducingManager>();
+            var settings = new GlobalSettings { Domain = "test-domain" };
+            var options = Options.Create(settings);
+            var producer = new Producer(new[] { interceptor }, manager, options);
+
+            await producer.PublishRawAsync("msg", "events", "user.created");
+
+            await interceptor.DidNotReceive().Intercept(Arg.Any<PublishContext>());
+            await manager.Received(1).PushRawAsync(
+                "msg",
+                Arg.Is<PublishingRoute>(route =>
+                    route.Topic == "user.created" &&
+                    route.RoutingKey == "user.created" &&
+                    route.Exchange == "events"),
+                CancellationToken.None);
         }
 
         [Fact]

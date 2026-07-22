@@ -30,6 +30,17 @@
         IConsumingConfigurator AddConsumer<T>(string topic, SemanticVersion version, ConsumeHandler<T> handler) where T : class;
 
         /// <summary>
+        /// Registers a consumer handler for a specific topic, semantic version, and subscription.
+        /// </summary>
+        /// <typeparam name="T">The type of the expected message payload.</typeparam>
+        /// <param name="topic">The topic or channel to bind the consumer to.</param>
+        /// <param name="version">The semantic version of the message contract.</param>
+        /// <param name="subscription">The subscription, queue name, or consumer group to bind.</param>
+        /// <param name="handler">The delegate that handles the consumed message.</param>
+        /// <returns>The same <see cref="IConsumingConfigurator"/> instance for fluent chaining.</returns>
+        IConsumingConfigurator AddConsumer<T>(string topic, SemanticVersion version, string subscription, ConsumeHandler<T> handler) where T : class;
+
+        /// <summary>
         /// Registers a consumer handler for a specific topic
         /// using the default semantic version.
         /// </summary>
@@ -65,6 +76,16 @@
         ConsumerConfiguration GetConfiguration(string topic, SemanticVersion version);
 
         /// <summary>
+        /// Retrieves the <see cref="ConsumerConfiguration"/> for a given topic, version, and subscription.
+        /// Throws an exception if no matching configuration is found.
+        /// </summary>
+        /// <param name="topic">The topic or channel to look up.</param>
+        /// <param name="version">The semantic version of the message contract.</param>
+        /// <param name="subscription">The subscription, queue name, or consumer group to look up.</param>
+        /// <returns>The matching <see cref="ConsumerConfiguration"/>.</returns>
+        ConsumerConfiguration GetConfiguration(string topic, SemanticVersion version, string subscription);
+
+        /// <summary>
         /// Retrieves the <see cref="ConsumerConfiguration"/> for a given topic
         /// using the default semantic version.
         /// Throws an exception if no matching configuration is found.
@@ -85,5 +106,11 @@
         /// with at least one registered consumer.
         /// </returns>
         IEnumerable<string> GetAllTopics();
+
+        /// <summary>
+        /// Retrieves all registered consumer endpoints currently configured in the consuming engine.
+        /// </summary>
+        /// <returns>An <see cref="IEnumerable{T}"/> containing all topic and subscription pairs.</returns>
+        IEnumerable<ConsumerEndpoint> GetAllEndpoints();
     }
 }

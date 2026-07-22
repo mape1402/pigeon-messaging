@@ -39,8 +39,8 @@
             _globalSettings = globalSettings.Value ?? throw new ArgumentNullException(nameof(globalSettings));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
-            _onTopicCreated = async (s, e) => await StartNewProcessor(e.Topic, CancellationToken.None);
-            _onTopicRemoved = async (s, e) => await StopProcessor(e.Topic, CancellationToken.None);
+            _onTopicCreated = async (s, e) => await StartNewProcessor(e.Endpoint, CancellationToken.None);
+            _onTopicRemoved = async (s, e) => await StopProcessor(e.Endpoint, CancellationToken.None);
         }
 
         /// <summary>
@@ -58,10 +58,10 @@
             _consumingConfigurator.TopicCreated += _onTopicCreated;
             _consumingConfigurator.TopicRemoved += _onTopicRemoved;
 
-            var topics = _consumingConfigurator.GetAllTopics();
+            var endpoints = GetConfiguredEndpoints();
 
-            foreach (var topic in topics)
-                await StartNewProcessor(topic, cancellationToken);
+            foreach (var endpoint in endpoints)
+                await StartNewProcessor(endpoint, cancellationToken);
 
             _logger.LogInformation("AzureServiceBusConsumingAdapter has been initialized");
         }
@@ -76,22 +76,24 @@
             _consumingConfigurator.TopicCreated -= _onTopicCreated;
             _consumingConfigurator.TopicRemoved -= _onTopicRemoved;
 
-            foreach (var topic in _processors.Keys)
-                await StopProcessor(topic, cancellationToken);
+            foreach (var endpoint in _processors.Keys.Select(ParseEndpointKey))
+                await StopProcessor(endpoint, cancellationToken);
 
             _processors.Clear();
 
             _logger.LogInformation("AzureServiceBusConsumingAdapter has been stopped gracefully");
         }
 
-        private async Task StartNewProcessor(string topic, CancellationToken cancellationToken = default)
+        private async Task StartNewProcessor(ConsumerEndpoint endpoint, CancellationToken cancellationToken = default)
         {
-            var processor = _serviceBusProvider.CreateProcessor(topic);
+            var processor = endpoint.Subscription == ConsumerEndpoint.DefaultSubscription
+                ? _serviceBusProvider.CreateProcessor(endpoint.Topic)
+                : _serviceBusProvider.CreateProcessor(endpoint.Topic, endpoint.Subscription);
 
-            if (!_processors.TryAdd(topic, processor))
+            if (!_processors.TryAdd(endpoint.Key, processor))
             {
                 await processor.DisposeAsync();
-                _logger.LogWarning("AzureServiceBusConsumingAdapter: Processor for topic '{Topic}' already exists. Skipping creation.", topic);
+                _logger.LogWarning("AzureServiceBusConsumingAdapter: Processor for topic '{Topic}' and subscription '{Subscription}' already exists. Skipping creation.", endpoint.Topic, endpoint.Subscription);
                 return;
             }
 
@@ -102,7 +104,7 @@
                     var body = args.Message.Body.ToArray();
                     var json = body.FromBytes();
 
-                    MessageConsumed?.Invoke(this, new MessageConsumedEventArgs(topic, json));
+                    MessageConsumed?.Invoke(this, new MessageConsumedEventArgs(endpoint.Topic, json, endpoint.Subscription));
 
                     await args.CompleteMessageAsync(args.Message, cancellationToken);
                 }
@@ -121,9 +123,9 @@
             await processor.StartProcessingAsync(cancellationToken);
         }
 
-        private async Task StopProcessor(string topic, CancellationToken cancellationToken = default)
+        private async Task StopProcessor(ConsumerEndpoint endpoint, CancellationToken cancellationToken = default)
         {
-            if (!_processors.TryRemove(topic, out var processor))
+            if (!_processors.TryRemove(endpoint.Key, out var processor))
                 return;
 
             try
@@ -133,8 +135,24 @@
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "AzureServiceBusConsumingAdapter: Error while stopping processor for topic '{Topic}'", topic);
+                _logger.LogError(ex, "AzureServiceBusConsumingAdapter: Error while stopping processor for topic '{Topic}' and subscription '{Subscription}'", endpoint.Topic, endpoint.Subscription);
             }
+        }
+
+        private static ConsumerEndpoint ParseEndpointKey(string key)
+        {
+            var parts = key.Split("::", 2, StringSplitOptions.None);
+            return new ConsumerEndpoint(parts[0], parts.Length > 1 ? parts[1] : ConsumerEndpoint.DefaultSubscription);
+        }
+
+        private IEnumerable<ConsumerEndpoint> GetConfiguredEndpoints()
+        {
+            var endpoints = _consumingConfigurator.GetAllEndpoints()?.ToArray();
+
+            if (endpoints is { Length: > 0 })
+                return endpoints;
+
+            return _consumingConfigurator.GetAllTopics()?.Select(topic => new ConsumerEndpoint(topic)) ?? Enumerable.Empty<ConsumerEndpoint>();
         }
     }
 }

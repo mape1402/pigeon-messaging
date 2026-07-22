@@ -18,5 +18,12 @@
         /// </summary>
         /// <returns>A <see cref="ConsumerConfig"/> instance with the necessary settings for consuming messages.</returns>
         ConsumerConfig GetConsumerConfig();
+
+        /// <summary>
+        /// Gets the configuration settings for a Kafka consumer using a specific consumer group.
+        /// </summary>
+        /// <param name="consumerGroup">The consumer group to use.</param>
+        /// <returns>A <see cref="ConsumerConfig"/> instance with the necessary settings for consuming messages.</returns>
+        ConsumerConfig GetConsumerConfig(string consumerGroup);
     }
 }

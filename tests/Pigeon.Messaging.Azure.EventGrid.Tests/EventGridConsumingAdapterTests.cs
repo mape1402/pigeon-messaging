@@ -153,6 +153,34 @@ namespace Pigeon.Messaging.Azure.EventGrid.Tests.Consuming
             await processor.Received(1).StartProcessingAsync(Arg.Any<CancellationToken>());
         }
 
+        [Fact]
+        public async Task StartConsumeAsync_Should_Create_Subscription_Processor_For_Endpoint()
+        {
+            // Arrange
+            var topic = "user.created";
+            var subscription = "notifications";
+            var configurator = Substitute.For<IConsumingConfigurator>();
+            var provider = Substitute.For<IEventGridProvider>();
+            var logger = Substitute.For<ILogger<EventGridConsumingAdapter>>();
+            var options = Options.Create(new GlobalSettings { Domain = "test-domain" });
+
+            configurator.GetAllEndpoints().Returns([new ConsumerEndpoint(topic, subscription)]);
+
+            var processor = Substitute.For<ServiceBusProcessor>();
+            provider.CreateProcessor(topic, subscription).Returns(processor);
+            processor.StartProcessingAsync(Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
+
+            var adapter = new EventGridConsumingAdapter(configurator, provider, options, logger);
+
+            // Act
+            await adapter.StartConsumeAsync();
+
+            // Assert
+            provider.Received(1).CreateProcessor(topic, subscription);
+            provider.DidNotReceive().CreateProcessor(topic);
+            await processor.Received(1).StartProcessingAsync(Arg.Any<CancellationToken>());
+        }
+
         private record TestMessage(string data);
     }
 }

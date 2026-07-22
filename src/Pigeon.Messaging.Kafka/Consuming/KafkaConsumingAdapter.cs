@@ -42,8 +42,8 @@
             _globalSettings = globalSettings.Value ?? throw new ArgumentNullException(nameof(globalSettings));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
-            _onTopicCreated = (s, e) => StartNewConsumer(e.Topic);
-            _onTopicRemoved = (s, e) => StopConsumer(e.Topic);
+            _onTopicCreated = (s, e) => StartNewConsumer(e.Endpoint);
+            _onTopicRemoved = (s, e) => StopConsumer(e.Endpoint);
         }
 
         /// <summary>
@@ -61,12 +61,12 @@
             _consumingConfigurator.TopicCreated += _onTopicCreated;
             _consumingConfigurator.TopicRemoved += _onTopicRemoved;
 
-            var topics = _consumingConfigurator.GetAllTopics();
+            var endpoints = GetConfiguredEndpoints();
             var cts = new CancellationTokenSource();
             _cancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, cts.Token);
 
-            foreach (var topic in topics)
-                StartNewConsumer(topic);
+            foreach (var endpoint in endpoints)
+                StartNewConsumer(endpoint);
 
             _logger.LogInformation("KafkaConsumingAdapter has been initialized");
 
@@ -95,8 +95,8 @@
                 _logger.LogError(ex, "KafkaConsumingAdapter: Unexpected error while waiting for Kafka listeners to stop.");
             }
 
-            foreach (var topic in _consumers.Keys)
-                StopConsumer(topic);
+            foreach (var endpoint in _consumers.Keys.Select(ParseEndpointKey))
+                StopConsumer(endpoint);
 
             _consumers.Clear();
             _listeners.Clear();
@@ -125,28 +125,47 @@
             }
         }
 
-        private void StartNewConsumer(string topic)
+        private void ListenEndpoint(IConsumer<Ignore, string> consumer, ConsumerEndpoint endpoint, CancellationToken cancellationToken)
         {
-            var config = _configurationProvider.GetConsumerConfig();
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                try
+                {
+                    var result = consumer.Consume(cancellationToken);
+                    var topic = string.IsNullOrWhiteSpace(endpoint.Topic) ? result.Topic : endpoint.Topic;
+                    MessageConsumed?.Invoke(this, new MessageConsumedEventArgs(topic, result.Message.Value, endpoint.Subscription));
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "KafkaConsumingAdapter: Has ocurred an unexpected error while consuming a message.");
+                }
+            }
+        }
+
+        private void StartNewConsumer(ConsumerEndpoint endpoint)
+        {
+            var config = endpoint.Subscription == ConsumerEndpoint.DefaultSubscription
+                ? _configurationProvider.GetConsumerConfig()
+                : _configurationProvider.GetConsumerConfig(endpoint.Subscription);
             var consumer = new ConsumerBuilder<Ignore, string>(config).Build();
 
-            if (!_consumers.TryAdd(topic, consumer))
+            if (!_consumers.TryAdd(endpoint.Key, consumer))
             {
                 consumer.Dispose();
-                _logger.LogWarning("KafkaConsumingAdapter: Consumer for topic '{Topic}' already exists. Skipping creation.", topic);
+                _logger.LogWarning("KafkaConsumingAdapter: Consumer for topic '{Topic}' and subscription '{Subscription}' already exists. Skipping creation.", endpoint.Topic, endpoint.Subscription);
                 return;
             }
 
-            consumer.Subscribe(topic);
+            consumer.Subscribe(endpoint.Topic);
 
-            var listener = Task.Run(() => Listen(consumer, _cancellationTokenSource.Token));
+            var listener = Task.Run(() => ListenEndpoint(consumer, endpoint, _cancellationTokenSource.Token));
 
-            _listeners.TryAdd(topic, listener);
+            _listeners.TryAdd(endpoint.Key, listener);
         }
 
-        private void StopConsumer(string topic)
+        private void StopConsumer(ConsumerEndpoint endpoint)
         {
-            if (!_consumers.TryRemove(topic, out var consumer))
+            if (!_consumers.TryRemove(endpoint.Key, out var consumer))
                 return;
 
             try
@@ -154,12 +173,28 @@
                 consumer.Close();
                 consumer.Dispose();
 
-                _listeners[topic] = default;
+                _listeners[endpoint.Key] = default;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "KafkaConsumingAdapter: Error while stopping processor for topic '{Topic}'", topic);
+                _logger.LogError(ex, "KafkaConsumingAdapter: Error while stopping processor for topic '{Topic}' and subscription '{Subscription}'", endpoint.Topic, endpoint.Subscription);
             }
+        }
+
+        private static ConsumerEndpoint ParseEndpointKey(string key)
+        {
+            var parts = key.Split("::", 2, StringSplitOptions.None);
+            return new ConsumerEndpoint(parts[0], parts.Length > 1 ? parts[1] : ConsumerEndpoint.DefaultSubscription);
+        }
+
+        private IEnumerable<ConsumerEndpoint> GetConfiguredEndpoints()
+        {
+            var endpoints = _consumingConfigurator.GetAllEndpoints()?.ToArray();
+
+            if (endpoints is { Length: > 0 })
+                return endpoints;
+
+            return _consumingConfigurator.GetAllTopics()?.Select(topic => new ConsumerEndpoint(topic)) ?? Enumerable.Empty<ConsumerEndpoint>();
         }
     }
 }

@@ -22,6 +22,11 @@
         public SemanticVersion Version { get; init; }
 
         /// <summary>
+        /// Gets the subscription, queue name, or consumer group used by this consumer.
+        /// </summary>
+        public string Subscription { get; init; } = ConsumerEndpoint.DefaultSubscription;
+
+        /// <summary>
         /// Gets the runtime type of the expected message payload.
         /// Useful for dynamic dispatch or validation.
         /// </summary>

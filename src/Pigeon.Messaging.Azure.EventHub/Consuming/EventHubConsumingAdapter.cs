@@ -39,8 +39,8 @@
             _globalSettings = globalSettings?.Value ?? throw new ArgumentNullException(nameof(globalSettings));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
-            _onTopicCreated = (s, e) => StartNewProcessor(e.Topic);
-            _onTopicRemoved = (s, e) => StopProcessor(e.Topic);
+            _onTopicCreated = (s, e) => StartNewProcessor(e.Endpoint);
+            _onTopicRemoved = (s, e) => StopProcessor(e.Endpoint);
         }
 
         /// <summary>
@@ -58,12 +58,12 @@
             _consumingConfigurator.TopicCreated += _onTopicCreated;
             _consumingConfigurator.TopicRemoved += _onTopicRemoved;
 
-            var topics = _consumingConfigurator.GetAllTopics();
+            var endpoints = GetConfiguredEndpoints();
             var cts = new CancellationTokenSource();
             _cancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, cts.Token);
 
-            foreach (var topic in topics)
-                StartNewProcessor(topic);
+            foreach (var endpoint in endpoints)
+                StartNewProcessor(endpoint);
 
             _logger.LogInformation("AzureEventHubConsumingAdapter has been initialized");
 
@@ -92,8 +92,8 @@
                 _logger.LogError(ex, "AzureEventHubConsumingAdapter: Unexpected error while waiting for Event Hub listeners to stop.");
             }
 
-            foreach (var topic in _processors.Keys)
-                StopProcessor(topic);
+            foreach (var endpoint in _processors.Keys.Select(ParseEndpointKey))
+                StopProcessor(endpoint);
 
             _processors.Clear();
             _listeners.Clear();
@@ -101,49 +101,51 @@
             _logger.LogInformation("AzureEventHubConsumingAdapter has been stopped gracefully");
         }
 
-        private void StartNewProcessor(string topic)
+        private void StartNewProcessor(ConsumerEndpoint endpoint)
         {
             try
             {
-                var processor = _eventHubProvider.CreateProcessor(topic);
+                var processor = endpoint.Subscription == ConsumerEndpoint.DefaultSubscription
+                    ? _eventHubProvider.CreateProcessor(endpoint.Topic)
+                    : _eventHubProvider.CreateProcessor(endpoint.Topic, endpoint.Subscription);
 
-                if (!_processors.TryAdd(topic, processor))
+                if (!_processors.TryAdd(endpoint.Key, processor))
                 {
                     processor.Dispose();
-                    _logger.LogWarning("AzureEventHubConsumingAdapter: Processor for topic '{Topic}' already exists. Skipping creation.", topic);
+                    _logger.LogWarning("AzureEventHubConsumingAdapter: Processor for topic '{Topic}' and subscription '{Subscription}' already exists. Skipping creation.", endpoint.Topic, endpoint.Subscription);
                     return;
                 }
 
-                var listener = Task.Run(() => ListenToEvents(processor, topic, _cancellationTokenSource.Token));
-                _listeners.TryAdd(topic, listener);
+                var listener = Task.Run(() => ListenToEvents(processor, endpoint, _cancellationTokenSource.Token));
+                _listeners.TryAdd(endpoint.Key, listener);
 
-                _logger.LogInformation("AzureEventHubConsumingAdapter: Started processor for topic '{Topic}'.", topic);
+                _logger.LogInformation("AzureEventHubConsumingAdapter: Started processor for topic '{Topic}' and subscription '{Subscription}'.", endpoint.Topic, endpoint.Subscription);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "AzureEventHubConsumingAdapter: Error starting processor for topic '{Topic}'.", topic);
+                _logger.LogError(ex, "AzureEventHubConsumingAdapter: Error starting processor for topic '{Topic}' and subscription '{Subscription}'.", endpoint.Topic, endpoint.Subscription);
             }
         }
 
-        private void StopProcessor(string topic)
+        private void StopProcessor(ConsumerEndpoint endpoint)
         {
-            if (!_processors.TryRemove(topic, out var processor))
+            if (!_processors.TryRemove(endpoint.Key, out var processor))
                 return;
 
             try
             {
                 processor.Dispose();
-                _listeners[topic] = default;
+                _listeners[endpoint.Key] = default;
 
-                _logger.LogInformation("AzureEventHubConsumingAdapter: Stopped processor for topic '{Topic}'.", topic);
+                _logger.LogInformation("AzureEventHubConsumingAdapter: Stopped processor for topic '{Topic}' and subscription '{Subscription}'.", endpoint.Topic, endpoint.Subscription);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "AzureEventHubConsumingAdapter: Error while stopping processor for topic '{Topic}'", topic);
+                _logger.LogError(ex, "AzureEventHubConsumingAdapter: Error while stopping processor for topic '{Topic}' and subscription '{Subscription}'", endpoint.Topic, endpoint.Subscription);
             }
         }
 
-        private async Task ListenToEvents(IEventHubProcessor processor, string topic, CancellationToken cancellationToken)
+        private async Task ListenToEvents(IEventHubProcessor processor, ConsumerEndpoint endpoint, CancellationToken cancellationToken)
         {
             try
             {
@@ -157,18 +159,34 @@
                         var eventData = partitionEvent.Data;
                         var json = eventData.EventBody.ToArray().FromBytes();
 
-                        MessageConsumed?.Invoke(this, new MessageConsumedEventArgs(topic, json));
+                        MessageConsumed?.Invoke(this, new MessageConsumedEventArgs(endpoint.Topic, json, endpoint.Subscription));
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex, "AzureEventHubConsumingAdapter: Has occurred an unexpected error while processing event from topic '{Topic}'.", topic);
+                        _logger.LogError(ex, "AzureEventHubConsumingAdapter: Has occurred an unexpected error while processing event from topic '{Topic}' and subscription '{Subscription}'.", endpoint.Topic, endpoint.Subscription);
                     }
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "AzureEventHubConsumingAdapter: Error in event listening loop for topic '{Topic}'.", topic);
+                _logger.LogError(ex, "AzureEventHubConsumingAdapter: Error in event listening loop for topic '{Topic}' and subscription '{Subscription}'.", endpoint.Topic, endpoint.Subscription);
             }
+        }
+
+        private static ConsumerEndpoint ParseEndpointKey(string key)
+        {
+            var parts = key.Split("::", 2, StringSplitOptions.None);
+            return new ConsumerEndpoint(parts[0], parts.Length > 1 ? parts[1] : ConsumerEndpoint.DefaultSubscription);
+        }
+
+        private IEnumerable<ConsumerEndpoint> GetConfiguredEndpoints()
+        {
+            var endpoints = _consumingConfigurator.GetAllEndpoints()?.ToArray();
+
+            if (endpoints is { Length: > 0 })
+                return endpoints;
+
+            return _consumingConfigurator.GetAllTopics()?.Select(topic => new ConsumerEndpoint(topic)) ?? Enumerable.Empty<ConsumerEndpoint>();
         }
     }
 }

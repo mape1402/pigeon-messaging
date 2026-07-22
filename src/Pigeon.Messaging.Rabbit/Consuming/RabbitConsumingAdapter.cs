@@ -19,9 +19,10 @@
         private readonly IConnectionProvider _connectionProvider;
         private readonly IConsumingConfigurator _consumingConfigurator;
         private readonly GlobalSettings _globalSettings;
+        private readonly RabbitSettings _settings;
         private readonly ILogger<RabbitConsumingAdapter> _logger;
 
-        // Dictionary to keep track of open channels keyed by topic to avoid duplicate consumers
+        // Dictionary to keep track of open channels keyed by endpoint to avoid duplicate consumers
         private ConcurrentDictionary<string, IChannel> _channels = new();
 
         private readonly EventHandler<TopicEventArgs> _onTopicCreated;
@@ -36,15 +37,16 @@
         /// <param name="logger">Logger for error and informational messages.</param>
         /// <exception cref="ArgumentNullException">Thrown if any dependency is null.</exception>
         public RabbitConsumingAdapter(IConnectionProvider connectionProvider, IConsumingConfigurator consumingConfigurator,
-            IOptions<GlobalSettings> globalSettings, ILogger<RabbitConsumingAdapter> logger)
+            IOptions<GlobalSettings> globalSettings, IOptions<RabbitSettings> settings, ILogger<RabbitConsumingAdapter> logger)
         {
             _connectionProvider = connectionProvider ?? throw new ArgumentNullException(nameof(connectionProvider));
             _consumingConfigurator = consumingConfigurator ?? throw new ArgumentNullException(nameof(consumingConfigurator));
             _globalSettings = globalSettings?.Value ?? throw new ArgumentNullException(nameof(globalSettings));
+            _settings = settings?.Value ?? throw new ArgumentNullException(nameof(settings));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
-            _onTopicCreated = async (s, e) => await StartNewChannel(e.Topic, CancellationToken.None);
-            _onTopicRemoved = async (s, e) => await StopChannel(e.Topic, CancellationToken.None);
+            _onTopicCreated = async (s, e) => await StartNewChannel(e.Endpoint, CancellationToken.None);
+            _onTopicRemoved = async (s, e) => await StopChannel(e.Endpoint, CancellationToken.None);
         }
 
         /// <summary>
@@ -63,10 +65,10 @@
             _consumingConfigurator.TopicCreated += _onTopicCreated;
             _consumingConfigurator.TopicRemoved += _onTopicRemoved;
 
-            var topics = _consumingConfigurator.GetAllTopics();
+            var endpoints = GetConfiguredEndpoints();
 
-            foreach (var topic in topics)
-                await StartNewChannel(topic, cancellationToken).ConfigureAwait(false);
+            foreach (var endpoint in endpoints)
+                await StartNewChannel(endpoint, cancellationToken).ConfigureAwait(false);
 
             _logger.LogInformation("RabbitConsumingAdapter has been initialized");
         }
@@ -81,24 +83,30 @@
             _consumingConfigurator.TopicCreated -= _onTopicCreated;
             _consumingConfigurator.TopicRemoved -= _onTopicRemoved;
 
-            foreach (var topic in _channels.Keys)
-                await StopChannel(topic, cancellationToken);
+            foreach (var endpoint in _channels.Keys.Select(ParseEndpointKey))
+                await StopChannel(endpoint, cancellationToken);
 
             _logger.LogInformation("RabbitConsumingAdapter has been stopped gracefully");
         }
 
-        private async Task StartNewChannel(string topic, CancellationToken cancellationToken = default)
+        private async Task StartNewChannel(ConsumerEndpoint endpoint, CancellationToken cancellationToken = default)
         {
             var channel = await _connectionProvider.CreateChannelAsync(cancellationToken);
 
-            if (!_channels.TryAdd(topic, channel))
+            if (!_channels.TryAdd(endpoint.Key, channel))
             {
                 await channel.DisposeAsync();
-                _logger.LogWarning("RabbitConsumingAdapter: Consumer for topic '{Topic}' already exists. Skipping creation.", topic);
+                _logger.LogWarning("RabbitConsumingAdapter: Consumer for topic '{Topic}' and subscription '{Subscription}' already exists. Skipping creation.", endpoint.Topic, endpoint.Subscription);
                 return;
             }
 
-            await channel.QueueDeclareAsync(topic, durable: false, exclusive: false, autoDelete: false, cancellationToken: cancellationToken);
+            await channel.QueueDeclareAsync(endpoint.ResourceName, durable: false, exclusive: false, autoDelete: false, cancellationToken: cancellationToken);
+
+            if (!string.IsNullOrWhiteSpace(_settings.Exchange))
+            {
+                await channel.ExchangeDeclareAsync(_settings.Exchange, _settings.ExchangeType, durable: _settings.DurableExchange, autoDelete: false, cancellationToken: cancellationToken);
+                await channel.QueueBindAsync(endpoint.ResourceName, _settings.Exchange, endpoint.Topic, cancellationToken: cancellationToken);
+            }
 
             var consumer = new AsyncEventingBasicConsumer(channel);
 
@@ -109,7 +117,7 @@
                     var body = e.Body.ToArray();
                     var message = body.FromBytes();
 
-                    MessageConsumed?.Invoke(this, new MessageConsumedEventArgs(e.RoutingKey, message));
+                    MessageConsumed?.Invoke(this, new MessageConsumedEventArgs(endpoint.Topic, message, endpoint.Subscription));
                 }
                 catch (Exception ex)
                 {
@@ -119,14 +127,14 @@
                 return Task.CompletedTask;
             };
 
-            await channel.BasicConsumeAsync(topic, autoAck: true, consumer, cancellationToken);
+            await channel.BasicConsumeAsync(endpoint.ResourceName, autoAck: true, consumer, cancellationToken);
 
-            _logger.LogInformation($"RabbitConsumingAdapter: Consumer for topic '{topic}' has been configured");
+            _logger.LogInformation("RabbitConsumingAdapter: Consumer for topic '{Topic}' and subscription '{Subscription}' has been configured", endpoint.Topic, endpoint.Subscription);
         }
 
-        private async Task StopChannel(string topic, CancellationToken cancellationToken = default)
+        private async Task StopChannel(ConsumerEndpoint endpoint, CancellationToken cancellationToken = default)
         {
-            if (!_channels.TryRemove(topic, out var channel))
+            if (!_channels.TryRemove(endpoint.Key, out var channel))
                 return;
 
             try
@@ -138,8 +146,24 @@
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "RabbitConsumingAdapter: Error while stopping processor for topic '{Topic}'.", topic);
+                _logger.LogError(ex, "RabbitConsumingAdapter: Error while stopping processor for topic '{Topic}' and subscription '{Subscription}'.", endpoint.Topic, endpoint.Subscription);
             }
+        }
+
+        private static ConsumerEndpoint ParseEndpointKey(string key)
+        {
+            var parts = key.Split("::", 2, StringSplitOptions.None);
+            return new ConsumerEndpoint(parts[0], parts.Length > 1 ? parts[1] : ConsumerEndpoint.DefaultSubscription);
+        }
+
+        private IEnumerable<ConsumerEndpoint> GetConfiguredEndpoints()
+        {
+            var endpoints = _consumingConfigurator.GetAllEndpoints()?.ToArray();
+
+            if (endpoints is { Length: > 0 })
+                return endpoints;
+
+            return _consumingConfigurator.GetAllTopics()?.Select(topic => new ConsumerEndpoint(topic)) ?? Enumerable.Empty<ConsumerEndpoint>();
         }
     }
 }

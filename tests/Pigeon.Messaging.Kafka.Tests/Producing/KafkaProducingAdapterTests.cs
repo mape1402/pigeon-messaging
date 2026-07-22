@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 using Pigeon.Messaging.Contracts;
+using Pigeon.Messaging.Producing;
 using Pigeon.Messaging.Kafka.Producing;
 using Xunit;
 
@@ -80,6 +81,31 @@ namespace Pigeon.Messaging.Kafka.Tests.Producing
             // Assert
             await producer.Received(1).PublishRawAsync(message, topic, Arg.Any<CancellationToken>());
             await producer.DidNotReceive().PublishAsync(Arg.Any<WrappedPayload<SampleMessage>>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+        }
+
+        [Fact]
+        public async Task PublishMessageAsync_Should_Use_Route_Topic_For_Kafka_Topic()
+        {
+            // Arrange
+            var serviceProvider = Substitute.For<IServiceProvider>();
+            var logger = Substitute.For<ILogger<KafkaProducingAdapter>>();
+            var producer = Substitute.For<IKafkaProducer<SampleMessage>>();
+            var payload = new WrappedPayload<SampleMessage> { Message = new SampleMessage() };
+            var route = PublishingRoute.ForExchange("events", "user.created");
+            var deliveryResult = new Confluent.Kafka.DeliveryResult<Confluent.Kafka.Null, WrappedPayload<SampleMessage>>
+            {
+                Offset = new Confluent.Kafka.Offset(1),
+                Partition = new Confluent.Kafka.Partition(2)
+            };
+            producer.PublishAsync(payload, "user.created", Arg.Any<CancellationToken>()).Returns(Task.FromResult(deliveryResult));
+            serviceProvider.GetService<IKafkaProducer<SampleMessage>>().Returns(producer);
+            var adapter = new KafkaProducingAdapter(serviceProvider, logger);
+
+            // Act
+            await adapter.PublishMessageAsync(payload, route);
+
+            // Assert
+            await producer.Received(1).PublishAsync(payload, "user.created", Arg.Any<CancellationToken>());
         }
     }
 

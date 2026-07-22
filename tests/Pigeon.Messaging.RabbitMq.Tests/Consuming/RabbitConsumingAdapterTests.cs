@@ -21,6 +21,7 @@
         private readonly ILogger<RabbitConsumingAdapter> _logger = Substitute.For<ILogger<RabbitConsumingAdapter>>();
         private readonly IChannel _channel = Substitute.For<IChannel>();
         private readonly IOptions<GlobalSettings> _options = Options.Create(new GlobalSettings { Domain = "test" });
+        private readonly IOptions<RabbitSettings> _rabbitOptions = Options.Create(new RabbitSettings());
 
         [Fact]
         public async Task Should_StartConsume_And_RegisterConsumerPerTopic()
@@ -30,7 +31,7 @@
             _consumingConfigurator.GetAllTopics().Returns(topics);
             _connectionProvider.CreateChannelAsync(Arg.Any<CancellationToken>()).Returns(_channel);
 
-            var adapter = new RabbitConsumingAdapter(_connectionProvider, _consumingConfigurator, _options, _logger);
+            var adapter = new RabbitConsumingAdapter(_connectionProvider, _consumingConfigurator, _options, _rabbitOptions, _logger);
 
             // Act
             await adapter.StartConsumeAsync();
@@ -56,7 +57,7 @@
             _consumingConfigurator.GetAllTopics().Returns(new[] { topic, topic });
             _connectionProvider.CreateChannelAsync(Arg.Any<CancellationToken>()).Returns(_channel);
 
-            var adapter = new RabbitConsumingAdapter(_connectionProvider, _consumingConfigurator, _options, _logger);
+            var adapter = new RabbitConsumingAdapter(_connectionProvider, _consumingConfigurator, _options, _rabbitOptions, _logger);
 
             // Act
             await adapter.StartConsumeAsync();
@@ -75,7 +76,7 @@
         public void Should_Invoke_MessageConsumed_WhenMessageReceived()
         {
             // Arrange
-            var adapter = new RabbitConsumingAdapter(_connectionProvider, _consumingConfigurator, _options, _logger);
+            var adapter = new RabbitConsumingAdapter(_connectionProvider, _consumingConfigurator, _options, _rabbitOptions, _logger);
 
             bool eventRaised = false;
             adapter.MessageConsumed += (s, e) =>
@@ -114,7 +115,7 @@
             _consumingConfigurator.GetAllTopics().Returns(new[] { "topic1" });
             _connectionProvider.CreateChannelAsync(Arg.Any<CancellationToken>()).Returns(_channel);
 
-            var adapter = new RabbitConsumingAdapter(_connectionProvider, _consumingConfigurator, _options, _logger);
+            var adapter = new RabbitConsumingAdapter(_connectionProvider, _consumingConfigurator, _options, _rabbitOptions, _logger);
             await adapter.StartConsumeAsync();
 
             // Act
@@ -129,6 +130,60 @@
                 Arg.Any<object>(),
                 Arg.Any<Exception>(),
                 Arg.Any<Func<object, Exception, string>>());
+        }
+
+        [Fact]
+        public async Task Should_Bind_Queue_To_Configured_Exchange()
+        {
+            // Arrange
+            var topic = "topic1";
+            var rabbitOptions = Options.Create(new RabbitSettings
+            {
+                Exchange = "events",
+                ExchangeType = "topic",
+                DurableExchange = true
+            });
+            _consumingConfigurator.GetAllTopics().Returns(new[] { topic });
+            _connectionProvider.CreateChannelAsync(Arg.Any<CancellationToken>()).Returns(_channel);
+
+            var adapter = new RabbitConsumingAdapter(_connectionProvider, _consumingConfigurator, _options, rabbitOptions, _logger);
+
+            // Act
+            await adapter.StartConsumeAsync();
+
+            // Assert
+            await _channel.Received(1).ExchangeDeclareAsync("events", "topic", true, false, null, false, Arg.Any<CancellationToken>());
+            await _channel.Received(1).QueueBindAsync(topic, "events", topic, null, false, Arg.Any<CancellationToken>());
+        }
+
+        [Fact]
+        public async Task Should_Create_Queue_Per_Subscription_For_Same_Topic()
+        {
+            // Arrange
+            var topic = "user.created";
+            var endpoints = new[]
+            {
+                new ConsumerEndpoint(topic, "billing"),
+                new ConsumerEndpoint(topic, "notifications")
+            };
+            var rabbitOptions = Options.Create(new RabbitSettings
+            {
+                Exchange = "events",
+                ExchangeType = "topic"
+            });
+            _consumingConfigurator.GetAllEndpoints().Returns(endpoints);
+            _connectionProvider.CreateChannelAsync(Arg.Any<CancellationToken>()).Returns(_channel);
+
+            var adapter = new RabbitConsumingAdapter(_connectionProvider, _consumingConfigurator, _options, rabbitOptions, _logger);
+
+            // Act
+            await adapter.StartConsumeAsync();
+
+            // Assert
+            await _channel.Received(1).QueueDeclareAsync("billing", false, false, false, null, false, Arg.Any<CancellationToken>());
+            await _channel.Received(1).QueueDeclareAsync("notifications", false, false, false, null, false, Arg.Any<CancellationToken>());
+            await _channel.Received(1).QueueBindAsync("billing", "events", topic, null, false, Arg.Any<CancellationToken>());
+            await _channel.Received(1).QueueBindAsync("notifications", "events", topic, null, false, Arg.Any<CancellationToken>());
         }
     }
 

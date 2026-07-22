@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using NSubstitute;
 using Pigeon.Messaging.Azure.EventHub.Producing;
 using Pigeon.Messaging.Contracts;
+using Pigeon.Messaging.Producing;
 
 namespace Pigeon.Messaging.Azure.EventHub.Tests.Producing
 {
@@ -185,6 +186,27 @@ namespace Pigeon.Messaging.Azure.EventHub.Tests.Producing
             
             Assert.Throws<ArgumentNullException>(() => 
                 new EventHubProducingAdapter(provider, serializer, null));
+        }
+
+        [Fact]
+        public void CreateRawEventData_Should_Add_Route_Properties()
+        {
+            // Arrange
+            var provider = Substitute.For<IEventHubProvider>();
+            var logger = Substitute.For<ILogger<EventHubProducingAdapter>>();
+            var serializer = Substitute.For<ISerializer>();
+            var route = PublishingRoute.ForExchange("events", "user.created");
+            var message = new TestMessage { Content = "Test" };
+
+            serializer.Serialize(Arg.Any<object>()).Returns("{\"content\":\"Test\"}");
+            var adapter = new EventHubProducingAdapter(provider, serializer, logger);
+
+            // Act
+            var eventData = adapter.CreateRawEventData(message, route);
+
+            // Assert
+            Assert.Equal("user.created", eventData.Properties["RoutingKey"]);
+            Assert.Equal("events", eventData.Properties["Exchange"]);
         }
 
         private class TestMessage

@@ -30,6 +30,11 @@
         public string Topic { get; init; }
 
         /// <summary>
+        /// Subscription, queue name, or consumer group that received this message.
+        /// </summary>
+        public string Subscription { get; init; }
+
+        /// <summary>
         /// Version of the message contract.
         /// </summary>
         public SemanticVersion MessageVersion { get; init; }

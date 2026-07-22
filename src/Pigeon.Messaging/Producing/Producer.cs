@@ -53,7 +53,18 @@
             if (string.IsNullOrWhiteSpace(topic))
                 throw new ArgumentException("Topic cannot be null or empty.", nameof(topic));
 
-            await PublishCore(message, topic, version, cancellationToken);
+            await PublishCore(message, PublishingRoute.ForTopic(topic), version, cancellationToken);
+        }
+
+        /// <summary>
+        /// <inheritdoc/>
+        /// </summary>
+        public virtual async ValueTask PublishAsync<T>(T message, string exchange, string routingKey, SemanticVersion version, CancellationToken cancellationToken = default) where T : class
+        {
+            if (message is null)
+                throw new ArgumentNullException(nameof(message));
+
+            await PublishCore(message, PublishingRoute.ForExchange(exchange, routingKey), version, cancellationToken);
         }
 
         /// <summary>
@@ -73,7 +84,18 @@
             if (string.IsNullOrWhiteSpace(topic))
                 throw new ArgumentException("Topic cannot be null or empty.", nameof(topic));
 
-            await _producingManager.PushRawAsync(message, topic, cancellationToken);
+            await _producingManager.PushRawAsync(message, PublishingRoute.ForTopic(topic), cancellationToken);
+        }
+
+        /// <summary>
+        /// <inheritdoc/>
+        /// </summary>
+        public virtual async ValueTask PublishRawAsync<T>(T message, string exchange, string routingKey, CancellationToken cancellationToken = default) where T : class
+        {
+            if (message is null)
+                throw new ArgumentNullException(nameof(message));
+
+            await _producingManager.PushRawAsync(message, PublishingRoute.ForExchange(exchange, routingKey), cancellationToken);
         }
 
         /// <summary>
@@ -89,7 +111,7 @@
         /// A cancellation token to observe while waiting for the task to complete.
         /// </param>
         /// <returns>A <see cref="ValueTask"/> representing the asynchronous operation.</returns>
-        protected virtual async ValueTask PublishCore<T>(T message, string topic, SemanticVersion version, CancellationToken cancellationToken = default) where T : class
+        protected virtual async ValueTask PublishCore<T>(T message, PublishingRoute route, SemanticVersion version, CancellationToken cancellationToken = default) where T : class
         {
             var publishContext = new PublishContext();
 
@@ -105,7 +127,7 @@
                 Domain = _settings.Domain
             };
 
-            await _producingManager.PushAsync(payload, topic, cancellationToken);
+            await _producingManager.PushAsync(payload, route, cancellationToken);
         }
     }
 }

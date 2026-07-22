@@ -25,11 +25,14 @@
 
         /// <inheritdoc/>
         public ConsumerConfig GetConsumerConfig()
+            => GetConsumerConfig(_globalSettings.Domain);
+
+        public ConsumerConfig GetConsumerConfig(string consumerGroup)
         {
             return new ConsumerConfig
             {
                 BootstrapServers = _kafkaSettings.BootstrapServers,
-                GroupId = _globalSettings.Domain,
+                GroupId = string.IsNullOrWhiteSpace(consumerGroup) ? _globalSettings.Domain : consumerGroup,
                 SaslUsername = _kafkaSettings.UserName,
                 SaslPassword = _kafkaSettings.Password,
                 SecurityProtocol = _kafkaSettings.SecurityProtocol,

@@ -3,6 +3,7 @@
     using global::Azure.Messaging.EventHubs;
     using Microsoft.Extensions.Logging;
     using Pigeon.Messaging.Contracts;
+    using Pigeon.Messaging.Producing;
     using Pigeon.Messaging.Producing.Management;
 
     /// <summary>
@@ -37,20 +38,23 @@
         /// <param name="cancellationToken">A cancellation token to observe while waiting for the task to complete.</param>
         /// <returns>A <see cref="ValueTask"/> representing the asynchronous publish operation.</returns>
         public async ValueTask PublishMessageAsync<T>(WrappedPayload<T> payload, string topic, CancellationToken cancellationToken = default) where T : class
+            => await PublishMessageAsync(payload, PublishingRoute.ForTopic(topic), cancellationToken);
+
+        public async ValueTask PublishMessageAsync<T>(WrappedPayload<T> payload, PublishingRoute route, CancellationToken cancellationToken = default) where T : class
         {
             try
             {
-                var producer = _eventHubProvider.GetProducer(topic);
-                var eventData = CreateEventData(payload);
+                var producer = _eventHubProvider.GetProducer(route.Topic);
+                var eventData = CreateEventData(payload, route);
 
                 using var eventBatch = await producer.CreateBatchAsync(cancellationToken);
                 
                 if (!eventBatch.TryAdd(eventData))
-                    throw new InvalidOperationException($"The event data for topic '{topic}' is too large to fit in a batch.");
+                    throw new InvalidOperationException($"The event data for topic '{route.Topic}' is too large to fit in a batch.");
 
                 await producer.SendAsync(eventBatch, cancellationToken);
 
-                _logger.LogInformation("EventHub: Message published to hub '{Topic}' successfully.", topic);
+                _logger.LogInformation("EventHub: Message published to hub '{Topic}' successfully.", route.Topic);
             }
             catch (Exception ex)
             {
@@ -60,20 +64,23 @@
         }
 
         public async ValueTask PublishRawMessageAsync<T>(T message, string topic, CancellationToken cancellationToken = default) where T : class
+            => await PublishRawMessageAsync(message, PublishingRoute.ForTopic(topic), cancellationToken);
+
+        public async ValueTask PublishRawMessageAsync<T>(T message, PublishingRoute route, CancellationToken cancellationToken = default) where T : class
         {
             try
             {
-                var producer = _eventHubProvider.GetProducer(topic);
-                var eventData = CreateRawEventData(message);
+                var producer = _eventHubProvider.GetProducer(route.Topic);
+                var eventData = CreateRawEventData(message, route);
 
                 using var eventBatch = await producer.CreateBatchAsync(cancellationToken);
 
                 if (!eventBatch.TryAdd(eventData))
-                    throw new InvalidOperationException($"The raw event data for topic '{topic}' is too large to fit in a batch.");
+                    throw new InvalidOperationException($"The raw event data for topic '{route.Topic}' is too large to fit in a batch.");
 
                 await producer.SendAsync(eventBatch, cancellationToken);
 
-                _logger.LogInformation("EventHub: Raw message published to hub '{Topic}' successfully.", topic);
+                _logger.LogInformation("EventHub: Raw message published to hub '{Topic}' successfully.", route.Topic);
             }
             catch (Exception ex)
             {
@@ -82,7 +89,7 @@
             }
         }
 
-        private EventData CreateEventData<T>(WrappedPayload<T> payload) where T : class
+        internal EventData CreateEventData<T>(WrappedPayload<T> payload, PublishingRoute route) where T : class
         {
             var bytes = _serializer.SerializeAsBytes(payload);
             var eventData = new EventData(bytes);
@@ -91,14 +98,25 @@
             eventData.Properties.Add("Domain", payload.Domain);
             eventData.Properties.Add("MessageVersion", payload.MessageVersion.ToString());
             eventData.Properties.Add("CreatedOnUtc", payload.CreatedOnUtc.ToString("O"));
+            AddRouteProperties(eventData, route);
 
             return eventData;
         }
 
-        private EventData CreateRawEventData<T>(T message) where T : class
+        internal EventData CreateRawEventData<T>(T message, PublishingRoute route) where T : class
         {
             var bytes = _serializer.SerializeAsBytes(message);
-            return new EventData(bytes);
+            var eventData = new EventData(bytes);
+            AddRouteProperties(eventData, route);
+            return eventData;
+        }
+
+        private static void AddRouteProperties(EventData eventData, PublishingRoute route)
+        {
+            eventData.Properties.Add("RoutingKey", route.RoutingKey);
+
+            if (!string.IsNullOrWhiteSpace(route.Exchange))
+                eventData.Properties.Add("Exchange", route.Exchange);
         }
     }
 }
