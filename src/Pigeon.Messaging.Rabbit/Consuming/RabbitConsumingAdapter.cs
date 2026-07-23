@@ -4,6 +4,7 @@
     using Microsoft.Extensions.Options;
     using Pigeon.Messaging.Consuming.Configuration;
     using Pigeon.Messaging.Consuming.Management;
+    using Pigeon.Messaging.Topology;
     using RabbitMQ.Client;
     using RabbitMQ.Client.Events;
     using System.Collections.Concurrent;
@@ -18,6 +19,7 @@
     {
         private readonly IConnectionProvider _connectionProvider;
         private readonly IConsumingConfigurator _consumingConfigurator;
+        private readonly ITopologyProvisioningService _topologyProvisioningService;
         private readonly GlobalSettings _globalSettings;
         private readonly RabbitSettings _settings;
         private readonly ILogger<RabbitConsumingAdapter> _logger;
@@ -38,9 +40,16 @@
         /// <exception cref="ArgumentNullException">Thrown if any dependency is null.</exception>
         public RabbitConsumingAdapter(IConnectionProvider connectionProvider, IConsumingConfigurator consumingConfigurator,
             IOptions<GlobalSettings> globalSettings, IOptions<RabbitSettings> settings, ILogger<RabbitConsumingAdapter> logger)
+            : this(connectionProvider, consumingConfigurator, NoopTopologyProvisioningService.Instance, globalSettings, settings, logger)
+        {
+        }
+
+        public RabbitConsumingAdapter(IConnectionProvider connectionProvider, IConsumingConfigurator consumingConfigurator,
+            ITopologyProvisioningService topologyProvisioningService, IOptions<GlobalSettings> globalSettings, IOptions<RabbitSettings> settings, ILogger<RabbitConsumingAdapter> logger)
         {
             _connectionProvider = connectionProvider ?? throw new ArgumentNullException(nameof(connectionProvider));
             _consumingConfigurator = consumingConfigurator ?? throw new ArgumentNullException(nameof(consumingConfigurator));
+            _topologyProvisioningService = topologyProvisioningService ?? throw new ArgumentNullException(nameof(topologyProvisioningService));
             _globalSettings = globalSettings?.Value ?? throw new ArgumentNullException(nameof(globalSettings));
             _settings = settings?.Value ?? throw new ArgumentNullException(nameof(settings));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -100,13 +109,7 @@
                 return;
             }
 
-            await channel.QueueDeclareAsync(endpoint.ResourceName, durable: false, exclusive: false, autoDelete: false, cancellationToken: cancellationToken);
-
-            if (!string.IsNullOrWhiteSpace(_settings.Exchange))
-            {
-                await channel.ExchangeDeclareAsync(_settings.Exchange, _settings.ExchangeType, durable: _settings.DurableExchange, autoDelete: false, cancellationToken: cancellationToken);
-                await channel.QueueBindAsync(endpoint.ResourceName, _settings.Exchange, endpoint.Topic, cancellationToken: cancellationToken);
-            }
+            await _topologyProvisioningService.EnsureConsumeTopologyAsync(endpoint, cancellationToken);
 
             var consumer = new AsyncEventingBasicConsumer(channel);
 

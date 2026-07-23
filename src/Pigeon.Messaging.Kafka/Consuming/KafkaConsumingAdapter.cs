@@ -5,6 +5,7 @@
     using Microsoft.Extensions.Options;
     using Pigeon.Messaging.Consuming.Configuration;
     using Pigeon.Messaging.Consuming.Management;
+    using Pigeon.Messaging.Topology;
     using System.Collections.Concurrent;
     using System.Threading;
 
@@ -16,6 +17,7 @@
     {
         private readonly IConsumingConfigurator _consumingConfigurator;
         private readonly IConfigurationProvider _configurationProvider;
+        private readonly ITopologyProvisioningService _topologyProvisioningService;
         private readonly GlobalSettings _globalSettings;
         private readonly ILogger<KafkaConsumingAdapter> _logger;
 
@@ -36,13 +38,20 @@
         /// <exception cref="ArgumentNullException">Thrown if any dependency is null.</exception>
         public KafkaConsumingAdapter(IConsumingConfigurator consumingConfigurator, IConfigurationProvider configurationProvider,
             IOptions<GlobalSettings> globalSettings, ILogger<KafkaConsumingAdapter> logger)
+            : this(consumingConfigurator, configurationProvider, NoopTopologyProvisioningService.Instance, globalSettings, logger)
+        {
+        }
+
+        public KafkaConsumingAdapter(IConsumingConfigurator consumingConfigurator, IConfigurationProvider configurationProvider,
+            ITopologyProvisioningService topologyProvisioningService, IOptions<GlobalSettings> globalSettings, ILogger<KafkaConsumingAdapter> logger)
         {
             _consumingConfigurator = consumingConfigurator ?? throw new ArgumentNullException(nameof(consumingConfigurator));
             _configurationProvider = configurationProvider ?? throw new ArgumentNullException(nameof(configurationProvider));
+            _topologyProvisioningService = topologyProvisioningService ?? throw new ArgumentNullException(nameof(topologyProvisioningService));
             _globalSettings = globalSettings.Value ?? throw new ArgumentNullException(nameof(globalSettings));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
-            _onTopicCreated = (s, e) => StartNewConsumer(e.Endpoint);
+            _onTopicCreated = async (s, e) => await StartNewConsumer(e.Endpoint, CancellationToken.None);
             _onTopicRemoved = (s, e) => StopConsumer(e.Endpoint);
         }
 
@@ -56,7 +65,7 @@
         /// </summary>
         /// <param name="cancellationToken">Optional token to cancel the operation.</param>
         /// <returns>A <see cref="ValueTask"/> representing the asynchronous start operation.</returns>
-        public ValueTask StartConsumeAsync(CancellationToken cancellationToken = default)
+        public async ValueTask StartConsumeAsync(CancellationToken cancellationToken = default)
         {
             _consumingConfigurator.TopicCreated += _onTopicCreated;
             _consumingConfigurator.TopicRemoved += _onTopicRemoved;
@@ -66,11 +75,9 @@
             _cancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, cts.Token);
 
             foreach (var endpoint in endpoints)
-                StartNewConsumer(endpoint);
+                await StartNewConsumer(endpoint, cancellationToken);
 
             _logger.LogInformation("KafkaConsumingAdapter has been initialized");
-
-            return ValueTask.CompletedTask;
         }
 
         /// <summary>
@@ -142,8 +149,10 @@
             }
         }
 
-        private void StartNewConsumer(ConsumerEndpoint endpoint)
+        private async Task StartNewConsumer(ConsumerEndpoint endpoint, CancellationToken cancellationToken = default)
         {
+            await _topologyProvisioningService.EnsureConsumeTopologyAsync(endpoint, cancellationToken);
+
             var config = endpoint.Subscription == ConsumerEndpoint.DefaultSubscription
                 ? _configurationProvider.GetConsumerConfig()
                 : _configurationProvider.GetConsumerConfig(endpoint.Subscription);

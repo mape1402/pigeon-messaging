@@ -6,6 +6,7 @@
     using Pigeon.Messaging.Kafka.Consuming;
     using Pigeon.Messaging.Kafka.Producing;
     using Pigeon.Messaging.Producing.Management;
+    using Pigeon.Messaging.Topology;
     using System.Diagnostics.CodeAnalysis;
 
     /// <summary>
@@ -28,6 +29,7 @@
                 ftBuilder.Services.AddSingleton(typeof(IKafkaProducer<>), typeof(KafkaProducer<>));
                 ftBuilder.Services.AddSingleton<IMessageBrokerConsumingAdapter, KafkaConsumingAdapter>();
                 ftBuilder.Services.AddSingleton<IMessageBrokerProducingAdapter, KafkaProducingAdapter>();
+                ftBuilder.Services.AddSingleton<IMessageBrokerTopologyAdapter, KafkaTopologyAdapter>();
 
                 if (!ftBuilder.TryGetAdapterSettings<KafkaSettings>("Kafka", out var settings))
                     settings = new KafkaSettings();

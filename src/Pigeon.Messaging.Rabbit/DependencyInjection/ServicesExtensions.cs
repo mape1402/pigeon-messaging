@@ -6,6 +6,7 @@
     using Pigeon.Messaging.Rabbit;
     using Pigeon.Messaging.Rabbit.Consuming;
     using Pigeon.Messaging.Rabbit.Producing;
+    using Pigeon.Messaging.Topology;
     using RabbitMQ.Client;
 
     /// <summary>
@@ -28,6 +29,7 @@
                 ftBuilder.Services.AddSingleton<IConnectionProvider, ConnectionProvider>();
                 ftBuilder.Services.AddSingleton<IMessageBrokerConsumingAdapter, RabbitConsumingAdapter>();
                 ftBuilder.Services.AddSingleton<IMessageBrokerProducingAdapter, RabbitProducingAdapter>();
+                ftBuilder.Services.AddSingleton<IMessageBrokerTopologyAdapter, RabbitTopologyAdapter>();
 
                 if (!ftBuilder.TryGetAdapterSettings<RabbitSettings>("RabbitMq", out var settings))
                     settings = new RabbitSettings();

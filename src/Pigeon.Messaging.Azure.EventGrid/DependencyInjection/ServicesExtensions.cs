@@ -6,6 +6,7 @@ namespace Microsoft.Extensions.DependencyInjection
     using Pigeon.Messaging.Azure.EventGrid.Producing;
     using Pigeon.Messaging.Consuming.Management;
     using Pigeon.Messaging.Producing.Management;
+    using Pigeon.Messaging.Topology;
     using System.Diagnostics.CodeAnalysis;
 
     /// <summary>
@@ -27,6 +28,7 @@ namespace Microsoft.Extensions.DependencyInjection
                 ftBuilder.Services.AddSingleton<IEventGridProvider, EventGridProvider>();
                 ftBuilder.Services.AddSingleton<IMessageBrokerProducingAdapter, EventGridProducingAdapter>();
                 ftBuilder.Services.AddSingleton<IMessageBrokerConsumingAdapter, EventGridConsumingAdapter>();
+                ftBuilder.Services.AddSingleton<IMessageBrokerTopologyAdapter, EventGridTopologyAdapter>();
 
                 if (!ftBuilder.TryGetAdapterSettings<AzureEventGridSettings>("AzureEventGrid", out var settings))
                     settings = new AzureEventGridSettings();

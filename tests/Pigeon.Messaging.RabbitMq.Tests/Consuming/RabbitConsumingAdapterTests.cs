@@ -38,7 +38,7 @@
 
             // Assert
             await _connectionProvider.Received(topics.Length).CreateChannelAsync(Arg.Any<CancellationToken>());
-            await _channel.Received(topics.Length).QueueDeclareAsync(Arg.Any<string>(), false, false, false, null, false, Arg.Any<CancellationToken>());
+            await _channel.DidNotReceive().QueueDeclareAsync(Arg.Any<string>(), false, false, false, null, false, Arg.Any<CancellationToken>());
             await _channel.Received(topics.Length).BasicConsumeAsync(Arg.Any<string>(), true, Arg.Any<IAsyncBasicConsumer>(), Arg.Any<CancellationToken>());
 
             _logger.Received().Log(
@@ -152,8 +152,8 @@
             await adapter.StartConsumeAsync();
 
             // Assert
-            await _channel.Received(1).ExchangeDeclareAsync("events", "topic", true, false, null, false, Arg.Any<CancellationToken>());
-            await _channel.Received(1).QueueBindAsync(topic, "events", topic, null, false, Arg.Any<CancellationToken>());
+            await _channel.DidNotReceive().ExchangeDeclareAsync("events", "topic", true, false, null, false, Arg.Any<CancellationToken>());
+            await _channel.DidNotReceive().QueueBindAsync(topic, "events", topic, null, false, Arg.Any<CancellationToken>());
         }
 
         [Fact]
@@ -180,10 +180,10 @@
             await adapter.StartConsumeAsync();
 
             // Assert
-            await _channel.Received(1).QueueDeclareAsync("billing", false, false, false, null, false, Arg.Any<CancellationToken>());
-            await _channel.Received(1).QueueDeclareAsync("notifications", false, false, false, null, false, Arg.Any<CancellationToken>());
-            await _channel.Received(1).QueueBindAsync("billing", "events", topic, null, false, Arg.Any<CancellationToken>());
-            await _channel.Received(1).QueueBindAsync("notifications", "events", topic, null, false, Arg.Any<CancellationToken>());
+            await _channel.DidNotReceive().QueueDeclareAsync("billing", false, false, false, null, false, Arg.Any<CancellationToken>());
+            await _channel.DidNotReceive().QueueDeclareAsync("notifications", false, false, false, null, false, Arg.Any<CancellationToken>());
+            await _channel.DidNotReceive().QueueBindAsync("billing", "events", topic, null, false, Arg.Any<CancellationToken>());
+            await _channel.DidNotReceive().QueueBindAsync("notifications", "events", topic, null, false, Arg.Any<CancellationToken>());
         }
     }
 

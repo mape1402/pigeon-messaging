@@ -30,7 +30,7 @@ namespace Pigeon.Messaging.RabbitMq.Tests.Producing
         }
 
         [Fact]
-        public async Task Should_Publish_Message_And_Declare_Topic_Once()
+        public async Task Should_Publish_Message_Without_Declaring_Topic()
         {
             // Arrange
             _channel.IsOpen.Returns(true);
@@ -51,10 +51,9 @@ namespace Pigeon.Messaging.RabbitMq.Tests.Producing
 
             // Act
             await adapter.PublishMessageAsync(payload, topic);
-            await adapter.PublishMessageAsync(payload, topic); // should NOT declare again
+            await adapter.PublishMessageAsync(payload, topic);
 
-            // Assert: QueueDeclareAsync called only once per topic
-            await _channel.Received(1).QueueDeclareAsync(topic, false, false, false, null, false, Arg.Any<CancellationToken>());
+            await _channel.DidNotReceive().QueueDeclareAsync(topic, false, false, false, null, false, Arg.Any<CancellationToken>());
 
             // Assert: BasicPublishAsync called twice
             await _channel.Received(2).BasicPublishAsync(
@@ -226,7 +225,7 @@ namespace Pigeon.Messaging.RabbitMq.Tests.Producing
             await adapter.PublishMessageAsync(payload, route);
 
             // Assert
-            await _channel.Received(1).ExchangeDeclareAsync("events", "topic", true, false, null, false, Arg.Any<CancellationToken>());
+            await _channel.DidNotReceive().ExchangeDeclareAsync("events", "topic", true, false, null, false, Arg.Any<CancellationToken>());
             await _channel.DidNotReceive().QueueDeclareAsync("user.created", Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<IDictionary<string, object>>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
             await _channel.Received(1).BasicPublishAsync(
                 "events",

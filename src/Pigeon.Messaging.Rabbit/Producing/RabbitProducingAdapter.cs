@@ -6,7 +6,6 @@
     using Pigeon.Messaging.Producing;
     using Pigeon.Messaging.Producing.Management;
     using RabbitMQ.Client;
-    using System.Collections.Concurrent;
     using System.Threading;
     using System.Threading.Tasks;
 
@@ -20,9 +19,6 @@
         private readonly ISerializer _serializer;
         private readonly RabbitSettings _settings;
         private readonly ILogger<RabbitProducingAdapter> _logger;
-
-        // Tracks topics that have already been declared to avoid redundant declarations
-        private readonly ConcurrentDictionary<string, byte> _registeredTopics = new();
 
         // Single channel instance reused for publishing
         private IChannel _channel;
@@ -82,12 +78,6 @@
                     _channel = await _connectionProvider.CreateChannelAsync(cancellationToken);
 
                 var exchange = ResolveExchange(route);
-
-                if (!string.IsNullOrWhiteSpace(exchange))
-                    await _channel.ExchangeDeclareAsync(exchange, _settings.ExchangeType, durable: _settings.DurableExchange, autoDelete: false, cancellationToken: cancellationToken);
-
-                if (string.IsNullOrWhiteSpace(exchange) && _registeredTopics.TryAdd(route.Topic, 0))
-                    await _channel.QueueDeclareAsync(route.Topic, durable: false, exclusive: false, autoDelete: false, cancellationToken: cancellationToken);
 
                 var body = _serializer.SerializeAsBytes(payload);
 

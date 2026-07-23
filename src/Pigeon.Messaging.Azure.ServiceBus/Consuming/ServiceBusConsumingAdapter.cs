@@ -5,6 +5,7 @@
     using Microsoft.Extensions.Options;
     using Pigeon.Messaging.Consuming.Configuration;
     using Pigeon.Messaging.Consuming.Management;
+    using Pigeon.Messaging.Topology;
     using System.Collections.Concurrent;
 
     /// <summary>
@@ -15,6 +16,7 @@
     {
         private readonly IConsumingConfigurator _consumingConfigurator;
         private readonly IServiceBusProvider _serviceBusProvider;
+        private readonly ITopologyProvisioningService _topologyProvisioningService;
         private readonly GlobalSettings _globalSettings;
         private readonly ILogger<ServiceBusConsumingAdapter> _logger;
 
@@ -33,9 +35,16 @@
         /// <exception cref="ArgumentNullException">Thrown if any dependency is null.</exception>
         public ServiceBusConsumingAdapter(IConsumingConfigurator consumingConfigurator, IServiceBusProvider serviceBusProvider,
             IOptions<GlobalSettings> globalSettings, ILogger<ServiceBusConsumingAdapter> logger)
+            : this(consumingConfigurator, serviceBusProvider, NoopTopologyProvisioningService.Instance, globalSettings, logger)
+        {
+        }
+
+        public ServiceBusConsumingAdapter(IConsumingConfigurator consumingConfigurator, IServiceBusProvider serviceBusProvider,
+            ITopologyProvisioningService topologyProvisioningService, IOptions<GlobalSettings> globalSettings, ILogger<ServiceBusConsumingAdapter> logger)
         {
             _consumingConfigurator = consumingConfigurator ?? throw new ArgumentNullException(nameof(consumingConfigurator));
             _serviceBusProvider = serviceBusProvider ?? throw new ArgumentNullException(nameof(serviceBusProvider));
+            _topologyProvisioningService = topologyProvisioningService ?? throw new ArgumentNullException(nameof(topologyProvisioningService));
             _globalSettings = globalSettings.Value ?? throw new ArgumentNullException(nameof(globalSettings));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
@@ -86,6 +95,8 @@
 
         private async Task StartNewProcessor(ConsumerEndpoint endpoint, CancellationToken cancellationToken = default)
         {
+            await _topologyProvisioningService.EnsureConsumeTopologyAsync(endpoint, cancellationToken);
+
             var processor = endpoint.Subscription == ConsumerEndpoint.DefaultSubscription
                 ? _serviceBusProvider.CreateProcessor(endpoint.Topic)
                 : _serviceBusProvider.CreateProcessor(endpoint.Topic, endpoint.Subscription);

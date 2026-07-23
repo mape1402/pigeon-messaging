@@ -5,6 +5,7 @@
     using Microsoft.Extensions.Options;
     using Pigeon.Messaging.Consuming.Configuration;
     using Pigeon.Messaging.Consuming.Management;
+    using Pigeon.Messaging.Topology;
     using System.Collections.Concurrent;
     using System.Text.Json;
 
@@ -16,6 +17,7 @@
     {
         private readonly IConsumingConfigurator _consumingConfigurator;
         private readonly IEventGridProvider _eventGridProvider;
+        private readonly ITopologyProvisioningService _topologyProvisioningService;
         private readonly GlobalSettings _globalSettings;
         private readonly ILogger<EventGridConsumingAdapter> _logger;
 
@@ -34,9 +36,16 @@
         /// <exception cref="ArgumentNullException">Thrown if any dependency is null.</exception>
         public EventGridConsumingAdapter(IConsumingConfigurator consumingConfigurator, IEventGridProvider eventGridProvider,
             IOptions<GlobalSettings> globalSettings, ILogger<EventGridConsumingAdapter> logger)
+            : this(consumingConfigurator, eventGridProvider, NoopTopologyProvisioningService.Instance, globalSettings, logger)
+        {
+        }
+
+        public EventGridConsumingAdapter(IConsumingConfigurator consumingConfigurator, IEventGridProvider eventGridProvider,
+            ITopologyProvisioningService topologyProvisioningService, IOptions<GlobalSettings> globalSettings, ILogger<EventGridConsumingAdapter> logger)
         {
             _consumingConfigurator = consumingConfigurator ?? throw new ArgumentNullException(nameof(consumingConfigurator));
             _eventGridProvider = eventGridProvider ?? throw new ArgumentNullException(nameof(eventGridProvider));
+            _topologyProvisioningService = topologyProvisioningService ?? throw new ArgumentNullException(nameof(topologyProvisioningService));
             _globalSettings = globalSettings?.Value ?? throw new ArgumentNullException(nameof(globalSettings));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
@@ -87,6 +96,8 @@
 
         private async Task StartNewProcessor(ConsumerEndpoint endpoint, CancellationToken cancellationToken = default)
         {
+            await _topologyProvisioningService.EnsureConsumeTopologyAsync(endpoint, cancellationToken);
+
             var processor = endpoint.Subscription == ConsumerEndpoint.DefaultSubscription
                 ? _eventGridProvider.CreateProcessor(endpoint.Topic)
                 : _eventGridProvider.CreateProcessor(endpoint.Topic, endpoint.Subscription);
