@@ -41,19 +41,32 @@ using var host = builder.Build();
 await host.StartAsync();
 
 var publishedMessages = host.Services.GetRequiredService<PublishedMessages>();
+var outboxStore = host.Services.GetRequiredService<TransactionalInMemoryOutboxStore>();
 
+Console.WriteLine("Pigeon TransactionScope outbox demo");
+Console.WriteLine("-----------------------------------");
+PrintState("Initial state", outboxStore, publishedMessages);
+
+Console.WriteLine();
+Console.WriteLine("1. Publishing inside a committed TransactionScope.");
 await PublishInsideCommittedTransactionAsync(host.Services);
+PrintState("After PublishAsync, before background dispatch wait", outboxStore, publishedMessages);
 await publishedMessages.WaitForCountAsync(1, TimeSpan.FromSeconds(5));
+PrintState("After commit dispatch", outboxStore, publishedMessages);
 
+Console.WriteLine();
+Console.WriteLine("2. Publishing inside a rolled back TransactionScope.");
 await PublishInsideRolledBackTransactionAsync(host.Services);
 await Task.Delay(TimeSpan.FromSeconds(1));
+PrintState("After rollback", outboxStore, publishedMessages);
 
 if (publishedMessages.Count != 1)
     throw new InvalidOperationException($"Expected only one committed message, but {publishedMessages.Count} messages were published.");
 
 var published = publishedMessages.Snapshot.Single();
-Console.WriteLine($"Published message: {published.MessageType} via topic '{published.Route.Topic}'.");
-Console.WriteLine("Rollback message was not dispatched.");
+Console.WriteLine();
+Console.WriteLine($"Published message: {published.MessageType} '{published.Description}' via topic '{published.Route.Topic}'.");
+Console.WriteLine("Demo completed: rollback message was not persisted or dispatched.");
 
 await host.StopAsync();
 
@@ -77,9 +90,21 @@ static async Task PublishInsideRolledBackTransactionAsync(IServiceProvider servi
     await producer.PublishAsync(new SampleMessage("rolled-back"), "sample.transaction-scope");
 }
 
+static void PrintState(string label, TransactionalInMemoryOutboxStore outboxStore, PublishedMessages publishedMessages)
+{
+    var outboxSnapshot = outboxStore.Snapshot;
+
+    Console.WriteLine($"{label}:");
+    Console.WriteLine($"  Outbox rows: {outboxSnapshot.Count}");
+    Console.WriteLine($"  Published messages: {publishedMessages.Count}");
+
+    foreach (var message in outboxSnapshot)
+        Console.WriteLine($"  - {message.Id:N} | {message.Status} | topic={message.Topic}");
+}
+
 internal sealed record SampleMessage(string Text);
 
-internal sealed record PublishedEnvelope(string Kind, string MessageType, PublishingRoute Route);
+internal sealed record PublishedEnvelope(string Kind, string MessageType, string Description, PublishingRoute Route);
 
 internal sealed class PublishedMessages
 {
@@ -124,7 +149,7 @@ internal sealed class CapturingProducingAdapter : IMessageBrokerProducingAdapter
     public ValueTask PublishMessageAsync<T>(WrappedPayload<T> payload, PublishingRoute route, CancellationToken cancellationToken = default)
         where T : class
     {
-        _publishedMessages.Add(new PublishedEnvelope("wrapped", typeof(T).Name, route));
+        _publishedMessages.Add(new PublishedEnvelope("wrapped", typeof(T).Name, Describe(payload.Message), route));
         return ValueTask.CompletedTask;
     }
 
@@ -135,9 +160,12 @@ internal sealed class CapturingProducingAdapter : IMessageBrokerProducingAdapter
     public ValueTask PublishRawMessageAsync<T>(T message, PublishingRoute route, CancellationToken cancellationToken = default)
         where T : class
     {
-        _publishedMessages.Add(new PublishedEnvelope("raw", typeof(T).Name, route));
+        _publishedMessages.Add(new PublishedEnvelope("raw", typeof(T).Name, Describe(message), route));
         return ValueTask.CompletedTask;
     }
+
+    private static string Describe<T>(T message)
+        => message is SampleMessage sample ? sample.Text : typeof(T).Name;
 }
 
 internal sealed class TransactionalInMemoryOutboxStore
@@ -147,6 +175,20 @@ internal sealed class TransactionalInMemoryOutboxStore
 
     public IOutboxStorage CreateStorage()
         => new TransactionalInMemoryOutboxStorage(this);
+
+    public IReadOnlyCollection<OutboxMessage> Snapshot
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _messages.Values
+                    .OrderBy(message => message.CreatedOnUtc)
+                    .Select(Clone)
+                    .ToArray();
+            }
+        }
+    }
 
     public void Commit(IReadOnlyCollection<OutboxMessage> messages)
     {
