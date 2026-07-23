@@ -53,10 +53,15 @@
                 };
                 context.SetAcknowledgementCallbacks(completeAsync, failAsync);
 
-                foreach (var interceptor in interceptors)
-                    await interceptor.Intercept(context);
+                var contextAccessor = scope.ServiceProvider.GetService<ConsumeContextAccessor>();
 
-                await configuration.Handler(context);
+                using (contextAccessor?.Push(context))
+                {
+                    foreach (var interceptor in interceptors)
+                        await interceptor.Intercept(context);
+
+                    await configuration.Handler(context);
+                }
             }
         }
     }

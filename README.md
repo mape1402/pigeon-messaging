@@ -273,6 +273,30 @@ pigeon.AddConsumeHandler<HelloWorldMessage>(
     });
 ```
 
+### Access the Current Consume Context
+
+Use `IConsumeContextAccessor` when application services need to read the current `ConsumeContext` without receiving it directly as a method argument:
+
+```csharp
+public class CurrentMessageTenantProvider
+{
+    private readonly IConsumeContextAccessor _consumeContextAccessor;
+
+    public CurrentMessageTenantProvider(IConsumeContextAccessor consumeContextAccessor)
+    {
+        _consumeContextAccessor = consumeContextAccessor;
+    }
+
+    public string GetTenantId()
+    {
+        var context = _consumeContextAccessor.ConsumeContext;
+        return context?.GetMetadata<string>("tenantId");
+    }
+}
+```
+
+`ConsumeContext` is only available while Pigeon is running consume interceptors or the consumer handler for the current message. Outside a consume pipeline, the accessor returns `null`.
+
 ### Configure the Transactional Outbox
 
 The Entity Framework Core outbox plugs into the producer pipeline. `PublishAsync` still runs publish interceptors in the current scope, builds the final `WrappedPayload`, and then stores that exact payload in the outbox instead of sending it directly to the broker. The background dispatcher later publishes the stored payload without running interceptors again.
