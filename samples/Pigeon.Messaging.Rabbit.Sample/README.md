@@ -24,6 +24,8 @@ dotnet run --project samples\Pigeon.Messaging.Rabbit.Sample\Pigeon.Messaging.Rab
 
 The sample creates unique queues and a unique routing key per run so the topology can be inspected after it completes.
 
+The worker also demonstrates `IConsumeContextAccessor`: before publishing there is no consume context, while each consumer resolves a scoped service that reads the current subscription from the accessor.
+
 ## Acknowledgement modes
 
 The sample defaults to `OnHandlerSuccess`, which confirms each Rabbit message after the consumer handler completes successfully.
