@@ -54,7 +54,7 @@ dotnet add package Pigeon.Messaging.Azure.ServiceBus
 dotnet add package Pigeon.Messaging.Azure.EventGrid
 dotnet add package Pigeon.Messaging.Azure.EventHub
 dotnet add package Pigeon.Messaging.InMemory
-dotnet add package Pigeon.Messaging.EntityFrameworkCore
+dotnet add package Pigeon.Messaging.Outbox.EntityFrameworkCore
 ```
 
 ## Quick Start

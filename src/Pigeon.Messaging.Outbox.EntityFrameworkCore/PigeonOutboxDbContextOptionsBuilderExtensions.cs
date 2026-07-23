@@ -1,7 +1,7 @@
 namespace Microsoft.EntityFrameworkCore
 {
     using Microsoft.EntityFrameworkCore.Infrastructure;
-    using Pigeon.Messaging.EntityFrameworkCore.Internal;
+    using Pigeon.Messaging.Outbox.EntityFrameworkCore.Internal;
 
     internal static class PigeonOutboxDbContextOptionsBuilderExtensions
     {
