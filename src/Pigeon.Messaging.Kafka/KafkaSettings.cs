@@ -36,5 +36,15 @@
         /// Gets or sets the required acknowledgments for Kafka producer requests. Default is <see cref="Acks.All"/>.
         /// </summary>
         public Acks Acks { get; set; } = Acks.All;
+
+        /// <summary>
+        /// Gets or sets the number of partitions to use when Pigeon provisions Kafka topics.
+        /// </summary>
+        public int TopicNumPartitions { get; set; } = 1;
+
+        /// <summary>
+        /// Gets or sets the replication factor to use when Pigeon provisions Kafka topics.
+        /// </summary>
+        public short TopicReplicationFactor { get; set; } = 1;
     }
 }

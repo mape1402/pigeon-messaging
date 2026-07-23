@@ -6,6 +6,7 @@
     using Pigeon.Messaging.Consuming.Configuration;
     using Pigeon.Messaging.Consuming.Dispatching;
     using Pigeon.Messaging.Contracts;
+    using Pigeon.Messaging.Topology;
     using System.Reflection;
     using System.Text.Json;
 
@@ -82,6 +83,17 @@
         public GlobalSettingsBuilder SetDomain(string domain)
         {
             GlobalSettings.Domain = domain;
+            return this;
+        }
+
+        /// <summary>
+        /// Configures when Pigeon should provision broker topology.
+        /// </summary>
+        /// <param name="mode">The provisioning mode flags to use.</param>
+        /// <returns>The same <see cref="GlobalSettingsBuilder"/> instance for chaining.</returns>
+        public GlobalSettingsBuilder SetTopologyProvisioningMode(TopologyProvisioningMode mode)
+        {
+            GlobalSettings.TopologyProvisioningMode = mode;
             return this;
         }
 

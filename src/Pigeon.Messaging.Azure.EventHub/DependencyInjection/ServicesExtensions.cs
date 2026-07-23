@@ -6,6 +6,7 @@ namespace Microsoft.Extensions.DependencyInjection
     using Pigeon.Messaging.Azure.EventHub.Producing;
     using Pigeon.Messaging.Consuming.Management;
     using Pigeon.Messaging.Producing.Management;
+    using Pigeon.Messaging.Topology;
     using System.Diagnostics.CodeAnalysis;
 
     /// <summary>
@@ -27,6 +28,7 @@ namespace Microsoft.Extensions.DependencyInjection
                 ftBuilder.Services.AddSingleton<IEventHubProvider, EventHubProvider>();
                 ftBuilder.Services.AddSingleton<IMessageBrokerProducingAdapter, EventHubProducingAdapter>();
                 ftBuilder.Services.AddSingleton<IMessageBrokerConsumingAdapter, EventHubConsumingAdapter>();
+                ftBuilder.Services.AddSingleton<IMessageBrokerTopologyAdapter, EventHubTopologyAdapter>();
 
                 if (!ftBuilder.TryGetAdapterSettings<AzureEventHubSettings>("AzureEventHub", out var settings))
                     settings = new AzureEventHubSettings();

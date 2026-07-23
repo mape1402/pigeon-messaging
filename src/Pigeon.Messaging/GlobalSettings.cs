@@ -1,5 +1,6 @@
 ﻿namespace Pigeon.Messaging
 {
+    using Pigeon.Messaging.Topology;
     using System.Reflection;
 
     /// <summary>
@@ -29,5 +30,11 @@
         /// via the <c>GlobalSettingsBuilder</c> during configuration.
         /// </remarks>
         public Assembly[] TargetAssemblies { get; set; } = Array.Empty<Assembly>();
+
+        /// <summary>
+        /// Gets or sets when Pigeon should provision broker topology.
+        /// Defaults to <see cref="TopologyProvisioningMode.Manual"/>, which means Pigeon only publishes and consumes.
+        /// </summary>
+        public TopologyProvisioningMode TopologyProvisioningMode { get; set; } = TopologyProvisioningMode.Manual;
     }
 }

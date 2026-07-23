@@ -2,22 +2,42 @@
 {
     using Microsoft.Extensions.Logging;
     using Microsoft.Extensions.Options;
+    using Pigeon.Messaging.Consuming.Configuration;
     using Pigeon.Messaging.Consuming.Dispatching;
+    using Pigeon.Messaging.Topology;
 
     internal class ConsumingManager : IConsumingManager
     {
         private readonly IConsumingDispatcher _dispatcher;
         private readonly IEnumerable<IMessageBrokerConsumingAdapter> _messageBrokerAdapters;
+        private readonly IConsumingConfigurator _consumingConfigurator;
+        private readonly ITopologyProvisioningService _topologyProvisioningService;
         private readonly GlobalSettings _globalSettings;
         private readonly ILogger<ConsumingManager> _logger;
 
         private CancellationToken _backgroundCancellationToken;
 
-        public ConsumingManager(IConsumingDispatcher dispatcher, IEnumerable<IMessageBrokerConsumingAdapter> messageBrokerAdapters, 
-            IOptions<GlobalSettings> globalSettings, ILogger<ConsumingManager> logger)
+        public ConsumingManager(
+            IConsumingDispatcher dispatcher,
+            IEnumerable<IMessageBrokerConsumingAdapter> messageBrokerAdapters,
+            IOptions<GlobalSettings> globalSettings,
+            ILogger<ConsumingManager> logger)
+            : this(dispatcher, messageBrokerAdapters, new Configuration.ConsumingConfigurator(), NoopTopologyProvisioningService.Instance, globalSettings, logger)
+        {
+        }
+
+        public ConsumingManager(
+            IConsumingDispatcher dispatcher,
+            IEnumerable<IMessageBrokerConsumingAdapter> messageBrokerAdapters,
+            IConsumingConfigurator consumingConfigurator,
+            ITopologyProvisioningService topologyProvisioningService,
+            IOptions<GlobalSettings> globalSettings,
+            ILogger<ConsumingManager> logger)
         {
             _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
             _messageBrokerAdapters = messageBrokerAdapters ?? throw new ArgumentNullException(nameof(messageBrokerAdapters));
+            _consumingConfigurator = consumingConfigurator ?? throw new ArgumentNullException(nameof(consumingConfigurator));
+            _topologyProvisioningService = topologyProvisioningService ?? throw new ArgumentNullException(nameof(topologyProvisioningService));
             _globalSettings = globalSettings?.Value ?? throw new ArgumentNullException(nameof(globalSettings));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
@@ -25,6 +45,9 @@
         public async Task StartAsync(CancellationToken cancellationToken = default)
         {
             _backgroundCancellationToken = cancellationToken;
+
+            foreach (var endpoint in _consumingConfigurator.GetAllEndpoints())
+                await _topologyProvisioningService.EnsureConsumeTopologyAsync(endpoint, cancellationToken);
 
             foreach (var adapter in _messageBrokerAdapters)
             {

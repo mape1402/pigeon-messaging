@@ -5,6 +5,7 @@
     using Pigeon.Messaging.Azure.ServiceBus.Producing;
     using Pigeon.Messaging.Consuming.Management;
     using Pigeon.Messaging.Producing.Management;
+    using Pigeon.Messaging.Topology;
     using System.Diagnostics.CodeAnalysis;
 
     /// <summary>
@@ -26,6 +27,7 @@
                 ftBuilder.Services.AddSingleton<IServiceBusProvider, ServiceBusProvider>();
                 ftBuilder.Services.AddSingleton<IMessageBrokerProducingAdapter, ServiceBusProducingAdapter>();
                 ftBuilder.Services.AddSingleton<IMessageBrokerConsumingAdapter, ServiceBusConsumingAdapter>();
+                ftBuilder.Services.AddSingleton<IMessageBrokerTopologyAdapter, ServiceBusTopologyAdapter>();
 
                 if(!ftBuilder.TryGetAdapterSettings<AzureServiceBusSettings>("AzureServiceBus", out var settings))
                     settings = new AzureServiceBusSettings();

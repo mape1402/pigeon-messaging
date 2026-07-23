@@ -4,9 +4,11 @@
     using Microsoft.Extensions.Options;
     using NSubstitute;
     using Pigeon.Messaging;
+    using Pigeon.Messaging.Consuming.Configuration;
     using Pigeon.Messaging.Consuming;
     using Pigeon.Messaging.Consuming.Dispatching;
     using Pigeon.Messaging.Consuming.Management;
+    using Pigeon.Messaging.Topology;
     using System.Threading;
     using System.Threading.Tasks;
     using Xunit;
@@ -37,6 +39,33 @@
 
             await adapter1.Received(1).StartConsumeAsync(Arg.Any<CancellationToken>());
             await adapter2.Received(1).StartConsumeAsync(Arg.Any<CancellationToken>());
+        }
+
+        [Fact]
+        public async Task StartAsync_Ensures_Configured_Consume_Topology_Before_Starting_Adapters()
+        {
+            var dispatcher = Substitute.For<IConsumingDispatcher>();
+            var adapter = Substitute.For<IMessageBrokerConsumingAdapter>();
+            var logger = Substitute.For<ILogger<ConsumingManager>>();
+            var consumingConfigurator = Substitute.For<IConsumingConfigurator>();
+            var topologyProvisioningService = Substitute.For<ITopologyProvisioningService>();
+            var endpoint = new ConsumerEndpoint("orders.created", "billing");
+            consumingConfigurator.GetAllEndpoints().Returns(new[] { endpoint });
+            var manager = new ConsumingManager(
+                dispatcher,
+                new[] { adapter },
+                consumingConfigurator,
+                topologyProvisioningService,
+                CreateOptions(),
+                logger);
+
+            await manager.StartAsync();
+
+            Received.InOrder(() =>
+            {
+                topologyProvisioningService.EnsureConsumeTopologyAsync(endpoint, Arg.Any<CancellationToken>());
+                adapter.StartConsumeAsync(Arg.Any<CancellationToken>());
+            });
         }
 
         [Fact]

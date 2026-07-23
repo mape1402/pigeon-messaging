@@ -9,6 +9,7 @@
     using Pigeon.Messaging.Contracts;
     using Pigeon.Messaging.Producing;
     using Pigeon.Messaging.Producing.Management;
+    using Pigeon.Messaging.Topology;
     using System.Text.Json;
 
     /// <summary>
@@ -39,6 +40,8 @@
             IConsumingConfigurator consumingConfigurator = new ConsumingConfigurator();
             services.AddSingleton(consumingConfigurator);
             services.AddSingleton<IConsumingDispatcher, ConsumingDispatcher>();
+            services.AddSingleton<ITopologyProvisioningService, TopologyProvisioningService>();
+            services.AddHostedService<TopologyProvisioningHostedService>();
             services.AddSingleton<IConsumingManager, ConsumingManager>();
             services.AddHostedService<ConsumeBackgroundService>();
 
