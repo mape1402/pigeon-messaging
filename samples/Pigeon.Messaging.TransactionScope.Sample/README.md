@@ -5,7 +5,7 @@ This sample demonstrates the happy path for Pigeon's transactional outbox with a
 - a message published inside a committed transaction is persisted to the outbox and dispatched from the in-memory queue
 - a message published inside a rolled back transaction is not persisted and is not dispatched
 
-The sample uses an in-memory transactional outbox storage and a capturing producing adapter, so it does not require a database or broker.
+The sample uses an in-memory transactional outbox storage and the official Pigeon in-memory broker, so it does not require a database or external broker.
 
 ## Run
 

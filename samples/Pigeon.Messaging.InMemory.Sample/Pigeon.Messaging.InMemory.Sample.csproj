@@ -13,7 +13,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Pigeon.Messaging.InMemory\Pigeon.Messaging.InMemory.csproj" />
-    <ProjectReference Include="..\..\src\Pigeon.Messaging\Pigeon.Messaging.csproj" />
   </ItemGroup>
 
 </Project>
