@@ -29,7 +29,7 @@ builder.Services.AddPigeon(builder.Configuration, pigeon =>
     pigeon.UseInMemoryBroker();
     pigeon.AddFeature(feature =>
     {
-        feature.Services.AddScoped<IOutboxStorage>(provider =>
+        feature.Services.AddScoped(provider =>
             provider.GetRequiredService<TransactionalInMemoryOutboxStore>().CreateStorage());
     });
 });
