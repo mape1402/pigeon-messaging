@@ -50,6 +50,7 @@ namespace Pigeon.Messaging.Rabbit.Sample
                 acknowledgementMode,
                 useOutbox,
                 outboxDatabasePath));
+            builder.Services.AddScoped<RabbitSampleConsumeContextProbe>();
 
             var pigeon = builder.Services.AddPigeon(
                 builder.Configuration,
@@ -99,7 +100,9 @@ namespace Pigeon.Messaging.Rabbit.Sample
                 async (context, message) =>
                 {
                     var scenario = context.Services.GetRequiredService<RabbitSampleScenario>();
-                    scenario.MarkBilling(message.OrderId, context.Subscription);
+                    var consumeContextProbe = context.Services.GetRequiredService<RabbitSampleConsumeContextProbe>();
+                    scenario.MarkBilling(message.OrderId, consumeContextProbe.GetCurrentSubscription());
+
                     if (scenario.AcknowledgementMode == MessageAcknowledgementMode.Manual)
                         await context.CompleteAsync();
 
@@ -113,7 +116,9 @@ namespace Pigeon.Messaging.Rabbit.Sample
                 async (context, message) =>
                 {
                     var scenario = context.Services.GetRequiredService<RabbitSampleScenario>();
-                    scenario.MarkAudit(message.OrderId, context.Subscription);
+                    var consumeContextProbe = context.Services.GetRequiredService<RabbitSampleConsumeContextProbe>();
+                    scenario.MarkAudit(message.OrderId, consumeContextProbe.GetCurrentSubscription());
+
                     if (scenario.AcknowledgementMode == MessageAcknowledgementMode.Manual)
                         await context.CompleteAsync();
 
@@ -165,6 +170,9 @@ namespace Pigeon.Messaging.Rabbit.Sample
 
             using (var scope = _scopeFactory.CreateScope())
             {
+                var consumeContextAccessor = scope.ServiceProvider.GetRequiredService<IConsumeContextAccessor>();
+                _logger.LogInformation("Consume context available before publishing: {HasConsumeContext}", consumeContextAccessor.ConsumeContext != null);
+
                 if (_scenario.UseOutbox)
                 {
                     var dbContext = scope.ServiceProvider.GetRequiredService<RabbitSampleDbContext>();
@@ -272,6 +280,24 @@ namespace Pigeon.Messaging.Rabbit.Sample
         public string OrderId { get; set; }
 
         public DateTimeOffset CreatedOnUtc { get; set; }
+    }
+
+    internal sealed class RabbitSampleConsumeContextProbe
+    {
+        private readonly IConsumeContextAccessor _consumeContextAccessor;
+
+        public RabbitSampleConsumeContextProbe(IConsumeContextAccessor consumeContextAccessor)
+        {
+            _consumeContextAccessor = consumeContextAccessor;
+        }
+
+        public string GetCurrentSubscription()
+        {
+            var context = _consumeContextAccessor.ConsumeContext
+                ?? throw new InvalidOperationException("No consume context is available outside the Pigeon consume pipeline.");
+
+            return context.Subscription;
+        }
     }
 
     internal sealed class RabbitSampleDbContext : DbContext
