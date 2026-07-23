@@ -7,6 +7,7 @@
     using System;
     using System.Collections.Generic;
     using System.Text.Json;
+    using System.Threading.Tasks;
     using Xunit;
 
     public class ConsumeContextTests
@@ -131,6 +132,24 @@
 
             Assert.Equal("demo", result.Name);
             Assert.Equal(1, result.Count);
+        }
+
+        [Fact]
+        public async Task CompleteAsync_Should_Invoke_Configured_Acknowledgement_Callback()
+        {
+            var completed = false;
+            var context = new ConsumeContext();
+            context.SetAcknowledgementCallbacks(
+                _ =>
+                {
+                    completed = true;
+                    return Task.CompletedTask;
+                },
+                (_, _) => Task.CompletedTask);
+
+            await context.CompleteAsync();
+
+            Assert.True(completed);
         }
 
         private string json =

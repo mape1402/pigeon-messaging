@@ -26,5 +26,10 @@
         /// Gets or sets whether the configured exchange should survive broker restarts.
         /// </summary>
         public bool DurableExchange { get; set; }
+
+        /// <summary>
+        /// Gets or sets whether failed messages should be requeued when a consumer handler fails.
+        /// </summary>
+        public bool RequeueOnFailure { get; set; }
     }
 }

@@ -5,6 +5,7 @@
     using Pigeon.Messaging;
     using Pigeon.Messaging.Consuming.Configuration;
     using Pigeon.Messaging.Consuming.Dispatching;
+    using Pigeon.Messaging.Consuming.Management;
     using Pigeon.Messaging.Contracts;
     using Pigeon.Messaging.Topology;
     using System.Reflection;
@@ -94,6 +95,20 @@
         public GlobalSettingsBuilder SetTopologyProvisioningMode(TopologyProvisioningMode mode)
         {
             GlobalSettings.TopologyProvisioningMode = mode;
+            return this;
+        }
+
+        /// <summary>
+        /// Configures bounded consumer dispatch execution.
+        /// </summary>
+        /// <param name="configure">The consumer execution configuration action.</param>
+        /// <returns>The same <see cref="GlobalSettingsBuilder"/> instance for chaining.</returns>
+        public GlobalSettingsBuilder ConfigureConsumerExecution(Action<ConsumerExecutionSettings> configure)
+        {
+            if (configure == null)
+                throw new ArgumentNullException(nameof(configure));
+
+            configure(GlobalSettings.ConsumerExecution);
             return this;
         }
 

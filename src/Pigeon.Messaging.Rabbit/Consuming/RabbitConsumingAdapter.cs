@@ -110,27 +110,41 @@
             }
 
             await _topologyProvisioningService.EnsureConsumeTopologyAsync(endpoint, cancellationToken);
+            var autoAck = GetAcknowledgementMode() == MessageAcknowledgementMode.OnReceive;
+
+            if (!autoAck)
+                await channel.BasicQosAsync(0, (ushort)Math.Max(1, _globalSettings.ConsumerExecution?.MaxConcurrency ?? Environment.ProcessorCount), false, cancellationToken);
 
             var consumer = new AsyncEventingBasicConsumer(channel);
 
-            consumer.ReceivedAsync += (s, e) =>
+            consumer.ReceivedAsync += async (s, e) =>
             {
                 try
                 {
                     var body = e.Body.ToArray();
                     var message = body.FromBytes();
 
-                    MessageConsumed?.Invoke(this, new MessageConsumedEventArgs(endpoint.Topic, message, endpoint.Subscription));
+                    var messageConsumed = autoAck
+                        ? new MessageConsumedEventArgs(endpoint.Topic, message, endpoint.Subscription)
+                        : new MessageConsumedEventArgs(
+                            endpoint.Topic,
+                            message,
+                            endpoint.Subscription,
+                            token => channel.BasicAckAsync(e.DeliveryTag, multiple: false, cancellationToken: token).AsTask(),
+                            (_, token) => channel.BasicNackAsync(e.DeliveryTag, multiple: false, requeue: _settings.RequeueOnFailure, cancellationToken: token).AsTask());
+
+                    MessageConsumed?.Invoke(this, messageConsumed);
                 }
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "RabbitConsumingAdapter: Has ocurred an unexpected error while consuming a message.");
-                }
 
-                return Task.CompletedTask;
+                    if (!autoAck)
+                        await channel.BasicNackAsync(e.DeliveryTag, multiple: false, requeue: _settings.RequeueOnFailure, cancellationToken: cancellationToken);
+                }
             };
 
-            await channel.BasicConsumeAsync(endpoint.ResourceName, autoAck: true, consumer, cancellationToken);
+            await channel.BasicConsumeAsync(endpoint.ResourceName, autoAck, consumer, cancellationToken);
 
             _logger.LogInformation("RabbitConsumingAdapter: Consumer for topic '{Topic}' and subscription '{Subscription}' has been configured", endpoint.Topic, endpoint.Subscription);
         }
@@ -168,5 +182,8 @@
 
             return _consumingConfigurator.GetAllTopics()?.Select(topic => new ConsumerEndpoint(topic)) ?? Enumerable.Empty<ConsumerEndpoint>();
         }
+
+        private MessageAcknowledgementMode GetAcknowledgementMode()
+            => _globalSettings.ConsumerExecution?.AcknowledgementMode ?? MessageAcknowledgementMode.Manual;
     }
 }

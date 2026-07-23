@@ -3,6 +3,7 @@
     using global::Azure.Messaging.ServiceBus;
     using Microsoft.Extensions.Options;
     using System.Collections.Concurrent;
+    using Pigeon.Messaging.Consuming.Management;
 
     /// <summary>
     /// Provides methods to interact with Azure Service Bus, allowing the creation of clients, senders, and processors for messaging operations.
@@ -10,6 +11,7 @@
     internal class ServiceBusProvider : IServiceBusProvider
     {
         private readonly ServiceBusClient _client;
+        private readonly GlobalSettings _globalSettings;
         private readonly ConcurrentDictionary<string, ServiceBusSender> _senders = new();
 
         /// <summary>
@@ -17,8 +19,14 @@
         /// </summary>
         /// <param name="options">The Azure Service Bus settings options.</param>
         public ServiceBusProvider(IOptions<AzureServiceBusSettings> options)
+            : this(options, Options.Create(new GlobalSettings()))
+        {
+        }
+
+        public ServiceBusProvider(IOptions<AzureServiceBusSettings> options, IOptions<GlobalSettings> globalSettings)
         {
             _client = new ServiceBusClient(options.Value.ConnectionString);
+            _globalSettings = globalSettings?.Value ?? throw new ArgumentNullException(nameof(globalSettings));
         }
         
         /// <inheritdoc />
@@ -40,10 +48,16 @@
 
         /// <inheritdoc />
         public ServiceBusProcessor CreateProcessor(string topic)
-            => _client.CreateProcessor(topic, new ServiceBusProcessorOptions());
+            => _client.CreateProcessor(topic, CreateProcessorOptions());
 
         /// <inheritdoc />
         public ServiceBusProcessor CreateProcessor(string topic, string subscription)
-            => _client.CreateProcessor(topic, subscription, new ServiceBusProcessorOptions());
+            => _client.CreateProcessor(topic, subscription, CreateProcessorOptions());
+
+        private ServiceBusProcessorOptions CreateProcessorOptions()
+            => new()
+            {
+                AutoCompleteMessages = _globalSettings.ConsumerExecution?.AcknowledgementMode == MessageAcknowledgementMode.OnReceive
+            };
     }
 }

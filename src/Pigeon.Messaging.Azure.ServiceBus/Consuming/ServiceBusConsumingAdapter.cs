@@ -115,9 +115,16 @@
                     var body = args.Message.Body.ToArray();
                     var json = body.FromBytes();
 
-                    MessageConsumed?.Invoke(this, new MessageConsumedEventArgs(endpoint.Topic, json, endpoint.Subscription));
+                    var consumed = _globalSettings.ConsumerExecution?.AcknowledgementMode == MessageAcknowledgementMode.OnReceive
+                        ? new MessageConsumedEventArgs(endpoint.Topic, json, endpoint.Subscription)
+                        : new MessageConsumedEventArgs(
+                            endpoint.Topic,
+                            json,
+                            endpoint.Subscription,
+                            token => args.CompleteMessageAsync(args.Message, token),
+                            (_, token) => args.AbandonMessageAsync(args.Message, cancellationToken: token));
 
-                    await args.CompleteMessageAsync(args.Message, cancellationToken);
+                    MessageConsumed?.Invoke(this, consumed);
                 }
                 catch (Exception ex)
                 {

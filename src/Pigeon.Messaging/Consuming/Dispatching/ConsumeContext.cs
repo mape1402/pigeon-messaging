@@ -18,6 +18,8 @@
     public class ConsumeContext
     {
         private readonly ConcurrentDictionary<string, object> _metadata = new();
+        private Func<CancellationToken, Task> _completeAsync = _ => Task.CompletedTask;
+        private Func<Exception, CancellationToken, Task> _failAsync = (_, _) => Task.CompletedTask;
 
         /// <summary>
         /// Provides access to scoped services.
@@ -68,6 +70,31 @@
         /// Optional metadata attached to the message envelope.
         /// </summary>
         public IReadOnlyDictionary<string, string> RawMetadata { get; init; }
+
+        /// <summary>
+        /// Completes the message in the underlying broker when manual acknowledgement is used.
+        /// </summary>
+        /// <param name="cancellationToken">A token to observe for cancellation requests.</param>
+        /// <returns>A task that represents the asynchronous acknowledgement operation.</returns>
+        public Task CompleteAsync(CancellationToken cancellationToken = default)
+            => _completeAsync(cancellationToken);
+
+        /// <summary>
+        /// Fails the message in the underlying broker when manual acknowledgement is used.
+        /// </summary>
+        /// <param name="exception">The exception that caused the message to fail.</param>
+        /// <param name="cancellationToken">A token to observe for cancellation requests.</param>
+        /// <returns>A task that represents the asynchronous failure operation.</returns>
+        public Task FailAsync(Exception exception, CancellationToken cancellationToken = default)
+            => _failAsync(exception, cancellationToken);
+
+        internal void SetAcknowledgementCallbacks(
+            Func<CancellationToken, Task> completeAsync,
+            Func<Exception, CancellationToken, Task> failAsync)
+        {
+            _completeAsync = completeAsync ?? (_ => Task.CompletedTask);
+            _failAsync = failAsync ?? ((_, _) => Task.CompletedTask);
+        }
 
         /// <summary>
         /// Retrieves a strongly typed metadata value by key.
