@@ -7,6 +7,7 @@
     using Pigeon.Messaging.Consuming.Dispatching;
     using Pigeon.Messaging.Consuming.Management;
     using Pigeon.Messaging.Contracts;
+    using Pigeon.Messaging.Outbox;
     using Pigeon.Messaging.Topology;
     using System.Reflection;
     using System.Text.Json;
@@ -109,6 +110,20 @@
                 throw new ArgumentNullException(nameof(configure));
 
             configure(GlobalSettings.ConsumerExecution);
+            return this;
+        }
+
+        /// <summary>
+        /// Configures transactional outbox behavior.
+        /// </summary>
+        /// <param name="configure">The outbox configuration action.</param>
+        /// <returns>The same <see cref="GlobalSettingsBuilder"/> instance for chaining.</returns>
+        public GlobalSettingsBuilder ConfigureOutbox(Action<OutboxSettings> configure)
+        {
+            if (configure == null)
+                throw new ArgumentNullException(nameof(configure));
+
+            configure(GlobalSettings.Outbox);
             return this;
         }
 

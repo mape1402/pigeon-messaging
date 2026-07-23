@@ -43,3 +43,11 @@ Use `OnReceive` to let Rabbit consume with `autoAck`.
 ```powershell
 dotnet run --project samples\Pigeon.Messaging.Rabbit.Sample\Pigeon.Messaging.Rabbit.Sample.csproj -- --Sample:AcknowledgementMode OnReceive
 ```
+
+## Outbox mode
+
+Use `Sample:UseOutbox` to persist the final Pigeon payload in an EF Core SQLite outbox before it is dispatched to Rabbit. The sample uses the same publish flow, stores the outbox message during `PublishAsync`, queues it for immediate in-memory dispatch after commit, and waits until both Rabbit queues receive it.
+
+```powershell
+dotnet run --project samples\Pigeon.Messaging.Rabbit.Sample\Pigeon.Messaging.Rabbit.Sample.csproj -- --Sample:UseOutbox true --Sample:AcknowledgementMode OnHandlerSuccess
+```

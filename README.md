@@ -51,6 +51,7 @@ dotnet add package Pigeon.Messaging.Kafka
 dotnet add package Pigeon.Messaging.Azure.ServiceBus
 dotnet add package Pigeon.Messaging.Azure.EventGrid
 dotnet add package Pigeon.Messaging.Azure.EventHub
+dotnet add package Pigeon.Messaging.EntityFrameworkCore
 ```
 
 ## Quick Start
@@ -270,6 +271,74 @@ pigeon.AddConsumeHandler<HelloWorldMessage>(
         await DoWorkAsync(message);
         await context.CompleteAsync();
     });
+```
+
+### Configure the Transactional Outbox
+
+The Entity Framework Core outbox plugs into the producer pipeline. `PublishAsync` still runs publish interceptors in the current scope, builds the final `WrappedPayload`, and then stores that exact payload in the outbox instead of sending it directly to the broker. The background dispatcher later publishes the stored payload without running interceptors again.
+
+This keeps scoped metadata, tracing, tenant data, and other publish interceptor output exactly as it existed at publish time. The dispatch step is intentionally separated from the original request scope.
+
+Register the application `DbContext` first, then enable the Pigeon EF outbox:
+
+```csharp
+builder.Services.AddDbContext<AppDbContext>(options =>
+{
+    options.UseSqlServer(connectionString);
+});
+
+builder.Services.AddPigeon(builder.Configuration, config =>
+{
+    config.UseRabbitMq();
+
+    config.UseEntityFrameworkOutbox<AppDbContext>(outbox =>
+    {
+        outbox.DispatchInterval = TimeSpan.FromSeconds(5);
+        outbox.ImmediateDispatch = true;
+        outbox.DispatchQueueCapacity = 1000;
+        outbox.CleanInterval = TimeSpan.FromMinutes(10);
+        outbox.PublishedMessageRetention = TimeSpan.FromDays(1);
+        outbox.DispatchBatchSize = 50;
+        outbox.MaxRetries = 10;
+    });
+});
+```
+
+Pigeon adds its outbox entity to the EF model automatically, so the application `DbContext` does not need a `DbSet` or manual `OnModelCreating` code for Pigeon. With the default `AutoCreate` schema mode, Pigeon creates the outbox table when the app starts for supported relational providers.
+
+When `ImmediateDispatch` is enabled, `PublishAsync` persists the outbox message immediately and queues it for background dispatch. If an ambient `TransactionScope` exists, Pigeon waits for that transaction to commit before queuing the message. If the transaction rolls back, nothing is queued and the stored row rolls back with the transaction.
+
+`DispatchInterval` is a recovery interval, not the happy path. It periodically scans the database for pending or retryable messages and puts them back into the in-memory queue if the immediate dispatch path failed or the process restarted.
+
+Without an ambient transaction, the message is stored and queued immediately:
+
+```csharp
+await producer.PublishAsync(
+    new OrderCreatedMessage { OrderId = order.Id },
+    topic: "orders.created");
+```
+
+With an ambient transaction, the outbox write participates in that transaction and dispatch starts only after commit:
+
+```csharp
+using var scope = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled);
+
+dbContext.Orders.Add(order);
+await dbContext.SaveChangesAsync();
+
+await producer.PublishAsync(
+    new OrderCreatedMessage { OrderId = order.Id },
+    topic: "orders.created");
+
+scope.Complete();
+```
+
+Raw messages are supported too:
+
+```csharp
+await producer.PublishRawAsync(
+    new ExternalAuditMessage { Id = auditId },
+    topic: "external.audit");
 ```
 
 ### Add Interceptors

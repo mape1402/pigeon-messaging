@@ -4,9 +4,11 @@ namespace Pigeon.Messaging.Rabbit.Sample
     using Microsoft.Extensions.DependencyInjection;
     using Microsoft.Extensions.Hosting;
     using Microsoft.Extensions.Logging;
+    using Microsoft.EntityFrameworkCore;
     using Pigeon.Messaging.Consuming.Dispatching;
     using Pigeon.Messaging.Consuming.Management;
     using Pigeon.Messaging.Contracts;
+    using Pigeon.Messaging.Outbox;
     using Pigeon.Messaging.Producing;
     using Pigeon.Messaging.Rabbit;
     using Pigeon.Messaging.Topology;
@@ -25,9 +27,19 @@ namespace Pigeon.Messaging.Rabbit.Sample
             var queuePrefix = builder.Configuration["Sample:QueuePrefix"] ?? "pigeon.sample";
             var acknowledgementMode = builder.Configuration.GetValue<MessageAcknowledgementMode?>("Sample:AcknowledgementMode")
                 ?? MessageAcknowledgementMode.OnHandlerSuccess;
+            var useOutbox = builder.Configuration.GetValue<bool>("Sample:UseOutbox");
+            var outboxDatabasePath = Path.Combine(Path.GetTempPath(), $"pigeon-rabbit-sample-outbox-{runId}.db");
             var routingKey = $"{routingKeyPrefix}.{runId}";
             var billingQueue = $"{queuePrefix}.billing.{runId}";
             var auditQueue = $"{queuePrefix}.audit.{runId}";
+
+            if (useOutbox)
+            {
+                builder.Services.AddDbContext<RabbitSampleDbContext>(options =>
+                {
+                    options.UseSqlite($"Data Source={outboxDatabasePath}");
+                });
+            }
 
             builder.Services.AddSingleton(new RabbitSampleScenario(
                 runId,
@@ -35,7 +47,9 @@ namespace Pigeon.Messaging.Rabbit.Sample
                 billingQueue,
                 auditQueue,
                 builder.Configuration.GetValue<int?>("Sample:TimeoutSeconds") ?? 30,
-                acknowledgementMode));
+                acknowledgementMode,
+                useOutbox,
+                outboxDatabasePath));
 
             var pigeon = builder.Services.AddPigeon(
                 builder.Configuration,
@@ -49,6 +63,18 @@ namespace Pigeon.Messaging.Rabbit.Sample
                     {
                         execution.AcknowledgementMode = acknowledgementMode;
                     });
+
+                    if (useOutbox)
+                    {
+                        settings.UseEntityFrameworkOutbox<RabbitSampleDbContext>(outbox =>
+                        {
+                            outbox.DispatchInterval = TimeSpan.FromSeconds(1);
+                            outbox.CleanInterval = TimeSpan.FromSeconds(5);
+                            outbox.PublishedMessageRetention = TimeSpan.FromSeconds(1);
+                            outbox.DispatchBatchSize = 10;
+                            outbox.CleanBatchSize = 10;
+                        });
+                    }
 
                     var rabbitSettings = builder.Configuration
                         .GetSection("RabbitMq")
@@ -102,20 +128,20 @@ namespace Pigeon.Messaging.Rabbit.Sample
 
     internal sealed class RabbitSampleWorker : BackgroundService
     {
-        private readonly IProducer _producer;
+        private readonly IServiceScopeFactory _scopeFactory;
         private readonly RabbitSampleScenario _scenario;
         private readonly IConfiguration _configuration;
         private readonly IHostApplicationLifetime _lifetime;
         private readonly ILogger<RabbitSampleWorker> _logger;
 
         public RabbitSampleWorker(
-            IProducer producer,
+            IServiceScopeFactory scopeFactory,
             RabbitSampleScenario scenario,
             IConfiguration configuration,
             IHostApplicationLifetime lifetime,
             ILogger<RabbitSampleWorker> logger)
         {
-            _producer = producer;
+            _scopeFactory = scopeFactory;
             _scenario = scenario;
             _configuration = configuration;
             _lifetime = lifetime;
@@ -135,7 +161,26 @@ namespace Pigeon.Messaging.Rabbit.Sample
 
             _logger.LogInformation("Publishing message to exchange '{Exchange}' with routing key '{RoutingKey}'.", exchange, _scenario.RoutingKey);
             _logger.LogInformation("Acknowledgement mode: {AcknowledgementMode}", _scenario.AcknowledgementMode);
-            await _producer.PublishAsync(message, exchange, _scenario.RoutingKey, SemanticVersion.Default, stoppingToken);
+            _logger.LogInformation("Outbox enabled: {UseOutbox}", _scenario.UseOutbox);
+
+            using (var scope = _scopeFactory.CreateScope())
+            {
+                if (_scenario.UseOutbox)
+                {
+                    var dbContext = scope.ServiceProvider.GetRequiredService<RabbitSampleDbContext>();
+                    await dbContext.Database.EnsureCreatedAsync(stoppingToken);
+                }
+
+                var producer = scope.ServiceProvider.GetRequiredService<IProducer>();
+                await producer.PublishAsync(message, exchange, _scenario.RoutingKey, SemanticVersion.Default, stoppingToken);
+
+                if (_scenario.UseOutbox)
+                {
+                    var dbContext = scope.ServiceProvider.GetRequiredService<RabbitSampleDbContext>();
+                    var pendingMessages = await dbContext.Set<OutboxMessage>().CountAsync(stoppingToken);
+                    _logger.LogInformation("Outbox message persisted. Pending outbox rows: {PendingMessages}", pendingMessages);
+                }
+            }
 
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(_scenario.TimeoutSeconds));
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken, timeout.Token);
@@ -144,6 +189,9 @@ namespace Pigeon.Messaging.Rabbit.Sample
             {
                 await _scenario.WaitForBothConsumersAsync(linked.Token);
                 _logger.LogInformation("Rabbit e2e sample completed. Both queues received the message.");
+                if (_scenario.UseOutbox)
+                    _logger.LogInformation("Outbox e2e completed. The stored message was dispatched to Rabbit.");
+
                 _logger.LogInformation("Exchange: {Exchange}", exchange);
                 _logger.LogInformation("Routing key: {RoutingKey}", _scenario.RoutingKey);
                 _logger.LogInformation("Queues: {BillingQueue}, {AuditQueue}", _scenario.BillingQueue, _scenario.AuditQueue);
@@ -171,7 +219,9 @@ namespace Pigeon.Messaging.Rabbit.Sample
             string billingQueue,
             string auditQueue,
             int timeoutSeconds,
-            MessageAcknowledgementMode acknowledgementMode)
+            MessageAcknowledgementMode acknowledgementMode,
+            bool useOutbox,
+            string outboxDatabasePath)
         {
             RunId = runId;
             RoutingKey = routingKey;
@@ -179,6 +229,8 @@ namespace Pigeon.Messaging.Rabbit.Sample
             AuditQueue = auditQueue;
             TimeoutSeconds = timeoutSeconds;
             AcknowledgementMode = acknowledgementMode;
+            UseOutbox = useOutbox;
+            OutboxDatabasePath = outboxDatabasePath;
         }
 
         public string RunId { get; }
@@ -192,6 +244,10 @@ namespace Pigeon.Messaging.Rabbit.Sample
         public int TimeoutSeconds { get; }
 
         public MessageAcknowledgementMode AcknowledgementMode { get; }
+
+        public bool UseOutbox { get; }
+
+        public string OutboxDatabasePath { get; }
 
         public void MarkBilling(string orderId, string subscription)
         {
@@ -216,5 +272,13 @@ namespace Pigeon.Messaging.Rabbit.Sample
         public string OrderId { get; set; }
 
         public DateTimeOffset CreatedOnUtc { get; set; }
+    }
+
+    internal sealed class RabbitSampleDbContext : DbContext
+    {
+        public RabbitSampleDbContext(DbContextOptions<RabbitSampleDbContext> options)
+            : base(options)
+        {
+        }
     }
 }

@@ -1,6 +1,7 @@
 ﻿namespace Pigeon.Messaging.Producing.Management
 {
     using Pigeon.Messaging.Contracts;
+    using Pigeon.Messaging.Outbox;
     using Pigeon.Messaging.Producing;
 
     /// <summary>
@@ -94,5 +95,10 @@
         /// A <see cref="ValueTask"/> that completes when the message has been dispatched.
         /// </returns>
         ValueTask PushRawAsync<T>(T message, PublishingRoute route, CancellationToken cancellationToken = default) where T : class;
+
+        /// <summary>
+        /// Publishes a previously prepared outbox message without running producer interceptors.
+        /// </summary>
+        ValueTask PushOutboxAsync(OutboxMessage message, CancellationToken cancellationToken = default);
     }
 }
