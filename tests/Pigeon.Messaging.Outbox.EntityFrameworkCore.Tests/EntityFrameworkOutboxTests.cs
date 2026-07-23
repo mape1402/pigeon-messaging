@@ -1,4 +1,4 @@
-namespace Pigeon.Messaging.EntityFrameworkCore.Tests
+namespace Pigeon.Messaging.Outbox.EntityFrameworkCore.Tests
 {
     using Microsoft.Data.Sqlite;
     using Microsoft.EntityFrameworkCore;

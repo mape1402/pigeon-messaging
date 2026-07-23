@@ -1,4 +1,4 @@
-namespace Pigeon.Messaging.EntityFrameworkCore
+namespace Pigeon.Messaging.Outbox.EntityFrameworkCore
 {
     using Microsoft.EntityFrameworkCore;
 

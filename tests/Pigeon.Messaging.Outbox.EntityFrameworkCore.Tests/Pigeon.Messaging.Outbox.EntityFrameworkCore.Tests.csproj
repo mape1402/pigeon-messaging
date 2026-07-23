@@ -13,7 +13,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Pigeon.Messaging\Pigeon.Messaging.csproj" />
-    <ProjectReference Include="..\..\src\Pigeon.Messaging.EntityFrameworkCore\Pigeon.Messaging.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\src\Pigeon.Messaging.Outbox.EntityFrameworkCore\Pigeon.Messaging.Outbox.EntityFrameworkCore.csproj" />
   </ItemGroup>
 
   <ItemGroup>

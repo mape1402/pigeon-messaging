@@ -7,7 +7,7 @@
   </PropertyGroup>
 
   <PropertyGroup>
-    <PackageId>Pigeon.Messaging.EntityFrameworkCore</PackageId>
+    <PackageId>Pigeon.Messaging.Outbox.EntityFrameworkCore</PackageId>
     <Description>Entity Framework Core transactional outbox storage for Pigeon.Messaging.</Description>
     <PackageTags>messaging outbox entity-framework-core efcore distributed-systems pigeon</PackageTags>
   </PropertyGroup>

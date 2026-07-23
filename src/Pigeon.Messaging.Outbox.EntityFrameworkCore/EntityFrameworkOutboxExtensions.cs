@@ -2,7 +2,7 @@ namespace Microsoft.Extensions.DependencyInjection
 {
     using Microsoft.EntityFrameworkCore;
     using Microsoft.Extensions.DependencyInjection.Extensions;
-    using Pigeon.Messaging.EntityFrameworkCore;
+    using Pigeon.Messaging.Outbox.EntityFrameworkCore;
     using Pigeon.Messaging.Outbox;
 
     /// <summary>
