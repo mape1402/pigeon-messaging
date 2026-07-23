@@ -317,6 +317,7 @@ builder.Services.AddPigeon(builder.Configuration, config =>
 
     config.UseEntityFrameworkOutbox<AppDbContext>(outbox =>
     {
+        outbox.SchemaMode = OutboxSchemaMode.AutoCreate;
         outbox.DispatchInterval = TimeSpan.FromSeconds(5);
         outbox.ImmediateDispatch = true;
         outbox.DispatchQueueCapacity = 1000;
@@ -329,6 +330,15 @@ builder.Services.AddPigeon(builder.Configuration, config =>
 ```
 
 Pigeon adds its outbox entity to the EF model automatically, so the application `DbContext` does not need a `DbSet` or manual `OnModelCreating` code for Pigeon. With the default `AutoCreate` schema mode, Pigeon creates the outbox table when the app starts for supported relational providers.
+
+Use `OutboxSchemaMode.Manual` when your database schema is created by migrations or another deployment process:
+
+```csharp
+config.UseEntityFrameworkOutbox<AppDbContext>(outbox =>
+{
+    outbox.SchemaMode = OutboxSchemaMode.Manual;
+});
+```
 
 When `ImmediateDispatch` is enabled, `PublishAsync` persists the outbox message immediately and queues it for background dispatch. If an ambient `TransactionScope` exists, Pigeon waits for that transaction to commit before queuing the message. If the transaction rolls back, nothing is queued and the stored row rolls back with the transaction.
 
@@ -357,12 +367,41 @@ await producer.PublishAsync(
 scope.Complete();
 ```
 
+The EF outbox storage uses its own `DbContext` instance so it does not flush pending application changes by accident. Transactional consistency with the application work is provided by the ambient transaction, so the selected database provider must support `TransactionScope`.
+
 Raw messages are supported too:
 
 ```csharp
 await producer.PublishRawAsync(
     new ExternalAuditMessage { Id = auditId },
     topic: "external.audit");
+```
+
+Run the transaction sample to see the expected commit and rollback behavior without requiring a broker:
+
+```bash
+dotnet run --project samples/Pigeon.Messaging.TransactionScope.Sample/Pigeon.Messaging.TransactionScope.Sample.csproj
+```
+
+### Inspect Outbox State
+
+When the EF outbox is registered, Pigeon also exposes `IOutboxDiagnostics` so an application can build health checks, dashboards, or support endpoints without querying the outbox table directly:
+
+```csharp
+public class OutboxHealthProbe
+{
+    private readonly IOutboxDiagnostics _diagnostics;
+
+    public OutboxHealthProbe(IOutboxDiagnostics diagnostics)
+    {
+        _diagnostics = diagnostics;
+    }
+
+    public async Task<OutboxDiagnosticsSnapshot> GetSnapshotAsync(CancellationToken cancellationToken)
+    {
+        return await _diagnostics.GetSnapshotAsync(cancellationToken);
+    }
+}
 ```
 
 ### Add Interceptors
