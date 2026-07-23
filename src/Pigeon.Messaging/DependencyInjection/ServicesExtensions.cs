@@ -40,6 +40,8 @@
             // Register core consuming components.
             IConsumingConfigurator consumingConfigurator = new ConsumingConfigurator();
             services.AddSingleton(consumingConfigurator);
+            services.AddSingleton<ConsumeContextAccessor>();
+            services.AddSingleton<IConsumeContextAccessor>(provider => provider.GetRequiredService<ConsumeContextAccessor>());
             services.AddSingleton<IConsumingDispatcher, ConsumingDispatcher>();
             services.AddSingleton<ITopologyProvisioningService, TopologyProvisioningService>();
             services.AddHostedService<TopologyProvisioningHostedService>();
