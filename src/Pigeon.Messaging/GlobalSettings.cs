@@ -2,6 +2,7 @@
 {
     using Pigeon.Messaging.Topology;
     using Pigeon.Messaging.Consuming.Management;
+    using Pigeon.Messaging.Outbox;
     using System.Reflection;
 
     /// <summary>
@@ -42,5 +43,10 @@
         /// Gets or sets how consumed messages are buffered and processed.
         /// </summary>
         public ConsumerExecutionSettings ConsumerExecution { get; set; } = new();
+
+        /// <summary>
+        /// Gets or sets transactional outbox settings.
+        /// </summary>
+        public OutboxSettings Outbox { get; set; } = new();
     }
 }

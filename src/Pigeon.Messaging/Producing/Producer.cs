@@ -1,50 +1,56 @@
-﻿namespace Pigeon.Messaging.Producing
+namespace Pigeon.Messaging.Producing
 {
     using Microsoft.Extensions.Options;
     using Pigeon.Messaging;
     using Pigeon.Messaging.Contracts;
+    using Pigeon.Messaging.Outbox;
     using Pigeon.Messaging.Producing.Management;
     using System;
 
     /// <summary>
     /// Provides a base implementation for a message producer with support for publish interceptors,
-    /// payload wrapping, and versioning.
-    /// This abstract class defines the general workflow for publishing a message,
-    /// delegating the actual publish operation to the producing manager.
+    /// payload wrapping, versioning, and optional transactional outbox persistence.
     /// </summary>
     public class Producer : IProducer
     {
         private readonly IEnumerable<IPublishInterceptor> _interceptors;
         private readonly IProducingManager _producingManager;
         private readonly GlobalSettings _settings;
+        private readonly IOutboxStorage _outboxStorage;
+        private readonly OutboxMessageFactory _outboxMessageFactory;
+        private readonly IOutboxCommitNotifier _outboxCommitNotifier;
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="Producer"/> class.
-        /// </summary>
-        /// <param name="interceptors">
-        /// A collection of publish interceptors that can enrich or modify the publish context
-        /// before the message is sent to the message broker.
-        /// </param>
-        /// <param name="producingManager">
-        /// The producing manager responsible for dispatching the final message payload
-        /// to the configured message broker.
-        /// </param>
-        /// <param name="settings">
-        /// The global messaging settings containing configuration details such as the domain name.
-        /// </param>
-        /// <exception cref="ArgumentNullException">
-        /// Thrown if any of the required dependencies are <c>null</c>.
-        /// </exception>
         public Producer(IEnumerable<IPublishInterceptor> interceptors, IProducingManager producingManager, IOptions<GlobalSettings> settings)
+            : this(interceptors, producingManager, settings, null, null)
+        {
+        }
+
+        public Producer(
+            IEnumerable<IPublishInterceptor> interceptors,
+            IProducingManager producingManager,
+            IOptions<GlobalSettings> settings,
+            IOutboxStorage outboxStorage,
+            OutboxMessageFactory outboxMessageFactory)
+            : this(interceptors, producingManager, settings, outboxStorage, outboxMessageFactory, null)
+        {
+        }
+
+        public Producer(
+            IEnumerable<IPublishInterceptor> interceptors,
+            IProducingManager producingManager,
+            IOptions<GlobalSettings> settings,
+            IOutboxStorage outboxStorage,
+            OutboxMessageFactory outboxMessageFactory,
+            IOutboxCommitNotifier outboxCommitNotifier)
         {
             _interceptors = interceptors ?? throw new ArgumentNullException(nameof(interceptors));
             _producingManager = producingManager ?? throw new ArgumentNullException(nameof(producingManager));
             _settings = settings?.Value ?? throw new ArgumentNullException(nameof(settings));
+            _outboxStorage = outboxStorage;
+            _outboxMessageFactory = outboxMessageFactory;
+            _outboxCommitNotifier = outboxCommitNotifier;
         }
 
-        /// <summary>
-        /// <inheritdoc/>
-        /// </summary>
         public virtual async ValueTask PublishAsync<T>(T message, string topic, SemanticVersion version, CancellationToken cancellationToken = default) where T : class
         {
             if (message is null)
@@ -56,9 +62,6 @@
             await PublishCore(message, PublishingRoute.ForTopic(topic), version, cancellationToken);
         }
 
-        /// <summary>
-        /// <inheritdoc/>
-        /// </summary>
         public virtual async ValueTask PublishAsync<T>(T message, string exchange, string routingKey, SemanticVersion version, CancellationToken cancellationToken = default) where T : class
         {
             if (message is null)
@@ -67,15 +70,9 @@
             await PublishCore(message, PublishingRoute.ForExchange(exchange, routingKey), version, cancellationToken);
         }
 
-        /// <summary>
-        /// <inheritdoc/>
-        /// </summary>
         public virtual ValueTask PublishAsync<T>(T message, string topic, CancellationToken cancellationToken = default) where T : class
             => PublishAsync(message, topic, SemanticVersion.Default, cancellationToken);
 
-        /// <summary>
-        /// <inheritdoc/>
-        /// </summary>
         public virtual async ValueTask PublishRawAsync<T>(T message, string topic, CancellationToken cancellationToken = default) where T : class
         {
             if (message is null)
@@ -84,33 +81,17 @@
             if (string.IsNullOrWhiteSpace(topic))
                 throw new ArgumentException("Topic cannot be null or empty.", nameof(topic));
 
-            await _producingManager.PushRawAsync(message, PublishingRoute.ForTopic(topic), cancellationToken);
+            await PublishRawCore(message, PublishingRoute.ForTopic(topic), cancellationToken);
         }
 
-        /// <summary>
-        /// <inheritdoc/>
-        /// </summary>
         public virtual async ValueTask PublishRawAsync<T>(T message, string exchange, string routingKey, CancellationToken cancellationToken = default) where T : class
         {
             if (message is null)
                 throw new ArgumentNullException(nameof(message));
 
-            await _producingManager.PushRawAsync(message, PublishingRoute.ForExchange(exchange, routingKey), cancellationToken);
+            await PublishRawCore(message, PublishingRoute.ForExchange(exchange, routingKey), cancellationToken);
         }
 
-        /// <summary>
-        /// Defines the core logic for publishing a message.
-        /// Applies all registered interceptors, wraps the payload with metadata and versioning,
-        /// and delegates the final push to the producing manager.
-        /// </summary>
-        /// <typeparam name="T">The type of the message payload.</typeparam>
-        /// <param name="message">The message instance to publish.</param>
-        /// <param name="topic">The target topic or channel.</param>
-        /// <param name="version">The semantic version of the message contract.</param>
-        /// <param name="cancellationToken">
-        /// A cancellation token to observe while waiting for the task to complete.
-        /// </param>
-        /// <returns>A <see cref="ValueTask"/> representing the asynchronous operation.</returns>
         protected virtual async ValueTask PublishCore<T>(T message, PublishingRoute route, SemanticVersion version, CancellationToken cancellationToken = default) where T : class
         {
             var publishContext = new PublishContext();
@@ -127,7 +108,40 @@
                 Domain = _settings.Domain
             };
 
+            if (IsOutboxEnabled())
+            {
+                await EnqueueOutboxAsync(payload, route, false, cancellationToken);
+                return;
+            }
+
             await _producingManager.PushAsync(payload, route, cancellationToken);
         }
+
+        private async ValueTask PublishRawCore<T>(T message, PublishingRoute route, CancellationToken cancellationToken = default) where T : class
+        {
+            if (IsOutboxEnabled())
+            {
+                await EnqueueOutboxAsync(message, route, true, cancellationToken);
+                return;
+            }
+
+            await _producingManager.PushRawAsync(message, route, cancellationToken);
+        }
+
+        private async Task EnqueueOutboxAsync(object payload, PublishingRoute route, bool isRaw, CancellationToken cancellationToken)
+        {
+            if (_outboxStorage == null || _outboxMessageFactory == null)
+                throw new InvalidOperationException("Pigeon outbox is enabled but no outbox storage has been registered.");
+
+            var message = _outboxMessageFactory.Create(payload, route, isRaw);
+            await _outboxStorage.AddAsync(message, cancellationToken);
+            await _outboxStorage.SaveChangesAsync(cancellationToken);
+
+            if (_outboxCommitNotifier != null)
+                await _outboxCommitNotifier.NotifySavedAsync(message.Id, cancellationToken);
+        }
+
+        private bool IsOutboxEnabled()
+            => _settings.Outbox?.Enabled == true;
     }
 }

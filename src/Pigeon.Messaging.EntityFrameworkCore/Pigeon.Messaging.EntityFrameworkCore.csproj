@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <GenerateDocumentationFile>True</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <PackageId>Pigeon.Messaging.EntityFrameworkCore</PackageId>
+    <Description>Entity Framework Core transactional outbox storage for Pigeon.Messaging.</Description>
+    <PackageTags>messaging outbox entity-framework-core efcore distributed-systems pigeon</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="MinVer" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Pigeon.Messaging\Pigeon.Messaging.csproj" />
+  </ItemGroup>
+
+</Project>

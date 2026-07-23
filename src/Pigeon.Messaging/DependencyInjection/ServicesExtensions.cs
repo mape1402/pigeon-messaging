@@ -7,6 +7,7 @@
     using Pigeon.Messaging.Consuming.Dispatching;
     using Pigeon.Messaging.Consuming.Management;
     using Pigeon.Messaging.Contracts;
+    using Pigeon.Messaging.Outbox;
     using Pigeon.Messaging.Producing;
     using Pigeon.Messaging.Producing.Management;
     using Pigeon.Messaging.Topology;
@@ -47,6 +48,10 @@
 
             services.AddScoped<IProducer, Producer>();
             services.AddSingleton<IProducingManager, ProducingManager>();
+            services.AddSingleton<OutboxMessageFactory>();
+            services.AddSingleton<IOutboxDispatchQueue, ChannelOutboxDispatchQueue>();
+            services.AddSingleton<IOutboxCommitNotifier, AmbientTransactionOutboxCommitNotifier>();
+            services.AddHostedService<OutboxDispatcherHostedService>();
 
             // Bind the MessagingSettings from configuration.
             var settings = configuration

@@ -5,6 +5,9 @@
     <PackageReference Update="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.6"/>
     <PackageReference Update="Microsoft.Extensions.Hosting.Abstractions" Version="9.0.6"/>
     <PackageReference Update="Microsoft.Extensions.Options" Version="9.0.6"/>
+    <PackageReference Update="Microsoft.EntityFrameworkCore" Version="9.0.6"/>
+    <PackageReference Update="Microsoft.EntityFrameworkCore.Relational" Version="9.0.6"/>
+    <PackageReference Update="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.6"/>
     <PackageReference Update="RabbitMQ.Client" Version="7.1.2"/>
     <PackageReference Update="Confluent.Kafka" Version="2.11.0" />
     <PackageReference Update="Azure.Messaging.ServiceBus" Version="7.20.1" />

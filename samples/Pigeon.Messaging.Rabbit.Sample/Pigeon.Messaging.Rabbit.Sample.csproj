@@ -9,12 +9,14 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.6" />
     <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="9.0.6" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.6" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Pigeon.Messaging\Pigeon.Messaging.csproj" />
+    <ProjectReference Include="..\..\src\Pigeon.Messaging.EntityFrameworkCore\Pigeon.Messaging.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\src\Pigeon.Messaging.Rabbit\Pigeon.Messaging.Rabbit.csproj" />
   </ItemGroup>
 
