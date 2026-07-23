@@ -20,11 +20,25 @@ namespace Pigeon.Messaging.Producing
         private readonly OutboxMessageFactory _outboxMessageFactory;
         private readonly IOutboxCommitNotifier _outboxCommitNotifier;
 
+        /// <summary>
+        /// Initializes a new producer without outbox persistence.
+        /// </summary>
+        /// <param name="interceptors">The publish interceptors executed before wrapped publishing.</param>
+        /// <param name="producingManager">The producing manager that dispatches messages to broker adapters.</param>
+        /// <param name="settings">The global Pigeon settings.</param>
         public Producer(IEnumerable<IPublishInterceptor> interceptors, IProducingManager producingManager, IOptions<GlobalSettings> settings)
             : this(interceptors, producingManager, settings, null, null)
         {
         }
 
+        /// <summary>
+        /// Initializes a new producer with outbox persistence.
+        /// </summary>
+        /// <param name="interceptors">The publish interceptors executed before wrapped publishing.</param>
+        /// <param name="producingManager">The producing manager that dispatches messages to broker adapters.</param>
+        /// <param name="settings">The global Pigeon settings.</param>
+        /// <param name="outboxStorage">The optional outbox storage used when outbox is enabled.</param>
+        /// <param name="outboxMessageFactory">The optional factory that creates persisted outbox messages.</param>
         public Producer(
             IEnumerable<IPublishInterceptor> interceptors,
             IProducingManager producingManager,
@@ -35,6 +49,15 @@ namespace Pigeon.Messaging.Producing
         {
         }
 
+        /// <summary>
+        /// Initializes a new producer with outbox persistence and commit-aware dispatch notification.
+        /// </summary>
+        /// <param name="interceptors">The publish interceptors executed before wrapped publishing.</param>
+        /// <param name="producingManager">The producing manager that dispatches messages to broker adapters.</param>
+        /// <param name="settings">The global Pigeon settings.</param>
+        /// <param name="outboxStorage">The optional outbox storage used when outbox is enabled.</param>
+        /// <param name="outboxMessageFactory">The optional factory that creates persisted outbox messages.</param>
+        /// <param name="outboxCommitNotifier">The optional notifier that queues messages after save or transaction commit.</param>
         public Producer(
             IEnumerable<IPublishInterceptor> interceptors,
             IProducingManager producingManager,
@@ -51,6 +74,15 @@ namespace Pigeon.Messaging.Producing
             _outboxCommitNotifier = outboxCommitNotifier;
         }
 
+        /// <summary>
+        /// Publishes a message to a topic using the specified semantic version.
+        /// </summary>
+        /// <typeparam name="T">The message payload type.</typeparam>
+        /// <param name="message">The message to publish.</param>
+        /// <param name="topic">The topic to publish to.</param>
+        /// <param name="version">The semantic version for the message contract.</param>
+        /// <param name="cancellationToken">A token to observe for cancellation.</param>
+        /// <returns>A value task that completes when the message has been published or persisted to outbox.</returns>
         public virtual async ValueTask PublishAsync<T>(T message, string topic, SemanticVersion version, CancellationToken cancellationToken = default) where T : class
         {
             if (message is null)
@@ -62,6 +94,16 @@ namespace Pigeon.Messaging.Producing
             await PublishCore(message, PublishingRoute.ForTopic(topic), version, cancellationToken);
         }
 
+        /// <summary>
+        /// Publishes a message to a broker exchange and routing key using the specified semantic version.
+        /// </summary>
+        /// <typeparam name="T">The message payload type.</typeparam>
+        /// <param name="message">The message to publish.</param>
+        /// <param name="exchange">The broker exchange.</param>
+        /// <param name="routingKey">The broker routing key.</param>
+        /// <param name="version">The semantic version for the message contract.</param>
+        /// <param name="cancellationToken">A token to observe for cancellation.</param>
+        /// <returns>A value task that completes when the message has been published or persisted to outbox.</returns>
         public virtual async ValueTask PublishAsync<T>(T message, string exchange, string routingKey, SemanticVersion version, CancellationToken cancellationToken = default) where T : class
         {
             if (message is null)
@@ -70,9 +112,25 @@ namespace Pigeon.Messaging.Producing
             await PublishCore(message, PublishingRoute.ForExchange(exchange, routingKey), version, cancellationToken);
         }
 
+        /// <summary>
+        /// Publishes a message to a topic using the default semantic version.
+        /// </summary>
+        /// <typeparam name="T">The message payload type.</typeparam>
+        /// <param name="message">The message to publish.</param>
+        /// <param name="topic">The topic to publish to.</param>
+        /// <param name="cancellationToken">A token to observe for cancellation.</param>
+        /// <returns>A value task that completes when the message has been published or persisted to outbox.</returns>
         public virtual ValueTask PublishAsync<T>(T message, string topic, CancellationToken cancellationToken = default) where T : class
             => PublishAsync(message, topic, SemanticVersion.Default, cancellationToken);
 
+        /// <summary>
+        /// Publishes a raw message to a topic without the Pigeon wrapper.
+        /// </summary>
+        /// <typeparam name="T">The message payload type.</typeparam>
+        /// <param name="message">The raw message to publish.</param>
+        /// <param name="topic">The topic to publish to.</param>
+        /// <param name="cancellationToken">A token to observe for cancellation.</param>
+        /// <returns>A value task that completes when the message has been published or persisted to outbox.</returns>
         public virtual async ValueTask PublishRawAsync<T>(T message, string topic, CancellationToken cancellationToken = default) where T : class
         {
             if (message is null)
@@ -84,6 +142,15 @@ namespace Pigeon.Messaging.Producing
             await PublishRawCore(message, PublishingRoute.ForTopic(topic), cancellationToken);
         }
 
+        /// <summary>
+        /// Publishes a raw message to a broker exchange and routing key without the Pigeon wrapper.
+        /// </summary>
+        /// <typeparam name="T">The message payload type.</typeparam>
+        /// <param name="message">The raw message to publish.</param>
+        /// <param name="exchange">The broker exchange.</param>
+        /// <param name="routingKey">The broker routing key.</param>
+        /// <param name="cancellationToken">A token to observe for cancellation.</param>
+        /// <returns>A value task that completes when the message has been published or persisted to outbox.</returns>
         public virtual async ValueTask PublishRawAsync<T>(T message, string exchange, string routingKey, CancellationToken cancellationToken = default) where T : class
         {
             if (message is null)
@@ -92,6 +159,15 @@ namespace Pigeon.Messaging.Producing
             await PublishRawCore(message, PublishingRoute.ForExchange(exchange, routingKey), cancellationToken);
         }
 
+        /// <summary>
+        /// Executes the wrapped publish pipeline for a message and route.
+        /// </summary>
+        /// <typeparam name="T">The message payload type.</typeparam>
+        /// <param name="message">The message to publish.</param>
+        /// <param name="route">The publishing route.</param>
+        /// <param name="version">The semantic version for the message contract.</param>
+        /// <param name="cancellationToken">A token to observe for cancellation.</param>
+        /// <returns>A value task that completes when the message has been published or persisted to outbox.</returns>
         protected virtual async ValueTask PublishCore<T>(T message, PublishingRoute route, SemanticVersion version, CancellationToken cancellationToken = default) where T : class
         {
             var publishContext = new PublishContext();

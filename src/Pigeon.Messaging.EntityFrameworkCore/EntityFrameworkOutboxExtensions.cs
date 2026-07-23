@@ -10,6 +10,13 @@ namespace Microsoft.Extensions.DependencyInjection
     /// </summary>
     public static class EntityFrameworkOutboxExtensions
     {
+        /// <summary>
+        /// Enables the Pigeon transactional outbox using an Entity Framework Core context.
+        /// </summary>
+        /// <typeparam name="TDbContext">The application DbContext type whose options should be reused for outbox storage.</typeparam>
+        /// <param name="builder">The Pigeon global settings builder.</param>
+        /// <param name="configure">An optional callback to configure outbox behavior.</param>
+        /// <returns>The same global settings builder for chaining.</returns>
         public static GlobalSettingsBuilder UseEntityFrameworkOutbox<TDbContext>(
             this GlobalSettingsBuilder builder,
             Action<OutboxSettings> configure = null)

@@ -7,6 +7,11 @@ namespace Microsoft.EntityFrameworkCore
     /// </summary>
     public static class OutboxEntityModelBuilderExtensions
     {
+        /// <summary>
+        /// Adds the Pigeon outbox entity mapping to an EF Core model.
+        /// </summary>
+        /// <param name="modelBuilder">The model builder to configure.</param>
+        /// <returns>The same model builder for chaining.</returns>
         public static ModelBuilder AddPigeonOutbox(this ModelBuilder modelBuilder)
         {
             var entity = modelBuilder.Entity<OutboxMessage>();
