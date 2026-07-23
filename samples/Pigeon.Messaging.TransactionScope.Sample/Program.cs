@@ -26,7 +26,7 @@ builder.Services.AddPigeon(builder.Configuration, pigeon =>
         outbox.ImmediateDispatch = true;
         outbox.DispatchInterval = TimeSpan.FromMinutes(10);
         outbox.CleanInterval = TimeSpan.FromMinutes(10);
-        outbox.SchemaMode = OutboxSchemaMode.Migrations;
+        outbox.SchemaMode = OutboxSchemaMode.Manual;
     });
 
     pigeon.AddFeature(feature =>
