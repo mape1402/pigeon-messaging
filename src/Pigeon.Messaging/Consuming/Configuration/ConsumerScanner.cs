@@ -97,6 +97,7 @@
         /// <param name="messageType">Type of the message parameter.</param>
         /// <param name="topic">Topic name to subscribe.</param>
         /// <param name="version">Message semantic version.</param>
+        /// <param name="subscription">Optional subscription, queue, or consumer group name.</param>
         private void RegisterConsumer(Type consumerType, MethodInfo method, Type messageType, string topic, SemanticVersion version, string subscription)
         {
             // Create generic handler delegate type ConsumeHandler<TMessage>
