@@ -84,7 +84,46 @@ namespace Pigeon.Messaging.EntityFrameworkCore.Tests
             Assert.Equal(1, await verificationContext.Set<OutboxMessage>().CountAsync());
         }
 
+        [Fact]
+        public async Task PublishAsync_Should_Persist_Concurrent_Outbox_Messages()
+        {
+            var databasePath = Path.Combine(Path.GetTempPath(), $"pigeon-outbox-{Guid.NewGuid():N}.db");
+
+            try
+            {
+                using var provider = BuildProvider($"Data Source={databasePath}");
+
+                using (var scope = provider.CreateScope())
+                {
+                    var dbContext = scope.ServiceProvider.GetRequiredService<TestDbContext>();
+                    await dbContext.Database.EnsureCreatedAsync();
+                }
+
+                await Task.WhenAll(Enumerable.Range(0, 20).Select(async index =>
+                {
+                    using var scope = provider.CreateScope();
+                    var producer = scope.ServiceProvider.GetRequiredService<IProducer>();
+                    await producer.PublishAsync(new TestMessage { Text = $"hello-{index}" }, "orders.created");
+                }));
+
+                using var verificationScope = provider.CreateScope();
+                var verificationContext = verificationScope.ServiceProvider.GetRequiredService<TestDbContext>();
+
+                Assert.Equal(20, await verificationContext.Set<OutboxMessage>().CountAsync());
+            }
+            finally
+            {
+                DeleteSqliteDatabase(databasePath);
+            }
+        }
+
         private static ServiceProvider BuildProvider(SqliteConnection connection)
+            => BuildProvider(options => options.UseSqlite(connection));
+
+        private static ServiceProvider BuildProvider(string connectionString)
+            => BuildProvider(options => options.UseSqlite(connectionString));
+
+        private static ServiceProvider BuildProvider(Action<DbContextOptionsBuilder> configureDbContext)
         {
             var services = new ServiceCollection();
             var configuration = new ConfigurationBuilder()
@@ -94,7 +133,7 @@ namespace Pigeon.Messaging.EntityFrameworkCore.Tests
                 })
                 .Build();
 
-            services.AddDbContext<TestDbContext>(options => options.UseSqlite(connection));
+            services.AddDbContext<TestDbContext>(configureDbContext);
 
             services
                 .AddPigeon(configuration, pigeon =>
@@ -108,6 +147,22 @@ namespace Pigeon.Messaging.EntityFrameworkCore.Tests
                 .AddPublishInterceptor<TestPublishInterceptor>();
 
             return services.BuildServiceProvider();
+        }
+
+        private static void DeleteSqliteDatabase(string databasePath)
+        {
+            SqliteConnection.ClearAllPools();
+
+            if (!File.Exists(databasePath))
+                return;
+
+            try
+            {
+                File.Delete(databasePath);
+            }
+            catch (IOException)
+            {
+            }
         }
 
         private sealed class TestDbContext : DbContext

@@ -7,6 +7,7 @@
     using Pigeon.Messaging.Consuming.Dispatching;
     using Pigeon.Messaging.Contracts;
     using System;
+    using System.Collections.Concurrent;
     using System.Threading;
     using System.Threading.Tasks;
     using Xunit;
@@ -187,6 +188,54 @@
                 () => dispatcher.DispatchAsync("test-topic", new RawPayload(ValidJson), CancellationToken.None));
 
             Assert.Null(accessor.ConsumeContext);
+        }
+
+        [Fact]
+        public async Task DispatchAsync_Should_Isolate_Accessor_Between_Concurrent_Messages()
+        {
+            var consumingConfigurator = Substitute.For<IConsumingConfigurator>();
+            var serializer = Substitute.For<ISerializer>();
+            var observedSubscriptions = new ConcurrentBag<string>();
+
+            serializer.Deserialize(Arg.Any<string>(), Arg.Any<Type>()).Returns(new TestMessage());
+
+            ConsumerConfiguration<TestMessage> CreateConfiguration(string subscription)
+                => new(async (ctx, message) =>
+                {
+                    var accessor = ctx.Services.GetRequiredService<IConsumeContextAccessor>();
+                    observedSubscriptions.Add(accessor.ConsumeContext.Subscription);
+                    await Task.Delay(50);
+                    observedSubscriptions.Add(accessor.ConsumeContext.Subscription);
+                })
+                {
+                    Topic = "test-topic",
+                    Version = SemanticVersion.Default,
+                    Subscription = subscription
+                };
+
+            consumingConfigurator
+                .GetConfiguration("test-topic", SemanticVersion.Default, "billing")
+                .Returns(CreateConfiguration("billing"));
+            consumingConfigurator
+                .GetConfiguration("test-topic", SemanticVersion.Default, "audit")
+                .Returns(CreateConfiguration("audit"));
+
+            var services = new ServiceCollection();
+            services.AddSingleton(consumingConfigurator);
+            services.AddSingleton(serializer);
+            services.AddSingleton<ConsumeContextAccessor>();
+            services.AddSingleton<IConsumeContextAccessor>(provider => provider.GetRequiredService<ConsumeContextAccessor>());
+
+            var serviceProvider = services.BuildServiceProvider();
+            var dispatcher = new ConsumingDispatcher(serviceProvider);
+
+            await Task.WhenAll(
+                dispatcher.DispatchAsync("test-topic", "billing", new RawPayload(ValidJson), CancellationToken.None),
+                dispatcher.DispatchAsync("test-topic", "audit", new RawPayload(ValidJson), CancellationToken.None));
+
+            Assert.Equal(2, observedSubscriptions.Count(x => x == "billing"));
+            Assert.Equal(2, observedSubscriptions.Count(x => x == "audit"));
+            Assert.Null(serviceProvider.GetRequiredService<IConsumeContextAccessor>().ConsumeContext);
         }
 
         private class TestMessage { }
