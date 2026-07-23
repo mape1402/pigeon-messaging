@@ -3,14 +3,17 @@ namespace Pigeon.Messaging.EntityFrameworkCore
     using Microsoft.EntityFrameworkCore;
     using Pigeon.Messaging.Outbox;
 
-    internal sealed class EntityFrameworkOutboxStorage<TDbContext> : IOutboxStorage
+    internal sealed class EntityFrameworkOutboxStorage<TDbContext> : IOutboxStorage, IDisposable, IAsyncDisposable
         where TDbContext : DbContext
     {
         private readonly TDbContext _dbContext;
 
-        public EntityFrameworkOutboxStorage(TDbContext dbContext)
+        public EntityFrameworkOutboxStorage(IOutboxDbContextFactory<TDbContext> dbContextFactory)
         {
-            _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+            if (dbContextFactory == null)
+                throw new ArgumentNullException(nameof(dbContextFactory));
+
+            _dbContext = dbContextFactory.CreateDbContext();
         }
 
         public async Task AddAsync(OutboxMessage message, CancellationToken cancellationToken = default)
@@ -110,5 +113,11 @@ namespace Pigeon.Messaging.EntityFrameworkCore
         private async Task<OutboxMessage> FindAsync(Guid id, CancellationToken cancellationToken)
             => await _dbContext.Set<OutboxMessage>().FindAsync(new object[] { id }, cancellationToken)
                 ?? throw new InvalidOperationException($"Outbox message '{id}' was not found.");
+
+        public void Dispose()
+            => _dbContext.Dispose();
+
+        public ValueTask DisposeAsync()
+            => _dbContext.DisposeAsync();
     }
 }

@@ -59,6 +59,31 @@ namespace Pigeon.Messaging.EntityFrameworkCore.Tests
             Assert.Equal("abc", payload.Metadata["correlationId"].ToString());
         }
 
+        [Fact]
+        public async Task PublishAsync_Should_Not_Save_Pending_App_DbContext_Changes()
+        {
+            await using var connection = new SqliteConnection("Data Source=:memory:");
+            await connection.OpenAsync();
+
+            var provider = BuildProvider(connection);
+
+            using var scope = provider.CreateScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<TestDbContext>();
+            await dbContext.Database.EnsureCreatedAsync();
+
+            dbContext.BusinessRecords.Add(new BusinessRecord { Name = "not-yet-saved" });
+
+            var producer = scope.ServiceProvider.GetRequiredService<IProducer>();
+            await producer.PublishAsync(new TestMessage { Text = "hello" }, "orders.created");
+
+            Assert.Equal(EntityState.Added, dbContext.Entry(dbContext.BusinessRecords.Local.Single()).State);
+
+            using var verificationScope = provider.CreateScope();
+            var verificationContext = verificationScope.ServiceProvider.GetRequiredService<TestDbContext>();
+            Assert.Equal(0, await verificationContext.BusinessRecords.CountAsync());
+            Assert.Equal(1, await verificationContext.Set<OutboxMessage>().CountAsync());
+        }
+
         private static ServiceProvider BuildProvider(SqliteConnection connection)
         {
             var services = new ServiceCollection();
@@ -91,6 +116,15 @@ namespace Pigeon.Messaging.EntityFrameworkCore.Tests
                 : base(options)
             {
             }
+
+            public DbSet<BusinessRecord> BusinessRecords { get; set; }
+        }
+
+        private sealed class BusinessRecord
+        {
+            public int Id { get; set; }
+
+            public string Name { get; set; }
         }
 
         private sealed class TestPublishInterceptor : IPublishInterceptor
