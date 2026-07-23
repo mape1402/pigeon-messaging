@@ -13,6 +13,11 @@ namespace Pigeon.Messaging.Outbox
         /// <summary>
         /// The application is responsible for creating the outbox schema.
         /// </summary>
-        Migrations = 1
+        Manual = 1,
+
+        /// <summary>
+        /// Alias for <see cref="Manual"/> kept for migration-based configurations.
+        /// </summary>
+        Migrations = Manual
     }
 }

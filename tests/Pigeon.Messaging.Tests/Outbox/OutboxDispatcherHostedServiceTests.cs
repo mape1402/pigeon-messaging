@@ -33,7 +33,7 @@ namespace Pigeon.Messaging.Tests.Outbox
                     DispatchInterval = TimeSpan.FromMinutes(5),
                     RetryDelay = TimeSpan.FromSeconds(10),
                     MaxRetries = 2,
-                    SchemaMode = OutboxSchemaMode.Migrations
+                    SchemaMode = OutboxSchemaMode.Manual
                 }
             });
             var dispatchQueue = new ChannelOutboxDispatchQueue(settings);
