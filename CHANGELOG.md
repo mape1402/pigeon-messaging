@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ------
 
+## [v2.0.0] - 2026-07-23
+
+### Added
+
+- Raw message publishing with `PublishRawAsync`, allowing producers to send payloads directly without the default `WrappedPayload` envelope.
+- Routed publishing with `PublishingRoute`, including broker route metadata such as exchange, routing key, queue, subscription, and partition information.
+- Broker-side fan-out support across adapters so one publish can be delivered to multiple configured consumers when the selected broker supports that behavior.
+- Configurable topology provisioning with `Manual`, `OnStartup`, `OnPublish`, and `OnConsume` modes. Manual provisioning is the default.
+- Cached topology provisioning records to avoid recreating queues, topics, subscriptions, exchanges, and bindings on every publish or consume.
+- Configurable consumer acknowledgement behavior with manual ack, auto-ack on receive, and ack after a successful handler.
+- Configurable consumer execution settings for concurrency, queue capacity, and handler timeout.
+- `IConsumeContextAccessor` for resolving the current consume context from application services, returning `null` outside a Pigeon consume pipeline.
+- Transactional outbox support in the producer pipeline, storing the final intercepted payload before broker dispatch.
+- Immediate outbox dispatch through an in-memory queue, with interval-based recovery scans only for failed, retryable, or restarted messages.
+- Outbox cleanup settings through `CleanInterval` and published message retention.
+- Outbox diagnostics through `IOutboxDiagnostics` and `OutboxDiagnosticsSnapshot`.
+- Entity Framework Core outbox provider in `Pigeon.Messaging.Outbox.EntityFrameworkCore`, including automatic model configuration and isolated outbox `DbContext` instances.
+- In-memory broker adapter in `Pigeon.Messaging.InMemory` for unit tests, examples, and modular monolith scenarios.
+- In-memory outbox provider in `Pigeon.Messaging.Outbox.InMemory` for tests and samples that need the real outbox pipeline without a database.
+- Support for `net8.0`, `net9.0`, and `net10.0`.
+
+### Changed
+
+- Consumer dispatch now uses configurable background execution instead of blocking the broker receive loop.
+
+### Removed
+
+- Support for `net6.0` and `net7.0`.
+
+------
+
 ## [v1.1.7] - 2026-01-05
 
 ### Fixed
