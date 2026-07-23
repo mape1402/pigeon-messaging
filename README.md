@@ -2,7 +2,7 @@
 
 **Simple. Fast. Broker-agnostic messaging for .NET.**
 
-[![Build](https://github.com/mape1402/pigeon-messaging/actions/workflows/publish.yaml/badge.svg)](https://github.com/mape1402/pigeon-messaging/actions/workflows/publish.yaml)
+[![Build](https://github.com/mape1402/pigeon-messaging/actions/workflows/CI.yml/badge.svg)](https://github.com/mape1402/pigeon-messaging/actions/workflows/CI.yml)
 [![NuGet](https://img.shields.io/nuget/v/Pigeon.Messaging.svg)](https://www.nuget.org/packages/Pigeon.Messaging/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
