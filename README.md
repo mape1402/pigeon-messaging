@@ -26,6 +26,7 @@ Its goal is to simplify publishing and consuming messages through a unified, dec
 - **Configurable topology provisioning** to create broker infrastructure on startup, publish, consume, or leave it fully manual.
 - **Configurable acknowledgement behavior** with manual ack, auto-ack on receive, or ack after a successful handler.
 - **Broker adapters** that keep business code independent from the transport.
+- **In-memory broker** for unit tests, examples, and modular monolith scenarios.
 - **Lightweight core package** with adapter packages for each broker.
 
 Pigeon is a good fit for microservices, distributed architectures, and applications that need reliable asynchronous communication without coupling domain code to a specific broker SDK.
@@ -37,6 +38,7 @@ Pigeon is a good fit for microservices, distributed architectures, and applicati
 - Azure Service Bus
 - Azure Event Grid
 - Azure Event Hub
+- In-memory
 
 ---
 
@@ -51,6 +53,7 @@ dotnet add package Pigeon.Messaging.Kafka
 dotnet add package Pigeon.Messaging.Azure.ServiceBus
 dotnet add package Pigeon.Messaging.Azure.EventGrid
 dotnet add package Pigeon.Messaging.Azure.EventHub
+dotnet add package Pigeon.Messaging.InMemory
 dotnet add package Pigeon.Messaging.EntityFrameworkCore
 ```
 
@@ -220,6 +223,47 @@ The Rabbit sample includes a runnable end-to-end version with one exchange, one 
 
 ```bash
 dotnet run --project samples/Pigeon.Messaging.Rabbit.Sample/Pigeon.Messaging.Rabbit.Sample.csproj
+```
+
+### Use the In-Memory Broker
+
+Use the in-memory broker for tests, samples, or modular monoliths where messages should stay inside the current process:
+
+```csharp
+builder.Services
+    .AddPigeon(builder.Configuration, config =>
+    {
+        config.UseInMemoryBroker();
+    })
+    .AddConsumeHandler<OrderCreatedMessage>(
+        topic: "orders.created",
+        version: "1.0.0",
+        subscription: "billing-module",
+        handler: (context, message) => Task.CompletedTask)
+    .AddConsumeHandler<OrderCreatedMessage>(
+        topic: "orders.created",
+        version: "1.0.0",
+        subscription: "audit-module",
+        handler: (context, message) => Task.CompletedTask);
+
+await producer.PublishAsync(new OrderCreatedMessage(), "orders.created");
+```
+
+One publish is delivered to every matching in-memory subscription. The broker is process-local, non-durable, and not distributed, so it is not a replacement for RabbitMQ, Kafka, or Azure brokers between services.
+
+Tests can inspect the broker state:
+
+```csharp
+var broker = serviceProvider.GetRequiredService<IInMemoryBroker>();
+
+Assert.Single(broker.PublishedMessages);
+Assert.Equal(2, broker.Deliveries.Count);
+```
+
+Run the in-memory sample:
+
+```bash
+dotnet run --project samples/Pigeon.Messaging.InMemory.Sample/Pigeon.Messaging.InMemory.Sample.csproj
 ```
 
 ### Configure Topology Provisioning
