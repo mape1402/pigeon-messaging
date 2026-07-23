@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Pigeon.Messaging.InMemory;
 using Pigeon.Messaging.Outbox;
+using Pigeon.Messaging.Outbox.InMemory;
 using Pigeon.Messaging.Producing;
 using System.Transactions;
 
@@ -13,49 +14,40 @@ builder.Configuration.AddInMemoryCollection(new Dictionary<string, string>
     ["Pigeon:Domain"] = "transaction-scope-sample"
 });
 
-builder.Services.AddSingleton<TransactionalInMemoryOutboxStore>();
-
 builder.Services.AddPigeon(builder.Configuration, pigeon =>
 {
-    pigeon.ConfigureOutbox(outbox =>
+    pigeon.UseInMemoryOutbox(outbox =>
     {
-        outbox.Enabled = true;
         outbox.ImmediateDispatch = true;
         outbox.DispatchInterval = TimeSpan.FromMinutes(10);
         outbox.CleanInterval = TimeSpan.FromMinutes(10);
-        outbox.SchemaMode = OutboxSchemaMode.Manual;
     });
 
     pigeon.UseInMemoryBroker();
-    pigeon.AddFeature(feature =>
-    {
-        feature.Services.AddScoped(provider =>
-            provider.GetRequiredService<TransactionalInMemoryOutboxStore>().CreateStorage());
-    });
 });
 
 using var host = builder.Build();
 await host.StartAsync();
 
-var outboxStore = host.Services.GetRequiredService<TransactionalInMemoryOutboxStore>();
+var outbox = host.Services.GetRequiredService<IInMemoryOutbox>();
 var broker = host.Services.GetRequiredService<IInMemoryBroker>();
 
 Console.WriteLine("Pigeon TransactionScope outbox demo");
 Console.WriteLine("-----------------------------------");
-PrintState("Initial state", outboxStore, broker);
+PrintState("Initial state", outbox, broker);
 
 Console.WriteLine();
 Console.WriteLine("1. Publishing inside a committed TransactionScope.");
 await PublishInsideCommittedTransactionAsync(host.Services);
-PrintState("After PublishAsync, before background dispatch wait", outboxStore, broker);
+PrintState("After PublishAsync, before background dispatch wait", outbox, broker);
 await WaitForPublishedCountAsync(broker, 1, TimeSpan.FromSeconds(5));
-PrintState("After commit dispatch", outboxStore, broker);
+PrintState("After commit dispatch", outbox, broker);
 
 Console.WriteLine();
 Console.WriteLine("2. Publishing inside a rolled back TransactionScope.");
 await PublishInsideRolledBackTransactionAsync(host.Services);
 await Task.Delay(TimeSpan.FromSeconds(1));
-PrintState("After rollback", outboxStore, broker);
+PrintState("After rollback", outbox, broker);
 
 if (broker.PublishedMessages.Count != 1)
     throw new InvalidOperationException($"Expected only one committed message, but {broker.PublishedMessages.Count} messages were published.");
@@ -87,9 +79,9 @@ static async Task PublishInsideRolledBackTransactionAsync(IServiceProvider servi
     await producer.PublishAsync(new SampleMessage("rolled-back"), "sample.transaction-scope");
 }
 
-static void PrintState(string label, TransactionalInMemoryOutboxStore outboxStore, IInMemoryBroker broker)
+static void PrintState(string label, IInMemoryOutbox outbox, IInMemoryBroker broker)
 {
-    var outboxSnapshot = outboxStore.Snapshot;
+    var outboxSnapshot = outbox.Messages;
 
     Console.WriteLine($"{label}:");
     Console.WriteLine($"  Outbox rows: {outboxSnapshot.Count}");
