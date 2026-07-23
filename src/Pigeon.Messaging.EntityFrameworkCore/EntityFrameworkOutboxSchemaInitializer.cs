@@ -6,22 +6,24 @@ namespace Pigeon.Messaging.EntityFrameworkCore
     internal sealed class EntityFrameworkOutboxSchemaInitializer<TDbContext> : IOutboxSchemaInitializer
         where TDbContext : DbContext
     {
-        private readonly TDbContext _dbContext;
+        private readonly IOutboxDbContextFactory<TDbContext> _dbContextFactory;
 
-        public EntityFrameworkOutboxSchemaInitializer(TDbContext dbContext)
+        public EntityFrameworkOutboxSchemaInitializer(IOutboxDbContextFactory<TDbContext> dbContextFactory)
         {
-            _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+            _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
         }
 
         public async Task InitializeAsync(CancellationToken cancellationToken = default)
         {
-            if (!_dbContext.Database.IsRelational())
+            await using var dbContext = _dbContextFactory.CreateDbContext();
+
+            if (!dbContext.Database.IsRelational())
                 return;
 
-            var sql = GetCreateTableSql(_dbContext.Database.ProviderName);
+            var sql = GetCreateTableSql(dbContext.Database.ProviderName);
 
             if (!string.IsNullOrWhiteSpace(sql))
-                await _dbContext.Database.ExecuteSqlRawAsync(sql, cancellationToken);
+                await dbContext.Database.ExecuteSqlRawAsync(sql, cancellationToken);
         }
 
         private static string GetCreateTableSql(string providerName)

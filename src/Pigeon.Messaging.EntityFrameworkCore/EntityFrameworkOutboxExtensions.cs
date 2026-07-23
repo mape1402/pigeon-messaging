@@ -26,6 +26,7 @@ namespace Microsoft.Extensions.DependencyInjection
 
             builder.AddFeature(feature =>
             {
+                feature.Services.AddScoped<IOutboxDbContextFactory<TDbContext>, OutboxDbContextFactory<TDbContext>>();
                 feature.Services.AddScoped<IOutboxStorage, EntityFrameworkOutboxStorage<TDbContext>>();
                 feature.Services.AddScoped<IOutboxSchemaInitializer, EntityFrameworkOutboxSchemaInitializer<TDbContext>>();
                 feature.Services.AddPigeonOutboxDbContextOptions<TDbContext>();
