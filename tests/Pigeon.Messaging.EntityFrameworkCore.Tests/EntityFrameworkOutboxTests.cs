@@ -117,6 +117,38 @@ namespace Pigeon.Messaging.EntityFrameworkCore.Tests
             }
         }
 
+        [Fact]
+        public async Task OutboxDiagnostics_Should_Return_Message_Snapshot()
+        {
+            await using var connection = new SqliteConnection("Data Source=:memory:");
+            await connection.OpenAsync();
+
+            var provider = BuildProvider(connection);
+
+            using var scope = provider.CreateScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<TestDbContext>();
+            await dbContext.Database.EnsureCreatedAsync();
+            var now = DateTimeOffset.UtcNow;
+
+            dbContext.Set<OutboxMessage>().AddRange(
+                CreateOutboxMessage(OutboxMessageStatus.Pending, now.AddMinutes(-5)),
+                CreateOutboxMessage(OutboxMessageStatus.Locked, now.AddMinutes(-4)),
+                CreateOutboxMessage(OutboxMessageStatus.Published, now.AddMinutes(-3)),
+                CreateOutboxMessage(OutboxMessageStatus.Failed, now.AddMinutes(-2), "last failure"));
+            await dbContext.SaveChangesAsync();
+
+            var diagnostics = scope.ServiceProvider.GetRequiredService<IOutboxDiagnostics>();
+            var snapshot = await diagnostics.GetSnapshotAsync();
+
+            Assert.Equal(1, snapshot.PendingMessages);
+            Assert.Equal(1, snapshot.LockedMessages);
+            Assert.Equal(1, snapshot.PublishedMessages);
+            Assert.Equal(1, snapshot.FailedMessages);
+            Assert.NotNull(snapshot.OldestPendingMessageOnUtc);
+            Assert.NotNull(snapshot.OldestFailedMessageOnUtc);
+            Assert.Equal("last failure", snapshot.LastFailure);
+        }
+
         private static ServiceProvider BuildProvider(SqliteConnection connection)
             => BuildProvider(options => options.UseSqlite(connection));
 
@@ -164,6 +196,22 @@ namespace Pigeon.Messaging.EntityFrameworkCore.Tests
             {
             }
         }
+
+        private static OutboxMessage CreateOutboxMessage(
+            OutboxMessageStatus status,
+            DateTimeOffset createdOnUtc,
+            string lastError = null)
+            => new()
+            {
+                Id = Guid.NewGuid(),
+                Payload = "{}",
+                PayloadType = typeof(TestMessage).AssemblyQualifiedName,
+                Topic = "orders.created",
+                RoutingKey = "orders.created",
+                Status = status,
+                CreatedOnUtc = createdOnUtc,
+                LastError = lastError
+            };
 
         private sealed class TestDbContext : DbContext
         {
