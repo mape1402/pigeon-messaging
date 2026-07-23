@@ -55,6 +55,7 @@ dotnet add package Pigeon.Messaging.Azure.EventGrid
 dotnet add package Pigeon.Messaging.Azure.EventHub
 dotnet add package Pigeon.Messaging.InMemory
 dotnet add package Pigeon.Messaging.Outbox.EntityFrameworkCore
+dotnet add package Pigeon.Messaging.Outbox.InMemory
 ```
 
 ## Quick Start
@@ -265,6 +266,28 @@ Run the in-memory sample:
 ```bash
 dotnet run --project samples/Pigeon.Messaging.InMemory.Sample/Pigeon.Messaging.InMemory.Sample.csproj
 ```
+
+### Use the In-Memory Outbox
+
+Use the in-memory outbox provider for tests and samples that need the real Pigeon outbox pipeline without a database:
+
+```csharp
+builder.Services.AddPigeon(builder.Configuration, config =>
+{
+    config.UseInMemoryBroker();
+    config.UseInMemoryOutbox();
+});
+```
+
+The provider stores outbox rows in the current process and exposes `IInMemoryOutbox` for assertions:
+
+```csharp
+var outbox = serviceProvider.GetRequiredService<IInMemoryOutbox>();
+
+Assert.Single(outbox.Messages);
+```
+
+It is process-local and non-durable. Use `Pigeon.Messaging.Outbox.EntityFrameworkCore` for production durability.
 
 ### Configure Topology Provisioning
 
