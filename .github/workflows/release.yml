@@ -90,14 +90,17 @@ jobs:
         run: dotnet test "$DOTNET_TARGET" --no-build --configuration "$CONFIGURATION" --verbosity normal
 
       - name: Pack NuGet packages
-        run: >
-          dotnet pack "$DOTNET_TARGET"
-          --no-build
-          --configuration "$CONFIGURATION"
-          --output "$NUGET_OUTPUT"
-          /p:Version=${{ steps.version.outputs.version }}
-          /p:PackageVersion=${{ steps.version.outputs.version }}
-          /p:MinVerVersionOverride=${{ steps.version.outputs.version }}
+        shell: bash
+        run: |
+          while IFS= read -r -d '' project; do
+            dotnet pack "$project" \
+              --no-build \
+              --configuration "$CONFIGURATION" \
+              --output "$NUGET_OUTPUT" \
+              /p:Version=${{ steps.version.outputs.version }} \
+              /p:PackageVersion=${{ steps.version.outputs.version }} \
+              /p:MinVerVersionOverride=${{ steps.version.outputs.version }}
+          done < <(find src -name '*.csproj' -print0 | sort -z)
 
       - name: Create or update release tag
         shell: bash
