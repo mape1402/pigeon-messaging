@@ -2,6 +2,7 @@
 {
     using Confluent.Kafka;
     using Microsoft.Extensions.Options;
+    using Pigeon.Messaging.Consuming.Management;
 
     /// <summary>
     /// Provides Kafka producer and consumer configuration based on global and Kafka-specific settings.
@@ -38,6 +39,7 @@
                 SecurityProtocol = _kafkaSettings.SecurityProtocol,
                 SaslMechanism = _kafkaSettings.SaslMechanism,
                 Acks = _kafkaSettings.Acks,
+                EnableAutoCommit = _globalSettings.ConsumerExecution?.AcknowledgementMode == MessageAcknowledgementMode.OnReceive,
             };
         }
 

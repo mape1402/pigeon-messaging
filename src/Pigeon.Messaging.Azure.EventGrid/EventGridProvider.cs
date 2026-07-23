@@ -4,6 +4,7 @@ namespace Pigeon.Messaging.Azure.EventGrid
     using global::Azure.Messaging.EventGrid;
     using global::Azure.Messaging.ServiceBus;
     using Microsoft.Extensions.Options;
+    using Pigeon.Messaging.Consuming.Management;
     using System.Collections.Concurrent;
 
     /// <summary>
@@ -54,6 +55,7 @@ namespace Pigeon.Messaging.Azure.EventGrid
     internal class EventGridProvider : IEventGridProvider
     {
         private readonly ServiceBusClient _client;
+        private readonly GlobalSettings _globalSettings;
         private readonly AzureEventGridSettings _settings;
         private readonly ConcurrentDictionary<string, IEventGridPublisher> _publisherClients = new();
 
@@ -62,8 +64,14 @@ namespace Pigeon.Messaging.Azure.EventGrid
         /// </summary>
         /// <param name="options">The Azure Event Grid settings options.</param>
         public EventGridProvider(IOptions<AzureEventGridSettings> options)
+            : this(options, Options.Create(new GlobalSettings()))
+        {
+        }
+
+        public EventGridProvider(IOptions<AzureEventGridSettings> options, IOptions<GlobalSettings> globalSettings)
         {
             _settings = options?.Value ?? throw new ArgumentNullException(nameof(options));
+            _globalSettings = globalSettings?.Value ?? throw new ArgumentNullException(nameof(globalSettings));
             _client = new ServiceBusClient(options.Value.ServiceBusEndPoint);
         }
 
@@ -91,11 +99,17 @@ namespace Pigeon.Messaging.Azure.EventGrid
 
         /// <inheritdoc />
         public ServiceBusProcessor CreateProcessor(string topic)
-            => _client.CreateProcessor(topic, new ServiceBusProcessorOptions());
+            => _client.CreateProcessor(topic, CreateProcessorOptions());
 
         /// <inheritdoc />
         public ServiceBusProcessor CreateProcessor(string topic, string subscription)
-            => _client.CreateProcessor(topic, subscription, new ServiceBusProcessorOptions());
+            => _client.CreateProcessor(topic, subscription, CreateProcessorOptions());
+
+        private ServiceBusProcessorOptions CreateProcessorOptions()
+            => new()
+            {
+                AutoCompleteMessages = _globalSettings.ConsumerExecution?.AcknowledgementMode == MessageAcknowledgementMode.OnReceive
+            };
     }
 
     /// <summary>

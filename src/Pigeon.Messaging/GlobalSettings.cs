@@ -1,6 +1,7 @@
 ﻿namespace Pigeon.Messaging
 {
     using Pigeon.Messaging.Topology;
+    using Pigeon.Messaging.Consuming.Management;
     using System.Reflection;
 
     /// <summary>
@@ -36,5 +37,10 @@
         /// Defaults to <see cref="TopologyProvisioningMode.Manual"/>, which means Pigeon only publishes and consumes.
         /// </summary>
         public TopologyProvisioningMode TopologyProvisioningMode { get; set; } = TopologyProvisioningMode.Manual;
+
+        /// <summary>
+        /// Gets or sets how consumed messages are buffered and processed.
+        /// </summary>
+        public ConsumerExecutionSettings ConsumerExecution { get; set; } = new();
     }
 }

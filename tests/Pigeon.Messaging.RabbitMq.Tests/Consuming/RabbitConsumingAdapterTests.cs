@@ -39,7 +39,7 @@
             // Assert
             await _connectionProvider.Received(topics.Length).CreateChannelAsync(Arg.Any<CancellationToken>());
             await _channel.DidNotReceive().QueueDeclareAsync(Arg.Any<string>(), false, false, false, null, false, Arg.Any<CancellationToken>());
-            await _channel.Received(topics.Length).BasicConsumeAsync(Arg.Any<string>(), true, Arg.Any<IAsyncBasicConsumer>(), Arg.Any<CancellationToken>());
+            await _channel.Received(topics.Length).BasicConsumeAsync(Arg.Any<string>(), false, Arg.Any<IAsyncBasicConsumer>(), Arg.Any<CancellationToken>());
 
             _logger.Received().Log(
                 LogLevel.Information,
@@ -130,6 +130,29 @@
                 Arg.Any<object>(),
                 Arg.Any<Exception>(),
                 Arg.Any<Func<object, Exception, string>>());
+        }
+
+        [Fact]
+        public async Task Should_Use_AutoAck_When_Acknowledgement_Mode_Is_OnReceive()
+        {
+            var topic = "topic1";
+            var options = Options.Create(new GlobalSettings
+            {
+                Domain = "test",
+                ConsumerExecution = new ConsumerExecutionSettings
+                {
+                    AcknowledgementMode = MessageAcknowledgementMode.OnReceive
+                }
+            });
+            _consumingConfigurator.GetAllTopics().Returns(new[] { topic });
+            _connectionProvider.CreateChannelAsync(Arg.Any<CancellationToken>()).Returns(_channel);
+
+            var adapter = new RabbitConsumingAdapter(_connectionProvider, _consumingConfigurator, options, _rabbitOptions, _logger);
+
+            await adapter.StartConsumeAsync();
+
+            await _channel.Received(1).BasicConsumeAsync(topic, true, Arg.Any<IAsyncBasicConsumer>(), Arg.Any<CancellationToken>());
+            await _channel.DidNotReceive().BasicQosAsync(Arg.Any<uint>(), Arg.Any<ushort>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
         }
 
         [Fact]

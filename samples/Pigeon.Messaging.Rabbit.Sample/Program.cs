@@ -5,6 +5,7 @@ namespace Pigeon.Messaging.Rabbit.Sample
     using Microsoft.Extensions.Hosting;
     using Microsoft.Extensions.Logging;
     using Pigeon.Messaging.Consuming.Dispatching;
+    using Pigeon.Messaging.Consuming.Management;
     using Pigeon.Messaging.Contracts;
     using Pigeon.Messaging.Producing;
     using Pigeon.Messaging.Rabbit;
@@ -18,9 +19,12 @@ namespace Pigeon.Messaging.Rabbit.Sample
             var builder = Host.CreateApplicationBuilder(args);
             builder.Configuration.AddJsonFile(Path.Combine(AppContext.BaseDirectory, "appsettings.json"), optional: false, reloadOnChange: false);
             builder.Configuration.AddUserSecrets(typeof(Program).Assembly, optional: true);
+            builder.Configuration.AddCommandLine(args);
 
             var routingKeyPrefix = builder.Configuration["Sample:RoutingKeyPrefix"] ?? "pigeon.sample.orders.created";
             var queuePrefix = builder.Configuration["Sample:QueuePrefix"] ?? "pigeon.sample";
+            var acknowledgementMode = builder.Configuration.GetValue<MessageAcknowledgementMode?>("Sample:AcknowledgementMode")
+                ?? MessageAcknowledgementMode.OnHandlerSuccess;
             var routingKey = $"{routingKeyPrefix}.{runId}";
             var billingQueue = $"{queuePrefix}.billing.{runId}";
             var auditQueue = $"{queuePrefix}.audit.{runId}";
@@ -30,7 +34,8 @@ namespace Pigeon.Messaging.Rabbit.Sample
                 routingKey,
                 billingQueue,
                 auditQueue,
-                builder.Configuration.GetValue<int?>("Sample:TimeoutSeconds") ?? 30));
+                builder.Configuration.GetValue<int?>("Sample:TimeoutSeconds") ?? 30,
+                acknowledgementMode));
 
             var pigeon = builder.Services.AddPigeon(
                 builder.Configuration,
@@ -40,6 +45,10 @@ namespace Pigeon.Messaging.Rabbit.Sample
                         TopologyProvisioningMode.OnStartup |
                         TopologyProvisioningMode.OnPublish |
                         TopologyProvisioningMode.OnConsume);
+                    settings.ConfigureConsumerExecution(execution =>
+                    {
+                        execution.AcknowledgementMode = acknowledgementMode;
+                    });
 
                     var rabbitSettings = builder.Configuration
                         .GetSection("RabbitMq")
@@ -65,6 +74,9 @@ namespace Pigeon.Messaging.Rabbit.Sample
                 {
                     var scenario = context.Services.GetRequiredService<RabbitSampleScenario>();
                     scenario.MarkBilling(message.OrderId, context.Subscription);
+                    if (scenario.AcknowledgementMode == MessageAcknowledgementMode.Manual)
+                        await context.CompleteAsync();
+
                     await Task.CompletedTask;
                 });
 
@@ -76,6 +88,9 @@ namespace Pigeon.Messaging.Rabbit.Sample
                 {
                     var scenario = context.Services.GetRequiredService<RabbitSampleScenario>();
                     scenario.MarkAudit(message.OrderId, context.Subscription);
+                    if (scenario.AcknowledgementMode == MessageAcknowledgementMode.Manual)
+                        await context.CompleteAsync();
+
                     await Task.CompletedTask;
                 });
 
@@ -119,6 +134,7 @@ namespace Pigeon.Messaging.Rabbit.Sample
             };
 
             _logger.LogInformation("Publishing message to exchange '{Exchange}' with routing key '{RoutingKey}'.", exchange, _scenario.RoutingKey);
+            _logger.LogInformation("Acknowledgement mode: {AcknowledgementMode}", _scenario.AcknowledgementMode);
             await _producer.PublishAsync(message, exchange, _scenario.RoutingKey, SemanticVersion.Default, stoppingToken);
 
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(_scenario.TimeoutSeconds));
@@ -149,13 +165,20 @@ namespace Pigeon.Messaging.Rabbit.Sample
         private readonly TaskCompletionSource _billingReceived = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly TaskCompletionSource _auditReceived = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        public RabbitSampleScenario(string runId, string routingKey, string billingQueue, string auditQueue, int timeoutSeconds)
+        public RabbitSampleScenario(
+            string runId,
+            string routingKey,
+            string billingQueue,
+            string auditQueue,
+            int timeoutSeconds,
+            MessageAcknowledgementMode acknowledgementMode)
         {
             RunId = runId;
             RoutingKey = routingKey;
             BillingQueue = billingQueue;
             AuditQueue = auditQueue;
             TimeoutSeconds = timeoutSeconds;
+            AcknowledgementMode = acknowledgementMode;
         }
 
         public string RunId { get; }
@@ -167,6 +190,8 @@ namespace Pigeon.Messaging.Rabbit.Sample
         public string AuditQueue { get; }
 
         public int TimeoutSeconds { get; }
+
+        public MessageAcknowledgementMode AcknowledgementMode { get; }
 
         public void MarkBilling(string orderId, string subscription)
         {

@@ -5,6 +5,7 @@
     using Pigeon.Messaging.Consuming.Configuration;
     using Pigeon.Messaging.Consuming.Dispatching;
     using Pigeon.Messaging.Topology;
+    using System.Threading.Channels;
 
     internal class ConsumingManager : IConsumingManager
     {
@@ -16,6 +17,9 @@
         private readonly ILogger<ConsumingManager> _logger;
 
         private CancellationToken _backgroundCancellationToken;
+        private Channel<MessageConsumedEventArgs> _messageQueue;
+        private CancellationTokenSource _workerCancellationTokenSource;
+        private Task[] _workers = Array.Empty<Task>();
 
         public ConsumingManager(
             IConsumingDispatcher dispatcher,
@@ -45,6 +49,16 @@
         public async Task StartAsync(CancellationToken cancellationToken = default)
         {
             _backgroundCancellationToken = cancellationToken;
+            _workerCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            _messageQueue = Channel.CreateBounded<MessageConsumedEventArgs>(new BoundedChannelOptions(GetQueueCapacity())
+            {
+                FullMode = BoundedChannelFullMode.Wait,
+                SingleReader = false,
+                SingleWriter = false
+            });
+            _workers = Enumerable.Range(0, GetMaxConcurrency())
+                .Select(_ => Task.Run(() => ProcessMessagesAsync(_workerCancellationTokenSource.Token), CancellationToken.None))
+                .ToArray();
 
             foreach (var endpoint in _consumingConfigurator.GetAllEndpoints())
                 await _topologyProvisioningService.EnsureConsumeTopologyAsync(endpoint, cancellationToken);
@@ -59,9 +73,16 @@
         public async Task StopAsync(CancellationToken cancellationToken = default)
         {
             foreach (var adapter in _messageBrokerAdapters)
-            {
                 adapter.MessageConsumed -= MessageConsumed;
 
+            if (_messageQueue != null)
+                _messageQueue.Writer.TryComplete();
+
+            if (_workers.Length > 0)
+                await Task.WhenAll(_workers);
+
+            foreach (var adapter in _messageBrokerAdapters)
+            {
                 try
                 {
                     await adapter.StopConsumeAsync(_backgroundCancellationToken);
@@ -71,35 +92,79 @@
                     _logger.LogWarning(ex, $"Failed to stop adapter {adapter.GetType().Name} gracefully.");
                 }
             }
+
+            _workerCancellationTokenSource?.Dispose();
         }
 
         private void MessageConsumed(object sender, MessageConsumedEventArgs e)
         {
-            Task.Run(async () =>
+            try
             {
-                try
-                {
-                    var cts = new CancellationTokenSource(); // TODO: maybe include a timeout global or by consumer =)
-
-                    using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cts.Token, _backgroundCancellationToken);
-
-                    var rawPayload = new RawPayload(e.RawPayload);
-
-                    var topic = e.Topic;
-
-                    if (!string.IsNullOrWhiteSpace(_globalSettings.Domain))
-                        topic = topic.Replace($"{_globalSettings.Domain}.", string.Empty);
-
-                    if (e.Subscription == Configuration.ConsumerEndpoint.DefaultSubscription)
-                        await _dispatcher.DispatchAsync(topic, rawPayload, linkedCts.Token);
-                    else
-                        await _dispatcher.DispatchAsync(topic, e.Subscription, rawPayload, linkedCts.Token);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Has occurred an unexpected error when a message has been consumed.");
-                }
-            });
+                _messageQueue.Writer.WriteAsync(e, _backgroundCancellationToken).AsTask().GetAwaiter().GetResult();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Has occurred an unexpected error when a message was enqueued for dispatch.");
+                e.FailAsync(ex, _backgroundCancellationToken).GetAwaiter().GetResult();
+            }
         }
+
+        private async Task ProcessMessagesAsync(CancellationToken cancellationToken)
+        {
+            await foreach (var message in _messageQueue.Reader.ReadAllAsync(cancellationToken))
+                await DispatchMessageAsync(message, cancellationToken);
+        }
+
+        private async Task DispatchMessageAsync(MessageConsumedEventArgs e, CancellationToken cancellationToken)
+        {
+            try
+            {
+                using var timeoutCts = new CancellationTokenSource(GetHandlerTimeout());
+                using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(timeoutCts.Token, cancellationToken);
+
+                var rawPayload = new RawPayload(e.RawPayload);
+
+                var topic = e.Topic;
+
+                if (!string.IsNullOrWhiteSpace(_globalSettings.Domain))
+                    topic = topic.Replace($"{_globalSettings.Domain}.", string.Empty);
+
+                var subscription = e.Subscription == Configuration.ConsumerEndpoint.DefaultSubscription
+                    ? Configuration.ConsumerEndpoint.DefaultSubscription
+                    : e.Subscription;
+
+                await _dispatcher.DispatchAsync(
+                    topic,
+                    subscription,
+                    rawPayload,
+                    e.CompleteAsync,
+                    e.FailAsync,
+                    linkedCts.Token);
+
+                if (GetAcknowledgementMode() == MessageAcknowledgementMode.OnHandlerSuccess)
+                    await e.CompleteAsync(cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Has occurred an unexpected error when a message has been consumed.");
+
+                if (GetAcknowledgementMode() == MessageAcknowledgementMode.OnHandlerSuccess)
+                    await e.FailAsync(ex, cancellationToken);
+            }
+        }
+
+        private int GetMaxConcurrency()
+            => Math.Max(1, _globalSettings.ConsumerExecution?.MaxConcurrency ?? Environment.ProcessorCount);
+
+        private int GetQueueCapacity()
+            => Math.Max(1, _globalSettings.ConsumerExecution?.QueueCapacity ?? 1_000);
+
+        private TimeSpan GetHandlerTimeout()
+            => _globalSettings.ConsumerExecution?.HandlerTimeout > TimeSpan.Zero
+                ? _globalSettings.ConsumerExecution.HandlerTimeout
+                : TimeSpan.FromSeconds(30);
+
+        private MessageAcknowledgementMode GetAcknowledgementMode()
+            => _globalSettings.ConsumerExecution?.AcknowledgementMode ?? MessageAcknowledgementMode.Manual;
     }
 }

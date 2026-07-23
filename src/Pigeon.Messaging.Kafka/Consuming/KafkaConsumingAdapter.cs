@@ -123,7 +123,7 @@
                 try
                 {
                     var result = consumer.Consume(cancellationToken);
-                    MessageConsumed?.Invoke(this, new MessageConsumedEventArgs(result.Topic, result.Message.Value));
+                    MessageConsumed?.Invoke(this, CreateConsumedEvent(result.Topic, result.Message.Value, ConsumerEndpoint.DefaultSubscription, consumer, result));
                 }
                 catch (Exception ex)
                 {
@@ -140,7 +140,7 @@
                 {
                     var result = consumer.Consume(cancellationToken);
                     var topic = string.IsNullOrWhiteSpace(endpoint.Topic) ? result.Topic : endpoint.Topic;
-                    MessageConsumed?.Invoke(this, new MessageConsumedEventArgs(topic, result.Message.Value, endpoint.Subscription));
+                    MessageConsumed?.Invoke(this, CreateConsumedEvent(topic, result.Message.Value, endpoint.Subscription, consumer, result));
                 }
                 catch (Exception ex)
                 {
@@ -170,6 +170,30 @@
             var listener = Task.Run(() => ListenEndpoint(consumer, endpoint, _cancellationTokenSource.Token));
 
             _listeners.TryAdd(endpoint.Key, listener);
+        }
+
+        private MessageConsumedEventArgs CreateConsumedEvent(
+            string topic,
+            string value,
+            string subscription,
+            IConsumer<Ignore, string> consumer,
+            ConsumeResult<Ignore, string> result)
+        {
+            if (_globalSettings.ConsumerExecution?.AcknowledgementMode == MessageAcknowledgementMode.OnReceive)
+                return new MessageConsumedEventArgs(topic, value, subscription);
+
+            return new MessageConsumedEventArgs(
+                topic,
+                value,
+                subscription,
+                _ =>
+                {
+                    lock (consumer)
+                        consumer.Commit(result);
+
+                    return Task.CompletedTask;
+                },
+                (_, _) => Task.CompletedTask);
         }
 
         private void StopConsumer(ConsumerEndpoint endpoint)

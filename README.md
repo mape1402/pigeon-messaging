@@ -19,8 +19,12 @@ Its goal is to simplify publishing and consuming messages through a unified, dec
 - **Consistent API** for multiple message brokers.
 - **Fluent configuration** through `IServiceCollection`.
 - **Publish and consume workflows** with topic and semantic-version support.
+- **Raw message publishing** when a broker payload should be sent without the default Pigeon wrapper.
+- **Routed publishing** for broker-native fan-out patterns such as RabbitMQ exchanges, routing keys, queues, and bindings.
 - **Consumer discovery** through `HubConsumer` and `ConsumerAttribute`.
 - **Publish and consume interceptors** for metadata, tracing, security context, sagas, and other cross-cutting behavior.
+- **Configurable topology provisioning** to create broker infrastructure on startup, publish, consume, or leave it fully manual.
+- **Configurable acknowledgement behavior** with manual ack, auto-ack on receive, or ack after a successful handler.
 - **Broker adapters** that keep business code independent from the transport.
 - **Lightweight core package** with adapter packages for each broker.
 
@@ -164,6 +168,108 @@ var producer = app.Services.GetRequiredService<IProducer>();
 await producer.PublishAsync(
     new HelloWorldMessage { Text = "Hello, Pigeon!" },
     topic: "hello-world");
+```
+
+### Publish a Raw Message
+
+Use raw publishing when you want to send the payload directly to the broker without the default wrapped Pigeon envelope:
+
+```csharp
+await producer.PublishRawAsync(
+    new HelloWorldMessage { Text = "Hello, Pigeon!" },
+    topic: "hello-world");
+```
+
+### Route a Message to Multiple Consumers
+
+Adapters that support broker-side routing can publish one message and deliver it to multiple configured consumers. In RabbitMQ, for example, one publish can target an exchange and routing key while each consumer owns its queue and binding:
+
+```csharp
+config.SetTopologyProvisioningMode(
+        TopologyProvisioningMode.OnStartup |
+        TopologyProvisioningMode.OnPublish |
+        TopologyProvisioningMode.OnConsume)
+      .UseRabbitMq(rabbit =>
+      {
+          rabbit.Url = "amqp://guest:guest@localhost:5672";
+          rabbit.Exchange = "orders.exchange";
+          rabbit.ExchangeType = "direct";
+      });
+
+pigeon.AddConsumeHandler<OrderCreatedMessage>(
+    topic: "orders.created",
+    version: "1.0.0",
+    subscription: "billing.orders.created",
+    handler: (context, message) => Task.CompletedTask);
+
+pigeon.AddConsumeHandler<OrderCreatedMessage>(
+    topic: "orders.created",
+    version: "1.0.0",
+    subscription: "audit.orders.created",
+    handler: (context, message) => Task.CompletedTask);
+
+await producer.PublishAsync(
+    new OrderCreatedMessage(),
+    topic: "orders.exchange",
+    routingKey: "orders.created",
+    version: "1.0.0");
+```
+
+The Rabbit sample includes a runnable end-to-end version with one exchange, one routing key, two queues, and two bindings:
+
+```bash
+dotnet run --project samples/Pigeon.Messaging.Rabbit.Sample/Pigeon.Messaging.Rabbit.Sample.csproj
+```
+
+### Configure Topology Provisioning
+
+Pigeon defaults to manual topology provisioning, so infrastructure is expected to already exist unless configured otherwise. You can combine provisioning modes when your topology is partly known at startup and partly dynamic at runtime:
+
+```csharp
+config.SetTopologyProvisioningMode(
+    TopologyProvisioningMode.OnStartup |
+    TopologyProvisioningMode.OnPublish |
+    TopologyProvisioningMode.OnConsume);
+```
+
+- `Manual`: Pigeon only publishes and consumes.
+- `OnStartup`: creates known topology when the app starts.
+- `OnPublish`: creates publish topology when a dynamic publish route appears.
+- `OnConsume`: creates consume topology when a dynamic consumer appears.
+
+Pigeon keeps an in-memory registry of provisioned topology so the same queue, topic, subscription, exchange, or binding is not recreated on every publish or consume.
+
+### Configure Consumer Acknowledgements
+
+Consumer acknowledgements are configured globally. The default is `Manual`, which means Pigeon does not ack automatically:
+
+```csharp
+config.ConfigureConsumerExecution(execution =>
+{
+    execution.AcknowledgementMode = MessageAcknowledgementMode.Manual;
+    execution.MaxConcurrency = 8;
+    execution.QueueCapacity = 256;
+    execution.HandlerTimeout = TimeSpan.FromSeconds(30);
+});
+```
+
+Available acknowledgement modes:
+
+- `Manual`: the handler controls acknowledgement through `ConsumeContext.CompleteAsync()` or `ConsumeContext.FailAsync(...)`.
+- `OnReceive`: the adapter uses broker auto-ack behavior where available.
+- `OnHandlerSuccess`: Pigeon acknowledges only after the handler completes successfully.
+
+Manual acknowledgement works from consumer methods and hub consumers:
+
+```csharp
+pigeon.AddConsumeHandler<HelloWorldMessage>(
+    topic: "hello-world",
+    version: "1.0.0",
+    handler: async (context, message) =>
+    {
+        await DoWorkAsync(message);
+        await context.CompleteAsync();
+    });
 ```
 
 ### Add Interceptors

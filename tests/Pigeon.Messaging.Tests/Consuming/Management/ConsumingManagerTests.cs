@@ -25,6 +25,16 @@
 
         private static IOptions<GlobalSettings> CreateOptions() => Options.Create(new GlobalSettings { Domain = "test-domain" });
 
+        private static IOptions<GlobalSettings> CreateAutomaticAckOptions()
+            => Options.Create(new GlobalSettings
+            {
+                Domain = "test-domain",
+                ConsumerExecution = new ConsumerExecutionSettings
+                {
+                    AcknowledgementMode = MessageAcknowledgementMode.OnHandlerSuccess
+                }
+            });
+
         [Fact]
         public async Task StartAsync_RegistersEventsAndStartsAdapters()
         {
@@ -104,7 +114,112 @@
             // Allow some delay for async fire-and-forget
             await Task.Delay(100);
 
-            await dispatcher.Received(1).DispatchAsync("topic1", Arg.Any<RawPayload>(), Arg.Any<CancellationToken>());
+            await dispatcher.Received(1).DispatchAsync(
+                "topic1",
+                "Default",
+                Arg.Any<RawPayload>(),
+                Arg.Any<Func<CancellationToken, Task>>(),
+                Arg.Any<Func<Exception, CancellationToken, Task>>(),
+                Arg.Any<CancellationToken>());
+        }
+
+        [Fact]
+        public async Task MessageConsumed_Completes_Message_When_Dispatch_Succeeds()
+        {
+            var dispatcher = Substitute.For<IConsumingDispatcher>();
+            var adapter = Substitute.For<IMessageBrokerConsumingAdapter>();
+            var logger = Substitute.For<ILogger<ConsumingManager>>();
+            var completed = false;
+            var manager = new ConsumingManager(dispatcher, new[] { adapter }, CreateAutomaticAckOptions(), logger);
+
+            await manager.StartAsync();
+
+            adapter.MessageConsumed += Raise.EventWith(
+                adapter,
+                new MessageConsumedEventArgs(
+                    "topic1",
+                    RawJson,
+                    "Default",
+                    _ =>
+                    {
+                        completed = true;
+                        return Task.CompletedTask;
+                    },
+                    (_, _) => Task.CompletedTask));
+
+            await Task.Delay(100);
+            await manager.StopAsync();
+
+            Assert.True(completed);
+        }
+
+        [Fact]
+        public async Task MessageConsumed_Does_Not_Complete_Message_By_Default()
+        {
+            var dispatcher = Substitute.For<IConsumingDispatcher>();
+            var adapter = Substitute.For<IMessageBrokerConsumingAdapter>();
+            var logger = Substitute.For<ILogger<ConsumingManager>>();
+            var completed = false;
+            var manager = new ConsumingManager(dispatcher, new[] { adapter }, CreateOptions(), logger);
+
+            await manager.StartAsync();
+
+            adapter.MessageConsumed += Raise.EventWith(
+                adapter,
+                new MessageConsumedEventArgs(
+                    "topic1",
+                    RawJson,
+                    "Default",
+                    _ =>
+                    {
+                        completed = true;
+                        return Task.CompletedTask;
+                    },
+                    (_, _) => Task.CompletedTask));
+
+            await Task.Delay(100);
+            await manager.StopAsync();
+
+            Assert.False(completed);
+        }
+
+        [Fact]
+        public async Task MessageConsumed_Fails_Message_When_Dispatch_Fails()
+        {
+            var dispatcher = Substitute.For<IConsumingDispatcher>();
+            dispatcher
+                .DispatchAsync(
+                    Arg.Any<string>(),
+                    Arg.Any<string>(),
+                    Arg.Any<RawPayload>(),
+                    Arg.Any<Func<CancellationToken, Task>>(),
+                    Arg.Any<Func<Exception, CancellationToken, Task>>(),
+                    Arg.Any<CancellationToken>())
+                .Returns(_ => throw new InvalidOperationException("dispatch failed"));
+            var adapter = Substitute.For<IMessageBrokerConsumingAdapter>();
+            var logger = Substitute.For<ILogger<ConsumingManager>>();
+            var failed = false;
+            var manager = new ConsumingManager(dispatcher, new[] { adapter }, CreateAutomaticAckOptions(), logger);
+
+            await manager.StartAsync();
+
+            adapter.MessageConsumed += Raise.EventWith(
+                adapter,
+                new MessageConsumedEventArgs(
+                    "topic1",
+                    RawJson,
+                    "Default",
+                    _ => Task.CompletedTask,
+                    (_, _) =>
+                    {
+                        failed = true;
+                        return Task.CompletedTask;
+                    }));
+
+            await Task.Delay(100);
+            await manager.StopAsync();
+
+            Assert.True(failed);
         }
     }
 }

@@ -16,6 +16,15 @@
             => await DispatchAsync(topic, Configuration.ConsumerEndpoint.DefaultSubscription, rawPayload, cancellationToken);
 
         public async Task DispatchAsync(string topic, string subscription, RawPayload rawPayload, CancellationToken cancellationToken = default)
+            => await DispatchAsync(topic, subscription, rawPayload, null, null, cancellationToken);
+
+        public async Task DispatchAsync(
+            string topic,
+            string subscription,
+            RawPayload rawPayload,
+            Func<CancellationToken, Task> completeAsync,
+            Func<Exception, CancellationToken, Task> failAsync,
+            CancellationToken cancellationToken = default)
         {
             if(string.IsNullOrWhiteSpace(topic))
                 throw new ArgumentNullException(nameof(topic));
@@ -42,6 +51,7 @@
                     Message = rawPayload.GetMessage(configuration.MessageType, serializer),
                     RawMetadata = rawPayload.GetMetadata()
                 };
+                context.SetAcknowledgementCallbacks(completeAsync, failAsync);
 
                 foreach (var interceptor in interceptors)
                     await interceptor.Intercept(context);
