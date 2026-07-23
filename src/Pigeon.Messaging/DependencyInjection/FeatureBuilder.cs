@@ -54,7 +54,7 @@
         {
             output = default;
 
-            if(!MessagingSettings.MessageBrokers.TryGetValue(adapterKey, out var section))
+            if (MessagingSettings.MessageBrokers == null || !MessagingSettings.MessageBrokers.TryGetValue(adapterKey, out var section))
                 return false;
 
             output = section.Get<T>();
