@@ -42,9 +42,19 @@ Pigeon is a good fit for microservices, distributed architectures, and applicati
 
 ---
 
+## Supported Frameworks
+
+Pigeon 2.0 supports:
+
+- .NET 8
+- .NET 9
+- .NET 10
+
+---
+
 ## Installation
 
-Install the core package and one or more broker adapters:
+Install the core package, one broker adapter, and any optional outbox providers you need:
 
 ```bash
 dotnet add package Pigeon.Messaging
