@@ -6,6 +6,7 @@ namespace Pigeon.Messaging.Producing
     using Pigeon.Messaging.Outbox;
     using Pigeon.Messaging.Producing.Management;
     using System;
+    using System.Transactions;
 
     /// <summary>
     /// Provides a base implementation for a message producer with support for publish interceptors,
@@ -190,7 +191,8 @@ namespace Pigeon.Messaging.Producing
                 return;
             }
 
-            await _producingManager.PushAsync(payload, route, cancellationToken);
+            await PublishDirectAsync(
+                () => _producingManager.PushAsync(payload, route, cancellationToken));
         }
 
         private async ValueTask PublishRawCore<T>(T message, PublishingRoute route, CancellationToken cancellationToken = default) where T : class
@@ -201,7 +203,8 @@ namespace Pigeon.Messaging.Producing
                 return;
             }
 
-            await _producingManager.PushRawAsync(message, route, cancellationToken);
+            await PublishDirectAsync(
+                () => _producingManager.PushRawAsync(message, route, cancellationToken));
         }
 
         private async Task EnqueueOutboxAsync(object payload, PublishingRoute route, bool isRaw, CancellationToken cancellationToken)
@@ -219,5 +222,31 @@ namespace Pigeon.Messaging.Producing
 
         private bool IsOutboxEnabled()
             => _settings.Outbox?.Enabled == true;
+
+        private async ValueTask PublishDirectAsync(Func<ValueTask> publish)
+        {
+            if (publish == null)
+                throw new ArgumentNullException(nameof(publish));
+
+            if (Transaction.Current == null)
+            {
+                await publish();
+                return;
+            }
+
+            var behavior = _settings.Publishing?.AmbientTransactionBehavior
+                ?? AmbientTransactionPublishBehavior.SuppressTransaction;
+
+            if (behavior == AmbientTransactionPublishBehavior.Throw)
+                throw new InvalidOperationException("Direct broker publishing cannot run inside an ambient transaction with the current Pigeon publishing settings.");
+
+            using var scope = new TransactionScope(
+                TransactionScopeOption.Suppress,
+                TransactionScopeAsyncFlowOption.Enabled);
+
+            await publish();
+
+            scope.Complete();
+        }
     }
 }

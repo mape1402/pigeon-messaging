@@ -7,6 +7,7 @@ namespace Pigeon.Messaging.Tests.Producing
     using Pigeon.Messaging.Producing;
     using Pigeon.Messaging.Producing.Management;
     using System.Text.Json;
+    using System.Transactions;
 
     public class ProducerTests
     {
@@ -193,6 +194,123 @@ namespace Pigeon.Messaging.Tests.Producing
         }
 
         [Fact]
+        public async Task PublishAsync_Should_Suppress_Ambient_Transaction_For_Direct_Publish_By_Default()
+        {
+            Transaction observedTransaction = null;
+            var manager = Substitute.For<IProducingManager>();
+            manager
+                .PushAsync(Arg.Any<WrappedPayload<string>>(), Arg.Any<PublishingRoute>(), Arg.Any<CancellationToken>())
+                .Returns(_ =>
+                {
+                    observedTransaction = Transaction.Current;
+                    return ValueTask.CompletedTask;
+                });
+
+            var producer = new Producer(
+                Enumerable.Empty<IPublishInterceptor>(),
+                manager,
+                Options.Create(new GlobalSettings { Domain = "test-domain" }));
+
+            using var scope = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled);
+
+            await producer.PublishAsync("msg", "topic");
+
+            Assert.Null(observedTransaction);
+            Assert.NotNull(Transaction.Current);
+
+            scope.Complete();
+        }
+
+        [Fact]
+        public async Task PublishRawAsync_Should_Suppress_Ambient_Transaction_For_Direct_Publish_By_Default()
+        {
+            Transaction observedTransaction = null;
+            var manager = Substitute.For<IProducingManager>();
+            manager
+                .PushRawAsync("msg", Arg.Any<PublishingRoute>(), Arg.Any<CancellationToken>())
+                .Returns(_ =>
+                {
+                    observedTransaction = Transaction.Current;
+                    return ValueTask.CompletedTask;
+                });
+
+            var producer = new Producer(
+                Enumerable.Empty<IPublishInterceptor>(),
+                manager,
+                Options.Create(new GlobalSettings { Domain = "test-domain" }));
+
+            using var scope = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled);
+
+            await producer.PublishRawAsync("msg", "topic");
+
+            Assert.Null(observedTransaction);
+            Assert.NotNull(Transaction.Current);
+
+            scope.Complete();
+        }
+
+        [Fact]
+        public async Task PublishAsync_Should_Throw_In_Ambient_Transaction_When_Configured()
+        {
+            var manager = Substitute.For<IProducingManager>();
+            var producer = new Producer(
+                Enumerable.Empty<IPublishInterceptor>(),
+                manager,
+                Options.Create(new GlobalSettings
+                {
+                    Domain = "test-domain",
+                    Publishing =
+                    {
+                        AmbientTransactionBehavior = AmbientTransactionPublishBehavior.Throw
+                    }
+                }));
+
+            using var scope = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled);
+
+            await Assert.ThrowsAsync<InvalidOperationException>(async () => await producer.PublishAsync("msg", "topic"));
+            await manager.DidNotReceive().PushAsync(
+                Arg.Any<WrappedPayload<string>>(),
+                Arg.Any<PublishingRoute>(),
+                Arg.Any<CancellationToken>());
+
+            scope.Complete();
+        }
+
+        [Fact]
+        public async Task PublishAsync_Should_Not_Suppress_Ambient_Transaction_When_Outbox_Enabled()
+        {
+            var manager = Substitute.For<IProducingManager>();
+            var storage = new TestOutboxStorage();
+            var serializer = new TestSerializer();
+            var producer = new Producer(
+                Enumerable.Empty<IPublishInterceptor>(),
+                manager,
+                Options.Create(new GlobalSettings
+                {
+                    Domain = "test-domain",
+                    Publishing =
+                    {
+                        AmbientTransactionBehavior = AmbientTransactionPublishBehavior.Throw
+                    },
+                    Outbox = new OutboxSettings { Enabled = true }
+                }),
+                storage,
+                new OutboxMessageFactory(serializer));
+
+            using var scope = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled);
+
+            await producer.PublishAsync(new TestMessage { Text = "hello" }, "topic");
+
+            Assert.NotNull(storage.TransactionOnAdd);
+            await manager.DidNotReceive().PushAsync(
+                Arg.Any<WrappedPayload<TestMessage>>(),
+                Arg.Any<PublishingRoute>(),
+                Arg.Any<CancellationToken>());
+
+            scope.Complete();
+        }
+
+        [Fact]
         public async Task PublishAsync_Should_Throw_If_Message_Null()
         {
             var producer = GetProducer();
@@ -254,8 +372,11 @@ namespace Pigeon.Messaging.Tests.Producing
 
             public int SaveChangesCount { get; private set; }
 
+            public Transaction TransactionOnAdd { get; private set; }
+
             public Task AddAsync(OutboxMessage message, CancellationToken cancellationToken = default)
             {
+                TransactionOnAdd = Transaction.Current;
                 Messages.Add(message);
                 return Task.CompletedTask;
             }

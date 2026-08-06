@@ -195,6 +195,33 @@ await producer.PublishRawAsync(
     topic: "hello-world");
 ```
 
+### Publish Inside an Ambient Transaction
+
+When `PublishAsync` runs inside a `TransactionScope` and the transactional outbox is not enabled, Pigeon suppresses the ambient transaction for the direct broker publish by default. This keeps brokers that do not participate in the current transaction from trying to enlist in it:
+
+```csharp
+builder.Services.AddPigeon(builder.Configuration, config =>
+{
+    config.ConfigurePublishing(publishing =>
+    {
+        publishing.AmbientTransactionBehavior =
+            AmbientTransactionPublishBehavior.SuppressTransaction;
+    });
+});
+```
+
+Suppressing the transaction means the broker publish is not atomic with the surrounding business transaction. If the message must be consistent with database changes, enable the transactional outbox instead.
+
+Use `Throw` when you want Pigeon to fail fast if direct broker publishing happens inside an ambient transaction:
+
+```csharp
+config.ConfigurePublishing(publishing =>
+{
+    publishing.AmbientTransactionBehavior =
+        AmbientTransactionPublishBehavior.Throw;
+});
+```
+
 ### Route a Message to Multiple Consumers
 
 Adapters that support broker-side routing can publish one message and deliver it to multiple configured consumers. In RabbitMQ, for example, one publish can target an exchange and routing key while each consumer owns its queue and binding:
