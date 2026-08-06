@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ------
 
+## [v2.1.0] - 2026-08-05
+
+### Added
+
+- Configurable direct publish behavior when an ambient transaction is active through `ConfigurePublishing`.
+- `AmbientTransactionPublishBehavior.SuppressTransaction` for publishing directly to brokers outside the ambient transaction.
+- `AmbientTransactionPublishBehavior.Throw` for failing fast when direct broker publishing is attempted inside an ambient transaction.
+
+------
+
 ## [v2.0.0] - 2026-07-23
 
 ### Added

@@ -7,6 +7,7 @@
     using Pigeon.Messaging.Consuming.Configuration;
     using Pigeon.Messaging.Consuming.Dispatching;
     using Pigeon.Messaging.Contracts;
+    using Pigeon.Messaging.Producing;
     using System;
     using System.Linq;
     using System.Reflection;
@@ -106,6 +107,21 @@
             builder.AddFeature(fb => invoked = true);
 
             Assert.True(invoked);
+        }
+
+        [Fact]
+        public void ConfigurePublishing_Should_Update_Publishing_Settings()
+        {
+            var builder = CreateBuilder();
+
+            builder.ConfigurePublishing(settings =>
+            {
+                settings.AmbientTransactionBehavior = AmbientTransactionPublishBehavior.Throw;
+            });
+
+            Assert.Equal(
+                AmbientTransactionPublishBehavior.Throw,
+                builder.GlobalSettings.Publishing.AmbientTransactionBehavior);
         }
 
         [Fact]

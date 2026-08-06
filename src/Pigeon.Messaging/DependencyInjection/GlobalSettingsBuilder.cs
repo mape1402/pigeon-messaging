@@ -8,6 +8,7 @@
     using Pigeon.Messaging.Consuming.Management;
     using Pigeon.Messaging.Contracts;
     using Pigeon.Messaging.Outbox;
+    using Pigeon.Messaging.Producing;
     using Pigeon.Messaging.Topology;
     using System.Reflection;
     using System.Text.Json;
@@ -110,6 +111,20 @@
                 throw new ArgumentNullException(nameof(configure));
 
             configure(GlobalSettings.ConsumerExecution);
+            return this;
+        }
+
+        /// <summary>
+        /// Configures global publishing behavior.
+        /// </summary>
+        /// <param name="configure">The publishing configuration action.</param>
+        /// <returns>The same <see cref="GlobalSettingsBuilder"/> instance for chaining.</returns>
+        public GlobalSettingsBuilder ConfigurePublishing(Action<PublishingSettings> configure)
+        {
+            if (configure == null)
+                throw new ArgumentNullException(nameof(configure));
+
+            configure(GlobalSettings.Publishing);
             return this;
         }
 
