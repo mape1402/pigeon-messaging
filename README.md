@@ -64,6 +64,7 @@ dotnet add package Pigeon.Messaging.Azure.ServiceBus
 dotnet add package Pigeon.Messaging.Azure.EventGrid
 dotnet add package Pigeon.Messaging.Azure.EventHub
 dotnet add package Pigeon.Messaging.InMemory
+dotnet add package Pigeon.Testing
 dotnet add package Pigeon.Messaging.Outbox.EntityFrameworkCore
 dotnet add package Pigeon.Messaging.Outbox.InMemory
 ```
@@ -302,6 +303,58 @@ Run the in-memory sample:
 
 ```bash
 dotnet run --project samples/Pigeon.Messaging.InMemory.Sample/Pigeon.Messaging.InMemory.Sample.csproj
+```
+
+### Test Pigeon Without a Broker
+
+Use `Pigeon.Testing` when tests need to inspect producers, consumers, message dispatch, metadata, retries, and failure paths without RabbitMQ, Kafka, Azure Service Bus, or a full application host:
+
+```csharp
+services.AddPigeonTesting();
+services.AddPigeonTestingConsumers(typeof(CustomersHubConsumer).Assembly);
+```
+
+Publish messages into the in-memory testing transport and dispatch them when the test is ready:
+
+```csharp
+var pigeon = serviceProvider.GetRequiredService<IPigeonTestingTransport>();
+var customerId = Guid.NewGuid();
+
+await pigeon.PublishAsync(new CustomerCreatedMessage(customerId));
+
+pigeon.ShouldContainMessage<CustomerCreatedMessage>(
+    message => message.CustomerId == customerId);
+
+await pigeon.DispatchPendingAsync();
+
+pigeon.ShouldContainConsumedMessage<CustomerCreatedMessage>(
+    message => message.CustomerId == customerId);
+```
+
+`PublishAsync` uses the real Pigeon producer pipeline, so publish interceptors can enrich the payload before the testing transport captures it:
+
+```csharp
+var message = pigeon.ShouldContainMessage<CustomerCreatedMessage>();
+message.Headers["correlation-id"].ShouldBe(correlationId);
+message.CorrelationId.ShouldBe(correlationId);
+```
+
+Failure paths can be simulated without touching broker SDKs:
+
+```csharp
+pigeon.FailNext<CustomerCreatedMessage>(new TimeoutException());
+
+await pigeon.PublishAsync(new CustomerCreatedMessage(customerId));
+await pigeon.DispatchPendingAsync();
+
+pigeon.ShouldContainDeadLetterMessage<CustomerCreatedMessage>();
+pigeon.ShouldHaveConsumerFailure<CustomerCreatedMessage>();
+```
+
+External test hosts can expose a thin wrapper over the adapter-friendly registration:
+
+```csharp
+services.AddPigeonTestingAdapter(typeof(CustomersHubConsumer).Assembly);
 ```
 
 ### Use the In-Memory Outbox

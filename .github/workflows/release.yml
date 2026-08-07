@@ -108,9 +108,6 @@ jobs:
           TAG="${{ steps.version.outputs.tag }}"
           HEAD_SHA="$(git rev-parse HEAD)"
 
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-
           if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
             git fetch --force origin "refs/tags/$TAG:refs/tags/$TAG"
             TAG_SHA="$(git rev-list -n 1 "$TAG")"
