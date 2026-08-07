@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <GenerateDocumentationFile>True</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <PackageId>Pigeon.Testing</PackageId>
+    <Description>Testing utilities for Pigeon producers, consumers, dispatch, metadata, and failure paths without a real broker.</Description>
+    <PackageTags>pigeon messaging testing in-memory broker unit-tests consumers producers assertions</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MinVer" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" Version="9.0.6" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Pigeon.Messaging\Pigeon.Messaging.csproj" />
+  </ItemGroup>
+
+</Project>

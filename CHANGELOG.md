@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ------
 
+## [v2.2.0] - 2026-08-07
+
+### Added
+
+- `Pigeon.Testing` package for broker-free tests of producers, consumers, dispatch, headers, dead letters, and failure paths.
+- In-memory testing transport registration through `AddPigeonTesting`.
+- Assembly-based testing consumer registration through `AddPigeonTestingConsumers`.
+- Adapter-friendly testing registration through `AddPigeonTestingAdapter`.
+- Manual pending-message dispatch through `DispatchPendingAsync`.
+- Published, consumed, dead-letter, and failure inspection through `IPigeonTestingTransport`.
+- Testing assertions for published messages, consumed messages, dead-letter messages, consumer failures, metadata values, and simple equality.
+- Failure simulation through `FailNext<TMessage>(Exception)`.
+
+------
+
 ## [v2.1.0] - 2026-08-05
 
 ### Added
