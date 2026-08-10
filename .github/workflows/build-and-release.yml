@@ -1,0 +1,271 @@
+name: Build and Release
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'samples/**'
+      - '.github/workflows/**'
+      - '.release'
+      - 'CHANGELOG.md'
+      - 'README.md'
+      - '*.sln'
+      - '*.slnx'
+      - 'Directory.Build.props'
+      - 'Directory.Build.targets'
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'samples/**'
+      - '.github/workflows/**'
+      - '.release'
+      - 'CHANGELOG.md'
+      - 'README.md'
+      - '*.sln'
+      - '*.slnx'
+      - 'Directory.Build.props'
+      - 'Directory.Build.targets'
+
+env:
+  CHANGELOG_PATH: CHANGELOG.md
+  CONFIGURATION: Release
+  DOTNET_TARGET: .
+  NUGET_OUTPUT: ./nupkgs
+  NUGET_SOURCE: https://api.nuget.org/v3/index.json
+  NUGET_USER: ${{ vars.NUGET_USER }}
+  RELEASE_BRANCH_PREFIX: releases/
+  RELEASE_MARKER_PATH: .release
+  RELEASE_NOTES_PATH: release_notes.txt
+  RELEASE_BRANCH_PATTERN: ^releases/v[0-9]+\.[0-9]+\.[0-9]+$
+  RELEASE_TAG_PATTERN: ^v[0-9]+\.[0-9]+\.[0-9]+$
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            9.0.x
+            10.0.x
+
+      - name: Restore
+        run: dotnet restore "$DOTNET_TARGET"
+
+      - name: Build
+        run: dotnet build "$DOTNET_TARGET" --no-restore --configuration "$CONFIGURATION"
+
+      - name: Test
+        run: dotnet test "$DOTNET_TARGET" --no-build --configuration "$CONFIGURATION" --verbosity normal
+
+      - name: Resolve release marker
+        id: release
+        if: >
+          (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+          github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "should_release=false" >> "$GITHUB_OUTPUT"
+
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            BRANCH="${GITHUB_REF_NAME}"
+
+            if [[ ! "$BRANCH" =~ $RELEASE_BRANCH_PATTERN ]]; then
+              echo "Manual releases must run from a branch matching $RELEASE_BRANCH_PATTERN. Current branch: $BRANCH"
+              exit 1
+            fi
+
+            TAG="${BRANCH#"$RELEASE_BRANCH_PREFIX"}"
+          else
+            if ! git diff --name-only "${{ github.event.before }}" "${{ github.sha }}" | grep -qx "$RELEASE_MARKER_PATH"; then
+              echo "$RELEASE_MARKER_PATH did not change in this push. Skipping release."
+              exit 0
+            fi
+
+            if [[ ! -f "$RELEASE_MARKER_PATH" ]]; then
+              echo "$RELEASE_MARKER_PATH was removed. Skipping release."
+              exit 0
+            fi
+
+            NON_EMPTY_LINES="$(grep -cve '^[[:space:]]*$' "$RELEASE_MARKER_PATH" || true)"
+            if [[ "$NON_EMPTY_LINES" != "1" ]]; then
+              echo "$RELEASE_MARKER_PATH must contain exactly one non-empty line with the release tag, for example v1.0.0."
+              exit 1
+            fi
+
+            TAG="$(grep -ve '^[[:space:]]*$' "$RELEASE_MARKER_PATH" | tr -d '[:space:]')"
+          fi
+
+          if [[ ! "$TAG" =~ $RELEASE_TAG_PATTERN ]]; then
+            echo "Release tag must match $RELEASE_TAG_PATTERN. Current value: $TAG"
+            exit 1
+          fi
+
+          VERSION="${TAG#v}"
+          TAG_LINE=$(grep -m1 -E "^## \[($TAG|$VERSION)\]" "$CHANGELOG_PATH" || true)
+
+          if [[ -z "$TAG_LINE" ]]; then
+            echo "$CHANGELOG_PATH must contain a section for $TAG or $VERSION before releasing."
+            exit 1
+          fi
+
+          BRANCH="$RELEASE_BRANCH_PREFIX$TAG"
+
+          echo "should_release=true" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+          echo "tag_line=$TAG_LINE" >> "$GITHUB_OUTPUT"
+
+      - name: Create release branch
+        if: steps.release.outputs.should_release == 'true' && github.event_name == 'push'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          BRANCH="${{ steps.release.outputs.branch }}"
+          if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
+            echo "Release branch $BRANCH already exists. Skipping creation."
+            exit 0
+          fi
+
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git branch "$BRANCH" "${{ github.sha }}"
+          git push origin "refs/heads/$BRANCH"
+
+      - name: Prepare release notes
+        if: steps.release.outputs.should_release == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          TAG_LINE="${{ steps.release.outputs.tag_line }}"
+
+          awk -v tag_line="$TAG_LINE" '
+            $0 == tag_line { in_section=1; next }
+            in_section && /^## / { exit }
+            in_section
+          ' "$CHANGELOG_PATH" > "$RELEASE_NOTES_PATH"
+
+          if [[ ! -s "$RELEASE_NOTES_PATH" ]]; then
+            echo "$CHANGELOG_PATH section for ${{ steps.release.outputs.tag }} is empty."
+            exit 1
+          fi
+
+      - name: Pack NuGet packages
+        if: steps.release.outputs.should_release == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          while IFS= read -r -d '' project; do
+            dotnet pack "$project" \
+              --configuration "$CONFIGURATION" \
+              --output "$NUGET_OUTPUT" \
+              /p:Version=${{ steps.release.outputs.version }} \
+              /p:PackageVersion=${{ steps.release.outputs.version }} \
+              /p:MinVerVersionOverride=${{ steps.release.outputs.version }}
+          done < <(find src -name '*.csproj' -print0 | sort -z)
+
+      - name: Create or update release tag
+        if: steps.release.outputs.should_release == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          TAG="${{ steps.release.outputs.tag }}"
+          HEAD_SHA="$(git rev-parse HEAD)"
+
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            git fetch --force origin "refs/tags/$TAG:refs/tags/$TAG"
+            TAG_SHA="$(git rev-list -n 1 "$TAG")"
+
+            if [[ "$TAG_SHA" == "$HEAD_SHA" ]]; then
+              echo "Tag $TAG already points to $HEAD_SHA. Nothing to update."
+            else
+              echo "Tag $TAG points to $TAG_SHA and will be moved to $HEAD_SHA."
+              git tag --force "$TAG" "$HEAD_SHA"
+              git push --force origin "refs/tags/$TAG"
+            fi
+          else
+            git tag --force "$TAG" "$HEAD_SHA"
+            git push origin "refs/tags/$TAG"
+          fi
+
+      - name: Create GitHub Release
+        if: steps.release.outputs.should_release == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release.outputs.tag }}
+          name: ${{ steps.release.outputs.tag }}
+          body_path: ${{ env.RELEASE_NOTES_PATH }}
+          draft: false
+          prerelease: false
+          files: |
+            ${{ env.NUGET_OUTPUT }}/*.nupkg
+            ${{ env.NUGET_OUTPUT }}/*.snupkg
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Validate NuGet trusted publishing user
+        if: steps.release.outputs.should_release == 'true'
+        shell: bash
+        run: |
+          if [[ -z "$NUGET_USER" ]]; then
+            echo "NuGet publishing user is not configured."
+            exit 1
+          fi
+
+      - name: NuGet trusted publishing login
+        if: steps.release.outputs.should_release == 'true'
+        uses: NuGet/login@v1
+        id: nuget_login
+        with:
+          user: ${{ env.NUGET_USER }}
+
+      - name: Push to NuGet
+        if: steps.release.outputs.should_release == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          packages=("$NUGET_OUTPUT"/*.nupkg)
+          symbols=("$NUGET_OUTPUT"/*.snupkg)
+
+          if (( ${#packages[@]} == 0 )); then
+            echo "No .nupkg files were found in $NUGET_OUTPUT."
+            exit 1
+          fi
+
+          for package in "${packages[@]}"; do
+            dotnet nuget push "$package" -k ${{ steps.nuget_login.outputs.NUGET_API_KEY }} -s "$NUGET_SOURCE" --skip-duplicate
+          done
+
+          for symbol in "${symbols[@]}"; do
+            dotnet nuget push "$symbol" -k ${{ steps.nuget_login.outputs.NUGET_API_KEY }} -s "$NUGET_SOURCE" --skip-duplicate
+          done

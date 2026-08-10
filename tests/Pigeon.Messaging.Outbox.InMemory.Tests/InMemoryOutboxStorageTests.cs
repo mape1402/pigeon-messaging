@@ -1,115 +1,94 @@
 namespace Pigeon.Messaging.Outbox.InMemory.Tests
 {
-    using Microsoft.Extensions.DependencyInjection;
     using Microsoft.Extensions.Configuration;
+    using Microsoft.Extensions.DependencyInjection;
+    using Microsoft.Extensions.Hosting;
+    using Mule;
+    using Pigeon.Messaging.InMemory;
     using Pigeon.Messaging.Outbox;
     using Pigeon.Messaging.Outbox.InMemory;
+    using Pigeon.Messaging.Producing;
     using System.Transactions;
 
     public class InMemoryOutboxStorageTests
     {
         [Fact]
-        public async Task SaveChangesAsync_Should_Persist_Staged_Message()
+        public async Task PublishAsync_Should_Store_Message_As_Pending_Durable_Action_When_Immediate_Dispatch_Is_Disabled()
         {
-            var storage = CreateStorage(out var outbox);
-            var message = CreateMessage();
+            await using var provider = CreateServiceProvider(settings =>
+            {
+                settings.ImmediateDispatch = false;
+                settings.DispatchInterval = TimeSpan.FromMinutes(10);
+            });
+            var producer = provider.GetRequiredService<IProducer>();
 
-            await storage.AddAsync(message);
-            Assert.Empty(outbox.Messages);
+            await producer.PublishAsync(new InMemoryOutboxTestMessage { Text = "hello" }, "tests.outbox");
 
-            await storage.SaveChangesAsync();
-
+            var outbox = provider.GetRequiredService<IInMemoryOutbox>();
             var stored = Assert.Single(outbox.Messages);
-            Assert.Equal(message.Id, stored.Id);
+
             Assert.Equal(OutboxMessageStatus.Pending, stored.Status);
+            Assert.Equal("tests.outbox", stored.Topic);
+            Assert.Empty(provider.GetRequiredService<IInMemoryBroker>().PublishedMessages);
         }
 
         [Fact]
-        public async Task LockAsync_Should_Lock_Pending_Message()
+        public async Task PublishAsync_Should_Dispatch_To_InMemoryBroker_When_Hosted_Service_Runs()
         {
-            var storage = CreateStorage(out _);
-            var message = CreateMessage();
-            var now = DateTimeOffset.UtcNow;
+            await using var provider = CreateServiceProvider(settings =>
+            {
+                settings.DispatchInterval = TimeSpan.FromMinutes(10);
+                settings.CleanInterval = TimeSpan.FromMinutes(10);
+            });
+            await StartHostedServicesAsync(provider);
 
-            await storage.AddAsync(message);
-            await storage.SaveChangesAsync();
+            var producer = provider.GetRequiredService<IProducer>();
 
-            var locked = await storage.LockAsync(message.Id, TimeSpan.FromMinutes(5), now);
+            await producer.PublishAsync(new InMemoryOutboxTestMessage { Text = "hello" }, "tests.outbox");
 
-            Assert.NotNull(locked);
-            Assert.Equal(OutboxMessageStatus.Locked, locked.Status);
-            Assert.Equal(now, locked.LockedOnUtc);
+            var broker = provider.GetRequiredService<IInMemoryBroker>();
+            await WaitUntilAsync(() => broker.PublishedMessages.Count == 1);
+
+            var outbox = provider.GetRequiredService<IInMemoryOutbox>();
+            Assert.Equal(OutboxMessageStatus.Published, outbox.Messages.Single().Status);
+
+            await StopHostedServicesAsync(provider);
         }
 
         [Fact]
-        public async Task MarkFailedAsync_Should_Schedule_Retry_When_NextAttempt_Is_Provided()
+        public async Task Diagnostics_Should_Return_Message_Counts_From_Mule()
         {
-            var storage = CreateStorage(out var outbox);
-            var message = CreateMessage();
-            var nextAttempt = DateTimeOffset.UtcNow.AddMinutes(1);
-
-            await storage.AddAsync(message);
-            await storage.SaveChangesAsync();
-            await storage.MarkFailedAsync(message.Id, "boom", DateTimeOffset.UtcNow, nextAttempt);
-
-            var stored = outbox.Messages.Single();
-            Assert.Equal(OutboxMessageStatus.Pending, stored.Status);
-            Assert.Equal(1, stored.Attempts);
-            Assert.Equal("boom", stored.LastError);
-            Assert.Equal(nextAttempt, stored.NextAttemptOnUtc);
-        }
-
-        [Fact]
-        public async Task CleanPublishedAsync_Should_Delete_Published_Messages_Older_Than_Cutoff()
-        {
-            var storage = CreateStorage(out var outbox);
-            var oldPublished = CreateMessage();
-            var recentPublished = CreateMessage();
-
-            await storage.AddAsync(oldPublished);
-            await storage.AddAsync(recentPublished);
-            await storage.SaveChangesAsync();
-            await storage.MarkPublishedAsync(oldPublished.Id, DateTimeOffset.UtcNow.AddHours(-2));
-            await storage.MarkPublishedAsync(recentPublished.Id, DateTimeOffset.UtcNow);
-
-            var deleted = await storage.CleanPublishedAsync(DateTimeOffset.UtcNow.AddHours(-1), 10);
-
-            Assert.Equal(1, deleted);
-            Assert.DoesNotContain(outbox.Messages, message => message.Id == oldPublished.Id);
-            Assert.Contains(outbox.Messages, message => message.Id == recentPublished.Id);
-        }
-
-        [Fact]
-        public async Task Diagnostics_Should_Return_Message_Counts()
-        {
-            var provider = CreateServiceProvider();
-            var storage = provider.CreateScope().ServiceProvider.GetRequiredService<IOutboxStorage>();
+            await using var provider = CreateServiceProvider(settings =>
+            {
+                settings.ImmediateDispatch = false;
+                settings.DispatchInterval = TimeSpan.FromMinutes(10);
+            });
+            var mule = provider.GetRequiredService<IMuleClient>();
             var diagnostics = provider.GetRequiredService<IOutboxDiagnostics>();
-            var pending = CreateMessage();
-            var failed = CreateMessage();
 
-            await storage.AddAsync(pending);
-            await storage.AddAsync(failed);
-            await storage.SaveChangesAsync();
-            await storage.MarkFailedAsync(failed.Id, "failed", DateTimeOffset.UtcNow, null);
+            await mule.EnqueueAsync(PigeonOutboxActionKeys.Publish, CreateMessage());
 
             var snapshot = await diagnostics.GetSnapshotAsync();
 
             Assert.Equal(1, snapshot.PendingMessages);
-            Assert.Equal(1, snapshot.FailedMessages);
-            Assert.Equal("failed", snapshot.LastFailure);
+            Assert.Equal(0, snapshot.FailedMessages);
+            Assert.NotNull(snapshot.OldestPendingMessageOnUtc);
         }
 
         [Fact]
-        public async Task SaveChangesAsync_Should_Persist_After_Ambient_Transaction_Commits()
+        public async Task PublishAsync_Should_Persist_After_Ambient_Transaction_Commits()
         {
-            var storage = CreateStorage(out var outbox);
-            var message = CreateMessage();
+            await using var provider = CreateServiceProvider(settings =>
+            {
+                settings.ImmediateDispatch = false;
+                settings.DispatchInterval = TimeSpan.FromMinutes(10);
+            });
+            var producer = provider.GetRequiredService<IProducer>();
+            var outbox = provider.GetRequiredService<IInMemoryOutbox>();
 
             using (var transaction = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled))
             {
-                await storage.AddAsync(message);
-                await storage.SaveChangesAsync();
+                await producer.PublishAsync(new InMemoryOutboxTestMessage { Text = "hello" }, "tests.outbox");
 
                 Assert.Empty(outbox.Messages);
 
@@ -120,30 +99,27 @@ namespace Pigeon.Messaging.Outbox.InMemory.Tests
         }
 
         [Fact]
-        public async Task SaveChangesAsync_Should_Discard_When_Ambient_Transaction_Rolls_Back()
+        public async Task PublishAsync_Should_Discard_When_Ambient_Transaction_Rolls_Back()
         {
-            var storage = CreateStorage(out var outbox);
+            await using var provider = CreateServiceProvider(settings =>
+            {
+                settings.ImmediateDispatch = false;
+                settings.DispatchInterval = TimeSpan.FromMinutes(10);
+            });
+            var producer = provider.GetRequiredService<IProducer>();
 
             using (new TransactionScope(TransactionScopeAsyncFlowOption.Enabled))
             {
-                await storage.AddAsync(CreateMessage());
-                await storage.SaveChangesAsync();
+                await producer.PublishAsync(new InMemoryOutboxTestMessage { Text = "hello" }, "tests.outbox");
             }
 
-            Assert.Empty(outbox.Messages);
+            Assert.Empty(provider.GetRequiredService<IInMemoryOutbox>().Messages);
         }
 
-        private static IOutboxStorage CreateStorage(out IInMemoryOutbox outbox)
+        private static ServiceProvider CreateServiceProvider(Action<OutboxSettings> configureOutbox = null)
         {
-            var provider = CreateServiceProvider();
-            outbox = provider.GetRequiredService<IInMemoryOutbox>();
-            return provider.CreateScope().ServiceProvider.GetRequiredService<IOutboxStorage>();
-        }
-
-        private static ServiceProvider CreateServiceProvider()
-        {
-            var services = new ServiceCollection();
-            var configuration = new Microsoft.Extensions.Configuration.ConfigurationBuilder()
+            var services = new ServiceCollection().AddLogging();
+            var configuration = new ConfigurationBuilder()
                 .AddInMemoryCollection(new Dictionary<string, string>
                 {
                     ["Pigeon:Domain"] = "Tests"
@@ -152,7 +128,8 @@ namespace Pigeon.Messaging.Outbox.InMemory.Tests
 
             services.AddPigeon(configuration, builder =>
             {
-                builder.UseInMemoryOutbox();
+                builder.UseInMemoryBroker();
+                builder.UseInMemoryOutbox(configureOutbox);
             });
 
             return services.BuildServiceProvider();
@@ -168,5 +145,32 @@ namespace Pigeon.Messaging.Outbox.InMemory.Tests
                 RoutingKey = "topic",
                 CreatedOnUtc = DateTimeOffset.UtcNow
             };
+
+        private static async Task StartHostedServicesAsync(IServiceProvider provider)
+        {
+            foreach (var hostedService in provider.GetServices<IHostedService>())
+                await hostedService.StartAsync(CancellationToken.None);
+        }
+
+        private static async Task StopHostedServicesAsync(IServiceProvider provider)
+        {
+            foreach (var hostedService in provider.GetServices<IHostedService>().Reverse())
+                await hostedService.StopAsync(CancellationToken.None);
+        }
+
+        private static async Task WaitUntilAsync(Func<bool> condition)
+        {
+            var timeout = DateTimeOffset.UtcNow.AddSeconds(5);
+
+            while (DateTimeOffset.UtcNow < timeout)
+            {
+                if (condition())
+                    return;
+
+                await Task.Delay(50);
+            }
+
+            throw new TimeoutException("The expected in-memory broker state was not reached.");
+        }
     }
 }

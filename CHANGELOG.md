@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ------
 
+## [v2.3.0] - 2026-08-10
+
+### Added
+
+- Mule-backed transactional outbox dispatch for persisted Pigeon publish intents.
+- Durable outbox action bridge that dispatches stored Pigeon payloads through the existing producer pipeline.
+- Mule-backed in-memory outbox provider for tests and samples.
+- Mule-backed Entity Framework Core outbox provider for durable persistence, recovery, retry, cleanup, and diagnostics.
+
+### Changed
+
+- The transactional outbox now stores the final intercepted Pigeon payload as a Mule durable action before broker dispatch.
+- Entity Framework Core outbox persistence now uses Mule durable action entities in the application `DbContext` model.
+- Outbox diagnostics now read Mule durable action state while preserving Pigeon's `IOutboxDiagnostics` contract.
+
+------
+
 ## [v2.2.0] - 2026-08-07
 
 ### Added

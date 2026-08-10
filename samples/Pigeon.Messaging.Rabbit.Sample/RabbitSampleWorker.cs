@@ -5,6 +5,7 @@ namespace Pigeon.Messaging.Rabbit.Sample
     using Microsoft.Extensions.DependencyInjection;
     using Microsoft.Extensions.Hosting;
     using Microsoft.Extensions.Logging;
+    using Mule;
     using Pigeon.Messaging.Consuming.Dispatching;
     using Pigeon.Messaging.Contracts;
     using Pigeon.Messaging.Outbox;
@@ -64,8 +65,18 @@ namespace Pigeon.Messaging.Rabbit.Sample
                 if (_scenario.UseOutbox)
                 {
                     var dbContext = scope.ServiceProvider.GetRequiredService<RabbitSampleDbContext>();
-                    var pendingMessages = await dbContext.Set<OutboxMessage>().CountAsync(stoppingToken);
-                    _logger.LogInformation("Outbox message persisted. Pending outbox rows: {PendingMessages}", pendingMessages);
+                    var durableActions = await dbContext.Set<DurableAction>().CountAsync(stoppingToken);
+                    var diagnostics = await scope.ServiceProvider
+                        .GetRequiredService<IOutboxDiagnostics>()
+                        .GetSnapshotAsync(stoppingToken);
+
+                    _logger.LogInformation("Outbox message persisted as a Mule durable action. Durable actions: {DurableActions}", durableActions);
+                    _logger.LogInformation(
+                        "Outbox diagnostics: pending={Pending}, locked={Locked}, published={Published}, failed={Failed}",
+                        diagnostics.PendingMessages,
+                        diagnostics.LockedMessages,
+                        diagnostics.PublishedMessages,
+                        diagnostics.FailedMessages);
                 }
             }
 

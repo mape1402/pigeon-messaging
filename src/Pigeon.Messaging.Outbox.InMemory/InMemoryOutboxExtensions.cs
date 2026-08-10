@@ -2,6 +2,7 @@ namespace Microsoft.Extensions.DependencyInjection
 {
     using Pigeon.Messaging.Outbox;
     using Pigeon.Messaging.Outbox.InMemory;
+    using Mule.InMemory;
 
     /// <summary>
     /// Provides in-memory outbox registration helpers.
@@ -30,11 +31,12 @@ namespace Microsoft.Extensions.DependencyInjection
 
             builder.AddFeature(feature =>
             {
-                feature.Services.AddSingleton<InMemoryOutboxStore>();
-                feature.Services.AddSingleton<IInMemoryOutbox>(provider => provider.GetRequiredService<InMemoryOutboxStore>());
-                feature.Services.AddScoped<IOutboxStorage, InMemoryOutboxStorage>();
-                feature.Services.AddScoped<IOutboxDiagnostics, InMemoryOutboxDiagnostics>();
-                feature.Services.AddSingleton<IOutboxSchemaInitializer, InMemoryOutboxSchemaInitializer>();
+                feature.Services.AddMule(mule => mule
+                    .UseInMemory()
+                    .AddPigeonOutboxAction(builder.GlobalSettings.Outbox));
+
+                feature.Services.AddSingleton<IInMemoryOutbox, MuleInMemoryOutbox>();
+                feature.Services.AddSingleton<IOutboxDiagnostics, InMemoryOutboxDiagnostics>();
             });
 
             return builder;

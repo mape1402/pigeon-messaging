@@ -4,6 +4,7 @@ namespace Pigeon.Messaging.Outbox.EntityFrameworkCore.Tests
     using Microsoft.EntityFrameworkCore;
     using Microsoft.Extensions.Configuration;
     using Microsoft.Extensions.DependencyInjection;
+    using Mule;
     using Pigeon.Messaging.Contracts;
     using Pigeon.Messaging.Outbox;
     using Pigeon.Messaging.Producing;
@@ -23,7 +24,7 @@ namespace Pigeon.Messaging.Outbox.EntityFrameworkCore.Tests
             using var scope = provider.CreateScope();
             var dbContext = scope.ServiceProvider.GetRequiredService<TestDbContext>();
 
-            Assert.NotNull(dbContext.Model.FindEntityType(typeof(OutboxMessage)));
+            Assert.NotNull(dbContext.Model.FindEntityType(typeof(DurableAction)));
         }
 
         [Fact]
@@ -42,18 +43,17 @@ namespace Pigeon.Messaging.Outbox.EntityFrameworkCore.Tests
 
             await producer.PublishAsync(new TestMessage { Text = "hello" }, "orders.created");
 
-            var stored = await dbContext.Set<OutboxMessage>().SingleAsync();
-            var dispatchQueue = scope.ServiceProvider.GetRequiredService<IOutboxDispatchQueue>();
-            var queuedMessageId = await dispatchQueue.DequeueAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(1));
-            var payloadType = Type.GetType(stored.PayloadType, throwOnError: true);
+            var stored = await dbContext.Set<DurableAction>().SingleAsync();
+            var outboxMessage = DeserializeOutboxMessage(scope.ServiceProvider, stored);
+            var payloadType = Type.GetType(outboxMessage.PayloadType, throwOnError: true);
             var payload = (WrappedPayload<TestMessage>)JsonSerializer.Deserialize(
-                stored.Payload,
+                outboxMessage.Payload,
                 payloadType,
                 new JsonSerializerOptions { Converters = { new SemanticVersionJsonConverter() } });
 
-            Assert.Equal(stored.Id, queuedMessageId);
-            Assert.Equal(OutboxMessageStatus.Pending, stored.Status);
-            Assert.Equal("orders.created", stored.Topic);
+            Assert.Equal(PigeonOutboxActionKeys.Publish, stored.Key);
+            Assert.Equal(DurableActionStatus.Pending, stored.Status);
+            Assert.Equal("orders.created", outboxMessage.Topic);
             Assert.Equal("test-domain", payload.Domain);
             Assert.Equal("hello", payload.Message.Text);
             Assert.Equal("abc", payload.Metadata["correlationId"].ToString());
@@ -81,7 +81,7 @@ namespace Pigeon.Messaging.Outbox.EntityFrameworkCore.Tests
             using var verificationScope = provider.CreateScope();
             var verificationContext = verificationScope.ServiceProvider.GetRequiredService<TestDbContext>();
             Assert.Equal(0, await verificationContext.BusinessRecords.CountAsync());
-            Assert.Equal(1, await verificationContext.Set<OutboxMessage>().CountAsync());
+            Assert.Equal(1, await verificationContext.Set<DurableAction>().CountAsync());
         }
 
         [Fact]
@@ -109,7 +109,7 @@ namespace Pigeon.Messaging.Outbox.EntityFrameworkCore.Tests
                 using var verificationScope = provider.CreateScope();
                 var verificationContext = verificationScope.ServiceProvider.GetRequiredService<TestDbContext>();
 
-                Assert.Equal(20, await verificationContext.Set<OutboxMessage>().CountAsync());
+                Assert.Equal(20, await verificationContext.Set<DurableAction>().CountAsync());
             }
             finally
             {
@@ -130,11 +130,11 @@ namespace Pigeon.Messaging.Outbox.EntityFrameworkCore.Tests
             await dbContext.Database.EnsureCreatedAsync();
             var now = DateTimeOffset.UtcNow;
 
-            dbContext.Set<OutboxMessage>().AddRange(
-                CreateOutboxMessage(OutboxMessageStatus.Pending, now.AddMinutes(-5)),
-                CreateOutboxMessage(OutboxMessageStatus.Locked, now.AddMinutes(-4)),
-                CreateOutboxMessage(OutboxMessageStatus.Published, now.AddMinutes(-3)),
-                CreateOutboxMessage(OutboxMessageStatus.Failed, now.AddMinutes(-2), "last failure"));
+            dbContext.Set<DurableAction>().AddRange(
+                CreateDurableAction(DurableActionStatus.Pending, now.AddMinutes(-5)),
+                CreateDurableAction(DurableActionStatus.Locked, now.AddMinutes(-4)),
+                CreateDurableAction(DurableActionStatus.Completed, now.AddMinutes(-3)),
+                CreateDurableAction(DurableActionStatus.Failed, now.AddMinutes(-2), "last failure"));
             await dbContext.SaveChangesAsync();
 
             var diagnostics = scope.ServiceProvider.GetRequiredService<IOutboxDiagnostics>();
@@ -197,21 +197,26 @@ namespace Pigeon.Messaging.Outbox.EntityFrameworkCore.Tests
             }
         }
 
-        private static OutboxMessage CreateOutboxMessage(
-            OutboxMessageStatus status,
+        private static DurableAction CreateDurableAction(
+            DurableActionStatus status,
             DateTimeOffset createdOnUtc,
             string lastError = null)
             => new()
             {
                 Id = Guid.NewGuid(),
+                Key = PigeonOutboxActionKeys.Publish,
                 Payload = "{}",
-                PayloadType = typeof(TestMessage).AssemblyQualifiedName,
-                Topic = "orders.created",
-                RoutingKey = "orders.created",
+                PayloadType = typeof(OutboxMessage).AssemblyQualifiedName,
                 Status = status,
                 CreatedOnUtc = createdOnUtc,
                 LastError = lastError
             };
+
+        private static OutboxMessage DeserializeOutboxMessage(IServiceProvider serviceProvider, DurableAction action)
+        {
+            var serializer = serviceProvider.GetRequiredService<IMuleSerializer>();
+            return (OutboxMessage)serializer.Deserialize(action.Payload, typeof(OutboxMessage));
+        }
 
         private sealed class TestDbContext : DbContext
         {

@@ -51,9 +51,6 @@
             services.AddScoped<IProducer, Producer>();
             services.AddSingleton<IProducingManager, ProducingManager>();
             services.AddSingleton<OutboxMessageFactory>();
-            services.AddSingleton<IOutboxDispatchQueue, ChannelOutboxDispatchQueue>();
-            services.AddSingleton<IOutboxCommitNotifier, AmbientTransactionOutboxCommitNotifier>();
-            services.AddHostedService<OutboxDispatcherHostedService>();
 
             // Bind the MessagingSettings from configuration.
             var settings = configuration

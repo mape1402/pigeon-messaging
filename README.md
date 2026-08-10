@@ -27,6 +27,7 @@ Its goal is to simplify publishing and consuming messages through a unified, dec
 - **Configurable acknowledgement behavior** with manual ack, auto-ack on receive, or ack after a successful handler.
 - **Broker adapters** that keep business code independent from the transport.
 - **In-memory broker** for unit tests, examples, and modular monolith scenarios.
+- **Mule-backed transactional outbox** for durable broker dispatch with retry, recovery, cleanup, and diagnostics.
 - **Lightweight core package** with adapter packages for each broker.
 
 Pigeon is a good fit for microservices, distributed architectures, and applications that need reliable asynchronous communication without coupling domain code to a specific broker SDK.
@@ -359,7 +360,7 @@ services.AddPigeonTestingAdapter(typeof(CustomersHubConsumer).Assembly);
 
 ### Use the In-Memory Outbox
 
-Use the in-memory outbox provider for tests and samples that need the real Pigeon outbox pipeline without a database:
+Use the in-memory outbox provider for tests and samples that need the real Pigeon outbox pipeline without a database. This provider uses Mule's in-memory durable action engine under the Pigeon outbox API:
 
 ```csharp
 builder.Services.AddPigeon(builder.Configuration, config =>
@@ -369,7 +370,7 @@ builder.Services.AddPigeon(builder.Configuration, config =>
 });
 ```
 
-The provider stores outbox rows in the current process and exposes `IInMemoryOutbox` for assertions:
+The provider stores durable actions in the current process and exposes `IInMemoryOutbox` for assertions:
 
 ```csharp
 var outbox = serviceProvider.GetRequiredService<IInMemoryOutbox>();
@@ -456,7 +457,7 @@ public class CurrentMessageTenantProvider
 
 ### Configure the Transactional Outbox
 
-The Entity Framework Core outbox plugs into the producer pipeline. `PublishAsync` still runs publish interceptors in the current scope, builds the final `WrappedPayload`, and then stores that exact payload in the outbox instead of sending it directly to the broker. The background dispatcher later publishes the stored payload without running interceptors again.
+The transactional outbox plugs into the producer pipeline. `PublishAsync` still runs publish interceptors in the current scope, builds the final `WrappedPayload`, and then stores that exact payload in the outbox instead of sending it directly to the broker. Pigeon stores the publish intent as a Mule durable action and Mule handles retry, recovery scanning, immediate dispatch, and cleanup.
 
 This keeps scoped metadata, tracing, tenant data, and other publish interceptor output exactly as it existed at publish time. The dispatch step is intentionally separated from the original request scope.
 
@@ -486,7 +487,7 @@ builder.Services.AddPigeon(builder.Configuration, config =>
 });
 ```
 
-Pigeon adds its outbox entity to the EF model automatically, so the application `DbContext` does not need a `DbSet` or manual `OnModelCreating` code for Pigeon. With the default `AutoCreate` schema mode, Pigeon creates the outbox table when the app starts for supported relational providers.
+Pigeon adds Mule's durable action entity to the EF model automatically, so the application `DbContext` does not need a `DbSet` or manual `OnModelCreating` code for Pigeon. The schema can be created with EF migrations, `EnsureCreated`, or your normal database deployment process.
 
 Use `OutboxSchemaMode.Manual` when your database schema is created by migrations or another deployment process:
 
@@ -497,9 +498,9 @@ config.UseEntityFrameworkOutbox<AppDbContext>(outbox =>
 });
 ```
 
-When `ImmediateDispatch` is enabled, `PublishAsync` persists the outbox message immediately and queues it for background dispatch. If an ambient `TransactionScope` exists, Pigeon waits for that transaction to commit before queuing the message. If the transaction rolls back, nothing is queued and the stored row rolls back with the transaction.
+When `ImmediateDispatch` is enabled, `PublishAsync` persists the outbox message as a Mule durable action and queues it for background dispatch. If an ambient `TransactionScope` exists, dispatch waits until the transaction commits. If the transaction rolls back, the durable action rolls back with it and nothing is dispatched.
 
-`DispatchInterval` is a recovery interval, not the happy path. It periodically scans the database for pending or retryable messages and puts them back into the in-memory queue if the immediate dispatch path failed or the process restarted.
+`DispatchInterval` is a recovery interval, not the happy path. Mule periodically scans for pending or retryable actions and puts them back into the in-memory dispatch queue if the immediate dispatch path failed or the process restarted.
 
 Without an ambient transaction, the message is stored and queued immediately:
 
@@ -524,7 +525,7 @@ await producer.PublishAsync(
 scope.Complete();
 ```
 
-The EF outbox storage uses its own `DbContext` instance so it does not flush pending application changes by accident. Transactional consistency with the application work is provided by the ambient transaction, so the selected database provider must support `TransactionScope`.
+The EF outbox uses its own `DbContext` instance so it does not flush pending application changes by accident. Transactional consistency with the application work is provided by the ambient transaction, so the selected database provider must support `TransactionScope`.
 
 Raw messages are supported too:
 
@@ -542,7 +543,7 @@ dotnet run --project samples/Pigeon.Messaging.TransactionScope.Sample/Pigeon.Mes
 
 ### Inspect Outbox State
 
-When the EF outbox is registered, Pigeon also exposes `IOutboxDiagnostics` so an application can build health checks, dashboards, or support endpoints without querying the outbox table directly:
+When an outbox provider is registered, Pigeon exposes `IOutboxDiagnostics` so an application can build health checks, dashboards, or support endpoints without querying Mule's durable action table directly:
 
 ```csharp
 public class OutboxHealthProbe
