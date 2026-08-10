@@ -4,6 +4,7 @@ namespace Microsoft.Extensions.DependencyInjection
     using Microsoft.Extensions.DependencyInjection.Extensions;
     using Pigeon.Messaging.Outbox.EntityFrameworkCore;
     using Pigeon.Messaging.Outbox;
+    using Mule.EntityFrameworkCore;
 
     /// <summary>
     /// Provides Entity Framework Core outbox registration helpers.
@@ -33,10 +34,12 @@ namespace Microsoft.Extensions.DependencyInjection
 
             builder.AddFeature(feature =>
             {
+                feature.Services.AddMule(mule => mule
+                    .UseEntityFrameworkCore<TDbContext>()
+                    .AddPigeonOutboxAction(builder.GlobalSettings.Outbox));
+
                 feature.Services.AddScoped<IOutboxDbContextFactory<TDbContext>, OutboxDbContextFactory<TDbContext>>();
-                feature.Services.AddScoped<IOutboxStorage, EntityFrameworkOutboxStorage<TDbContext>>();
                 feature.Services.AddScoped<IOutboxDiagnostics, EntityFrameworkOutboxDiagnostics<TDbContext>>();
-                feature.Services.AddScoped<IOutboxSchemaInitializer, EntityFrameworkOutboxSchemaInitializer<TDbContext>>();
                 feature.Services.AddPigeonOutboxDbContextOptions<TDbContext>();
             });
 

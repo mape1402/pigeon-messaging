@@ -1,11 +1,11 @@
 namespace Pigeon.Messaging.Producing
 {
     using Microsoft.Extensions.Options;
+    using Mule;
     using Pigeon.Messaging;
     using Pigeon.Messaging.Contracts;
     using Pigeon.Messaging.Outbox;
     using Pigeon.Messaging.Producing.Management;
-    using System;
     using System.Transactions;
 
     /// <summary>
@@ -20,6 +20,7 @@ namespace Pigeon.Messaging.Producing
         private readonly IOutboxStorage _outboxStorage;
         private readonly OutboxMessageFactory _outboxMessageFactory;
         private readonly IOutboxCommitNotifier _outboxCommitNotifier;
+        private readonly IMuleClient _muleClient;
 
         /// <summary>
         /// Initializes a new producer without outbox persistence.
@@ -28,7 +29,7 @@ namespace Pigeon.Messaging.Producing
         /// <param name="producingManager">The producing manager that dispatches messages to broker adapters.</param>
         /// <param name="settings">The global Pigeon settings.</param>
         public Producer(IEnumerable<IPublishInterceptor> interceptors, IProducingManager producingManager, IOptions<GlobalSettings> settings)
-            : this(interceptors, producingManager, settings, null, null)
+            : this(interceptors, producingManager, settings, (OutboxMessageFactory)null, (IMuleClient)null)
         {
         }
 
@@ -46,7 +47,7 @@ namespace Pigeon.Messaging.Producing
             IOptions<GlobalSettings> settings,
             IOutboxStorage outboxStorage,
             OutboxMessageFactory outboxMessageFactory)
-            : this(interceptors, producingManager, settings, outboxStorage, outboxMessageFactory, null)
+            : this(interceptors, producingManager, settings, outboxStorage, outboxMessageFactory, null, null)
         {
         }
 
@@ -66,6 +67,36 @@ namespace Pigeon.Messaging.Producing
             IOutboxStorage outboxStorage,
             OutboxMessageFactory outboxMessageFactory,
             IOutboxCommitNotifier outboxCommitNotifier)
+            : this(interceptors, producingManager, settings, outboxStorage, outboxMessageFactory, outboxCommitNotifier, null)
+        {
+        }
+
+        /// <summary>
+        /// Initializes a new producer with Mule-backed outbox persistence.
+        /// </summary>
+        /// <param name="interceptors">The publish interceptors executed before wrapped publishing.</param>
+        /// <param name="producingManager">The producing manager that dispatches messages to broker adapters.</param>
+        /// <param name="settings">The global Pigeon settings.</param>
+        /// <param name="outboxMessageFactory">The factory that creates persisted outbox messages.</param>
+        /// <param name="muleClient">The durable action client used when outbox is enabled.</param>
+        public Producer(
+            IEnumerable<IPublishInterceptor> interceptors,
+            IProducingManager producingManager,
+            IOptions<GlobalSettings> settings,
+            OutboxMessageFactory outboxMessageFactory,
+            IMuleClient muleClient)
+            : this(interceptors, producingManager, settings, null, outboxMessageFactory, null, muleClient)
+        {
+        }
+
+        private Producer(
+            IEnumerable<IPublishInterceptor> interceptors,
+            IProducingManager producingManager,
+            IOptions<GlobalSettings> settings,
+            IOutboxStorage outboxStorage,
+            OutboxMessageFactory outboxMessageFactory,
+            IOutboxCommitNotifier outboxCommitNotifier,
+            IMuleClient muleClient)
         {
             _interceptors = interceptors ?? throw new ArgumentNullException(nameof(interceptors));
             _producingManager = producingManager ?? throw new ArgumentNullException(nameof(producingManager));
@@ -73,6 +104,7 @@ namespace Pigeon.Messaging.Producing
             _outboxStorage = outboxStorage;
             _outboxMessageFactory = outboxMessageFactory;
             _outboxCommitNotifier = outboxCommitNotifier;
+            _muleClient = muleClient;
         }
 
         /// <summary>
@@ -209,8 +241,20 @@ namespace Pigeon.Messaging.Producing
 
         private async Task EnqueueOutboxAsync(object payload, PublishingRoute route, bool isRaw, CancellationToken cancellationToken)
         {
+            if (_muleClient == null || _outboxMessageFactory == null)
+            {
+                await EnqueueLegacyOutboxAsync(payload, route, isRaw, cancellationToken);
+                return;
+            }
+
+            var message = _outboxMessageFactory.Create(payload, route, isRaw);
+            await _muleClient.EnqueueAsync(PigeonOutboxActionKeys.Publish, message, cancellationToken);
+        }
+
+        private async Task EnqueueLegacyOutboxAsync(object payload, PublishingRoute route, bool isRaw, CancellationToken cancellationToken)
+        {
             if (_outboxStorage == null || _outboxMessageFactory == null)
-                throw new InvalidOperationException("Pigeon outbox is enabled but no outbox storage has been registered.");
+                throw new InvalidOperationException("Pigeon outbox is enabled but Mule durable actions have not been registered.");
 
             var message = _outboxMessageFactory.Create(payload, route, isRaw);
             await _outboxStorage.AddAsync(message, cancellationToken);

@@ -48,8 +48,18 @@ dotnet run --project samples\Pigeon.Messaging.Rabbit.Sample\Pigeon.Messaging.Rab
 
 ## Outbox mode
 
-Use `Sample:UseOutbox` to persist the final Pigeon payload in an EF Core SQLite outbox before it is dispatched to Rabbit. The sample uses the same publish flow, stores the outbox message during `PublishAsync`, queues it for immediate in-memory dispatch after commit, and waits until both Rabbit queues receive it.
+Use `Sample:UseOutbox` to persist the final Pigeon payload in an EF Core SQLite outbox before it is dispatched to Rabbit.
+
+In this mode the sample demonstrates the current Pigeon outbox design:
+
+- `PublishAsync` still executes publish interceptors and creates the final Pigeon payload.
+- Pigeon stores that payload as a Mule durable action in SQLite.
+- Mule queues the durable action for immediate background dispatch.
+- If dispatch fails or the process restarts, Mule recovers pending/retryable actions with the configured interval.
+- `IOutboxDiagnostics` reports pending, locked, published, and failed outbox actions without querying the table directly.
 
 ```powershell
 dotnet run --project samples\Pigeon.Messaging.Rabbit.Sample\Pigeon.Messaging.Rabbit.Sample.csproj -- --Sample:UseOutbox true --Sample:AcknowledgementMode OnHandlerSuccess
 ```
+
+The console logs include the SQLite database path, the durable action count, and the outbox diagnostics snapshot.

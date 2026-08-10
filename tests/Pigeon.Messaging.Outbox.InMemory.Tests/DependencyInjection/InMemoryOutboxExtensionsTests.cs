@@ -2,6 +2,8 @@ namespace Pigeon.Messaging.Outbox.InMemory.Tests.DependencyInjection
 {
     using Microsoft.Extensions.Configuration;
     using Microsoft.Extensions.DependencyInjection;
+    using Mule;
+    using Mule.InMemory;
     using NSubstitute;
     using Pigeon.Messaging.Consuming.Configuration;
     using Pigeon.Messaging.Outbox;
@@ -21,9 +23,9 @@ namespace Pigeon.Messaging.Outbox.InMemory.Tests.DependencyInjection
             Assert.True(builder.GlobalSettings.Outbox.Enabled);
             Assert.Equal(OutboxSchemaMode.Manual, builder.GlobalSettings.Outbox.SchemaMode);
             Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IInMemoryOutbox));
-            Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IOutboxStorage));
             Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IOutboxDiagnostics));
-            Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IOutboxSchemaInitializer));
+            Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IMuleClient));
+            Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IInMemoryMule));
         }
 
         [Fact]
