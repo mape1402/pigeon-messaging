@@ -165,6 +165,6 @@
                 : TimeSpan.FromSeconds(30);
 
         private MessageAcknowledgementMode GetAcknowledgementMode()
-            => _globalSettings.ConsumerExecution?.AcknowledgementMode ?? MessageAcknowledgementMode.Manual;
+            => _globalSettings.ConsumerExecution?.AcknowledgementMode ?? MessageAcknowledgementMode.OnHandlerSuccess;
     }
 }

@@ -7,9 +7,9 @@ namespace Pigeon.Messaging.Consuming.Management
     {
         /// <summary>
         /// Gets or sets who acknowledges broker messages after dispatch.
-        /// Defaults to <see cref="MessageAcknowledgementMode.Manual"/>.
+        /// Defaults to <see cref="MessageAcknowledgementMode.OnHandlerSuccess"/>.
         /// </summary>
-        public MessageAcknowledgementMode AcknowledgementMode { get; set; } = MessageAcknowledgementMode.Manual;
+        public MessageAcknowledgementMode AcknowledgementMode { get; set; } = MessageAcknowledgementMode.OnHandlerSuccess;
 
         /// <summary>
         /// Gets or sets the maximum number of messages dispatched concurrently.
