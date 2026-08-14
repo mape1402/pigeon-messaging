@@ -5,6 +5,7 @@
     using Pigeon.Messaging.Consuming.Configuration;
     using Pigeon.Messaging.Consuming.Dispatching;
     using Pigeon.Messaging.Topology;
+    using System.Collections.Concurrent;
     using System.Threading.Channels;
 
     internal class ConsumingManager : IConsumingManager
@@ -18,6 +19,7 @@
 
         private CancellationToken _backgroundCancellationToken;
         private Channel<MessageConsumedEventArgs> _messageQueue;
+        private readonly ConcurrentDictionary<Guid, Task> _inFlightDispatches = new();
         private CancellationTokenSource _workerCancellationTokenSource;
         private Task[] _workers = Array.Empty<Task>();
 
@@ -50,15 +52,14 @@
         {
             _backgroundCancellationToken = cancellationToken;
             _workerCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            _messageQueue = Channel.CreateBounded<MessageConsumedEventArgs>(new BoundedChannelOptions(GetQueueCapacity())
-            {
-                FullMode = BoundedChannelFullMode.Wait,
-                SingleReader = false,
-                SingleWriter = false
-            });
-            _workers = Enumerable.Range(0, GetMaxConcurrency())
-                .Select(_ => Task.Run(() => ProcessMessagesAsync(_workerCancellationTokenSource.Token), CancellationToken.None))
-                .ToArray();
+            _messageQueue = CreateMessageQueue();
+
+            var maxConcurrency = GetMaxConcurrency();
+            _workers = maxConcurrency.HasValue
+                ? Enumerable.Range(0, maxConcurrency.Value)
+                    .Select(_ => Task.Run(() => ProcessMessagesAsync(_workerCancellationTokenSource.Token), CancellationToken.None))
+                    .ToArray()
+                : new[] { Task.Run(() => ProcessMessagesWithoutConcurrencyLimitAsync(_workerCancellationTokenSource.Token), CancellationToken.None) };
 
             foreach (var endpoint in _consumingConfigurator.GetAllEndpoints())
                 await _topologyProvisioningService.EnsureConsumeTopologyAsync(endpoint, cancellationToken);
@@ -80,6 +81,9 @@
 
             if (_workers.Length > 0)
                 await Task.WhenAll(_workers);
+
+            if (!_inFlightDispatches.IsEmpty)
+                await Task.WhenAll(_inFlightDispatches.Values);
 
             foreach (var adapter in _messageBrokerAdapters)
             {
@@ -113,6 +117,25 @@
         {
             await foreach (var message in _messageQueue.Reader.ReadAllAsync(cancellationToken))
                 await DispatchMessageAsync(message, cancellationToken);
+        }
+
+        private async Task ProcessMessagesWithoutConcurrencyLimitAsync(CancellationToken cancellationToken)
+        {
+            await foreach (var message in _messageQueue.Reader.ReadAllAsync(cancellationToken))
+                TrackDispatch(message, cancellationToken);
+        }
+
+        private void TrackDispatch(MessageConsumedEventArgs message, CancellationToken cancellationToken)
+        {
+            var id = Guid.NewGuid();
+            var dispatch = Task.Run(() => DispatchMessageAsync(message, cancellationToken), CancellationToken.None);
+
+            _inFlightDispatches.TryAdd(id, dispatch);
+            _ = dispatch.ContinueWith(
+                _ => _inFlightDispatches.TryRemove(id, out _),
+                CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
         }
 
         private async Task DispatchMessageAsync(MessageConsumedEventArgs e, CancellationToken cancellationToken)
@@ -153,11 +176,40 @@
             }
         }
 
-        private int GetMaxConcurrency()
-            => Math.Max(1, _globalSettings.ConsumerExecution?.MaxConcurrency ?? Environment.ProcessorCount);
+        private Channel<MessageConsumedEventArgs> CreateMessageQueue()
+        {
+            var queueCapacity = GetQueueCapacity();
 
-        private int GetQueueCapacity()
-            => Math.Max(1, _globalSettings.ConsumerExecution?.QueueCapacity ?? 1_000);
+            if (queueCapacity.HasValue)
+            {
+                return Channel.CreateBounded<MessageConsumedEventArgs>(new BoundedChannelOptions(queueCapacity.Value)
+                {
+                    FullMode = BoundedChannelFullMode.Wait,
+                    SingleReader = false,
+                    SingleWriter = false
+                });
+            }
+
+            return Channel.CreateUnbounded<MessageConsumedEventArgs>(new UnboundedChannelOptions
+            {
+                SingleReader = false,
+                SingleWriter = false
+            });
+        }
+
+        private int? GetMaxConcurrency()
+        {
+            var maxConcurrency = _globalSettings.ConsumerExecution?.MaxConcurrency;
+
+            return maxConcurrency > 0 ? maxConcurrency.Value : null;
+        }
+
+        private int? GetQueueCapacity()
+        {
+            var queueCapacity = _globalSettings.ConsumerExecution?.QueueCapacity;
+
+            return queueCapacity > 0 ? queueCapacity.Value : null;
+        }
 
         private TimeSpan GetHandlerTimeout()
             => _globalSettings.ConsumerExecution?.HandlerTimeout > TimeSpan.Zero

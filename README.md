@@ -406,8 +406,6 @@ Consumer acknowledgements are configured globally. The default is `Manual`, whic
 config.ConfigureConsumerExecution(execution =>
 {
     execution.AcknowledgementMode = MessageAcknowledgementMode.Manual;
-    execution.MaxConcurrency = 8;
-    execution.QueueCapacity = 256;
     execution.HandlerTimeout = TimeSpan.FromSeconds(30);
 });
 ```
@@ -417,6 +415,18 @@ Available acknowledgement modes:
 - `Manual`: the handler controls acknowledgement through `ConsumeContext.CompleteAsync()` or `ConsumeContext.FailAsync(...)`.
 - `OnReceive`: the adapter uses broker auto-ack behavior where available.
 - `OnHandlerSuccess`: Pigeon acknowledges only after the handler completes successfully.
+
+By default, Pigeon does not cap consumer dispatch concurrency based on CPU cores. Delivery is broker-driven and handlers are dispatched as messages arrive. If an application needs to protect a dependency such as a database, HTTP API, or downstream service, set an explicit limit:
+
+```csharp
+config.ConfigureConsumerExecution(execution =>
+{
+    execution.MaxConcurrency = 128;
+    execution.QueueCapacity = 10_000;
+});
+```
+
+When `MaxConcurrency` is `null` or less than `1`, Pigeon does not apply an internal concurrency limit. When `QueueCapacity` is `null` or less than `1`, the internal dispatch queue is unbounded. RabbitMQ prefetch is only configured when `MaxConcurrency` is explicitly set.
 
 Manual acknowledgement works from consumer methods and hub consumers:
 
