@@ -31,6 +31,7 @@
         /// </summary>
         /// <param name="connectionProvider">Provider for RabbitMQ connections and channels.</param>
         /// <param name="serializer">Serializer for converting messages to JSON format.</param>
+        /// <param name="settings">RabbitMQ adapter settings.</param>
         /// <param name="logger">Logger instance for error and info logging.</param>
         /// <exception cref="ArgumentNullException">Thrown if any dependency is null.</exception>
         public RabbitProducingAdapter(IConnectionProvider connectionProvider, ISerializer serializer, IOptions<RabbitSettings> settings, ILogger<RabbitProducingAdapter> logger)

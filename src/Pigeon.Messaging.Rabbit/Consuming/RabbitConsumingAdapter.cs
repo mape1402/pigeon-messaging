@@ -36,6 +36,7 @@
         /// <param name="connectionProvider">Provider for RabbitMQ connections and channels.</param>
         /// <param name="consumingConfigurator">Configuration provider that supplies topics to consume.</param>
         /// <param name="globalSettings">Global messaging settings for domain and configuration.</param>
+        /// <param name="settings">RabbitMQ adapter settings.</param>
         /// <param name="logger">Logger for error and informational messages.</param>
         /// <exception cref="ArgumentNullException">Thrown if any dependency is null.</exception>
         public RabbitConsumingAdapter(IConnectionProvider connectionProvider, IConsumingConfigurator consumingConfigurator,
