@@ -156,6 +156,42 @@
         }
 
         [Fact]
+        public async Task Should_Not_Configure_Prefetch_When_MaxConcurrency_Is_Not_Set()
+        {
+            var topic = "topic1";
+            _consumingConfigurator.GetAllTopics().Returns(new[] { topic });
+            _connectionProvider.CreateChannelAsync(Arg.Any<CancellationToken>()).Returns(_channel);
+
+            var adapter = new RabbitConsumingAdapter(_connectionProvider, _consumingConfigurator, _options, _rabbitOptions, _logger);
+
+            await adapter.StartConsumeAsync();
+
+            await _channel.DidNotReceive().BasicQosAsync(Arg.Any<uint>(), Arg.Any<ushort>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
+        }
+
+        [Fact]
+        public async Task Should_Configure_Prefetch_When_MaxConcurrency_Is_Set()
+        {
+            var topic = "topic1";
+            var options = Options.Create(new GlobalSettings
+            {
+                Domain = "test",
+                ConsumerExecution = new ConsumerExecutionSettings
+                {
+                    MaxConcurrency = 32
+                }
+            });
+            _consumingConfigurator.GetAllTopics().Returns(new[] { topic });
+            _connectionProvider.CreateChannelAsync(Arg.Any<CancellationToken>()).Returns(_channel);
+
+            var adapter = new RabbitConsumingAdapter(_connectionProvider, _consumingConfigurator, options, _rabbitOptions, _logger);
+
+            await adapter.StartConsumeAsync();
+
+            await _channel.Received(1).BasicQosAsync(0, 32, false, Arg.Any<CancellationToken>());
+        }
+
+        [Fact]
         public async Task Should_Bind_Queue_To_Configured_Exchange()
         {
             // Arrange

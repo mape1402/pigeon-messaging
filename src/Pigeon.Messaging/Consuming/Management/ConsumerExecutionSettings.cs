@@ -1,7 +1,7 @@
 namespace Pigeon.Messaging.Consuming.Management
 {
     /// <summary>
-    /// Controls bounded consumer dispatch concurrency.
+    /// Controls consumer dispatch execution.
     /// </summary>
     public sealed class ConsumerExecutionSettings
     {
@@ -13,13 +13,15 @@ namespace Pigeon.Messaging.Consuming.Management
 
         /// <summary>
         /// Gets or sets the maximum number of messages dispatched concurrently.
+        /// When null, Pigeon does not apply an internal concurrency limit and lets the broker or adapter drive delivery.
         /// </summary>
-        public int MaxConcurrency { get; set; } = Environment.ProcessorCount;
+        public int? MaxConcurrency { get; set; }
 
         /// <summary>
         /// Gets or sets the in-memory queue capacity used before applying backpressure.
+        /// When null, Pigeon uses an unbounded dispatch queue.
         /// </summary>
-        public int QueueCapacity { get; set; } = 1_000;
+        public int? QueueCapacity { get; set; }
 
         /// <summary>
         /// Gets or sets the maximum time allowed for each handler dispatch.

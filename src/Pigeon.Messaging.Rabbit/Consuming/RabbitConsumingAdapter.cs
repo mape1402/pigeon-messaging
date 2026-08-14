@@ -111,9 +111,10 @@
 
             await _topologyProvisioningService.EnsureConsumeTopologyAsync(endpoint, cancellationToken);
             var autoAck = GetAcknowledgementMode() == MessageAcknowledgementMode.OnReceive;
+            var maxConcurrency = GetMaxConcurrency();
 
-            if (!autoAck)
-                await channel.BasicQosAsync(0, (ushort)Math.Max(1, _globalSettings.ConsumerExecution?.MaxConcurrency ?? Environment.ProcessorCount), false, cancellationToken);
+            if (!autoAck && maxConcurrency.HasValue)
+                await channel.BasicQosAsync(0, maxConcurrency.Value, false, cancellationToken);
 
             var consumer = new AsyncEventingBasicConsumer(channel);
 
@@ -185,5 +186,15 @@
 
         private MessageAcknowledgementMode GetAcknowledgementMode()
             => _globalSettings.ConsumerExecution?.AcknowledgementMode ?? MessageAcknowledgementMode.Manual;
+
+        private ushort? GetMaxConcurrency()
+        {
+            var maxConcurrency = _globalSettings.ConsumerExecution?.MaxConcurrency;
+
+            if (maxConcurrency is not > 0)
+                return null;
+
+            return (ushort)Math.Min(ushort.MaxValue, maxConcurrency.Value);
+        }
     }
 }

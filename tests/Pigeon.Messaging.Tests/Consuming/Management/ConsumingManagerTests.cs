@@ -221,5 +221,116 @@
 
             Assert.True(failed);
         }
+
+        [Fact]
+        public async Task MessageConsumed_Should_Not_Limit_Concurrency_By_Default()
+        {
+            var totalMessages = 5;
+            var started = 0;
+            var active = 0;
+            var allStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var dispatcher = Substitute.For<IConsumingDispatcher>();
+            dispatcher
+                .DispatchAsync(
+                    Arg.Any<string>(),
+                    Arg.Any<string>(),
+                    Arg.Any<RawPayload>(),
+                    Arg.Any<Func<CancellationToken, Task>>(),
+                    Arg.Any<Func<Exception, CancellationToken, Task>>(),
+                    Arg.Any<CancellationToken>())
+                .Returns(async _ =>
+                {
+                    Interlocked.Increment(ref active);
+
+                    if (Interlocked.Increment(ref started) == totalMessages)
+                        allStarted.TrySetResult();
+
+                    await release.Task;
+                    Interlocked.Decrement(ref active);
+                });
+            var adapter = Substitute.For<IMessageBrokerConsumingAdapter>();
+            var logger = Substitute.For<ILogger<ConsumingManager>>();
+            var manager = new ConsumingManager(dispatcher, new[] { adapter }, CreateOptions(), logger);
+
+            await manager.StartAsync();
+
+            for (var i = 0; i < totalMessages; i++)
+                adapter.MessageConsumed += Raise.EventWith(adapter, new MessageConsumedEventArgs("topic1", RawJson));
+
+            await allStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+            Assert.Equal(totalMessages, Volatile.Read(ref active));
+
+            release.SetResult();
+            await manager.StopAsync();
+        }
+
+        [Fact]
+        public async Task MessageConsumed_Should_Respect_Configured_MaxConcurrency()
+        {
+            var started = 0;
+            var active = 0;
+            var firstStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var dispatcher = Substitute.For<IConsumingDispatcher>();
+            dispatcher
+                .DispatchAsync(
+                    Arg.Any<string>(),
+                    Arg.Any<string>(),
+                    Arg.Any<RawPayload>(),
+                    Arg.Any<Func<CancellationToken, Task>>(),
+                    Arg.Any<Func<Exception, CancellationToken, Task>>(),
+                    Arg.Any<CancellationToken>())
+                .Returns(async _ =>
+                {
+                    Interlocked.Increment(ref active);
+                    Interlocked.Increment(ref started);
+                    firstStarted.TrySetResult();
+                    await release.Task;
+                    Interlocked.Decrement(ref active);
+                });
+            var adapter = Substitute.For<IMessageBrokerConsumingAdapter>();
+            var logger = Substitute.For<ILogger<ConsumingManager>>();
+            var options = Options.Create(new GlobalSettings
+            {
+                Domain = "test-domain",
+                ConsumerExecution = new ConsumerExecutionSettings
+                {
+                    MaxConcurrency = 1
+                }
+            });
+            var manager = new ConsumingManager(dispatcher, new[] { adapter }, options, logger);
+
+            await manager.StartAsync();
+
+            adapter.MessageConsumed += Raise.EventWith(adapter, new MessageConsumedEventArgs("topic1", RawJson));
+            adapter.MessageConsumed += Raise.EventWith(adapter, new MessageConsumedEventArgs("topic1", RawJson));
+
+            await firstStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+            await Task.Delay(100);
+
+            Assert.Equal(1, Volatile.Read(ref active));
+            Assert.Equal(1, Volatile.Read(ref started));
+
+            release.SetResult();
+            await WaitUntilAsync(() => Volatile.Read(ref started) == 2);
+            await manager.StopAsync();
+        }
+
+        private static async Task WaitUntilAsync(Func<bool> condition)
+        {
+            var timeout = DateTimeOffset.UtcNow.AddSeconds(2);
+
+            while (DateTimeOffset.UtcNow < timeout)
+            {
+                if (condition())
+                    return;
+
+                await Task.Delay(25);
+            }
+
+            throw new TimeoutException("The expected condition was not reached.");
+        }
     }
 }
