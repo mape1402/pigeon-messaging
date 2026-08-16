@@ -15,10 +15,11 @@
         private readonly IConsumingConfigurator _consumingConfigurator;
         private readonly ITopologyProvisioningService _topologyProvisioningService;
         private readonly GlobalSettings _globalSettings;
+        private readonly ConsumerExecutionDiagnostics _diagnostics;
         private readonly ILogger<ConsumingManager> _logger;
 
         private CancellationToken _backgroundCancellationToken;
-        private Channel<MessageConsumedEventArgs> _messageQueue;
+        private Channel<QueuedConsumedMessage> _messageQueue;
         private readonly ConcurrentDictionary<Guid, Task> _inFlightDispatches = new();
         private CancellationTokenSource _workerCancellationTokenSource;
         private Task[] _workers = Array.Empty<Task>();
@@ -28,7 +29,7 @@
             IEnumerable<IMessageBrokerConsumingAdapter> messageBrokerAdapters,
             IOptions<GlobalSettings> globalSettings,
             ILogger<ConsumingManager> logger)
-            : this(dispatcher, messageBrokerAdapters, new Configuration.ConsumingConfigurator(), NoopTopologyProvisioningService.Instance, globalSettings, logger)
+            : this(dispatcher, messageBrokerAdapters, new Configuration.ConsumingConfigurator(), NoopTopologyProvisioningService.Instance, globalSettings, new ConsumerExecutionDiagnostics(), logger)
         {
         }
 
@@ -39,12 +40,25 @@
             ITopologyProvisioningService topologyProvisioningService,
             IOptions<GlobalSettings> globalSettings,
             ILogger<ConsumingManager> logger)
+            : this(dispatcher, messageBrokerAdapters, consumingConfigurator, topologyProvisioningService, globalSettings, new ConsumerExecutionDiagnostics(), logger)
+        {
+        }
+
+        public ConsumingManager(
+            IConsumingDispatcher dispatcher,
+            IEnumerable<IMessageBrokerConsumingAdapter> messageBrokerAdapters,
+            IConsumingConfigurator consumingConfigurator,
+            ITopologyProvisioningService topologyProvisioningService,
+            IOptions<GlobalSettings> globalSettings,
+            ConsumerExecutionDiagnostics diagnostics,
+            ILogger<ConsumingManager> logger)
         {
             _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
             _messageBrokerAdapters = messageBrokerAdapters ?? throw new ArgumentNullException(nameof(messageBrokerAdapters));
             _consumingConfigurator = consumingConfigurator ?? throw new ArgumentNullException(nameof(consumingConfigurator));
             _topologyProvisioningService = topologyProvisioningService ?? throw new ArgumentNullException(nameof(topologyProvisioningService));
             _globalSettings = globalSettings?.Value ?? throw new ArgumentNullException(nameof(globalSettings));
+            _diagnostics = diagnostics ?? throw new ArgumentNullException(nameof(diagnostics));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -53,6 +67,7 @@
             _backgroundCancellationToken = cancellationToken;
             _workerCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             _messageQueue = CreateMessageQueue();
+            _diagnostics.Configure(_globalSettings.ConsumerExecution);
 
             var maxConcurrency = GetMaxConcurrency();
             _workers = maxConcurrency.HasValue
@@ -104,11 +119,15 @@
         {
             try
             {
-                _messageQueue.Writer.WriteAsync(e, _backgroundCancellationToken).AsTask().GetAwaiter().GetResult();
+                _diagnostics.RecordReceived();
+                _diagnostics.RecordQueued();
+                _messageQueue.Writer.WriteAsync(new QueuedConsumedMessage(e, DateTimeOffset.UtcNow), _backgroundCancellationToken).AsTask().GetAwaiter().GetResult();
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Has occurred an unexpected error when a message was enqueued for dispatch.");
+                _diagnostics.RecordQueueWriteFailed();
+                _diagnostics.RecordRejected();
                 e.FailAsync(ex, _backgroundCancellationToken).GetAwaiter().GetResult();
             }
         }
@@ -125,7 +144,7 @@
                 TrackDispatch(message, cancellationToken);
         }
 
-        private void TrackDispatch(MessageConsumedEventArgs message, CancellationToken cancellationToken)
+        private void TrackDispatch(QueuedConsumedMessage message, CancellationToken cancellationToken)
         {
             var id = Guid.NewGuid();
             var dispatch = Task.Run(() => DispatchMessageAsync(message, cancellationToken), CancellationToken.None);
@@ -138,8 +157,12 @@
                 TaskScheduler.Default);
         }
 
-        private async Task DispatchMessageAsync(MessageConsumedEventArgs e, CancellationToken cancellationToken)
+        private async Task DispatchMessageAsync(QueuedConsumedMessage queuedMessage, CancellationToken cancellationToken)
         {
+            var e = queuedMessage.Message;
+            _diagnostics.RecordDequeued(DateTimeOffset.UtcNow - queuedMessage.EnqueuedOnUtc);
+            _diagnostics.RecordHandlerStarted();
+
             try
             {
                 using var timeoutCts = new CancellationTokenSource(GetHandlerTimeout());
@@ -160,29 +183,45 @@
                     topic,
                     subscription,
                     rawPayload,
-                    e.CompleteAsync,
-                    e.FailAsync,
+                    token => CompleteMessageAsync(e, token),
+                    (ex, token) => FailMessageAsync(e, ex, token),
                     linkedCts.Token);
 
                 if (GetAcknowledgementMode() == MessageAcknowledgementMode.OnHandlerSuccess)
-                    await e.CompleteAsync(cancellationToken);
+                    await CompleteMessageAsync(e, cancellationToken);
+
+                _diagnostics.RecordHandlerCompleted();
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Has occurred an unexpected error when a message has been consumed.");
 
                 if (GetAcknowledgementMode() == MessageAcknowledgementMode.OnHandlerSuccess)
-                    await e.FailAsync(ex, cancellationToken);
+                    await FailMessageAsync(e, ex, cancellationToken);
+
+                _diagnostics.RecordHandlerFailed();
             }
         }
 
-        private Channel<MessageConsumedEventArgs> CreateMessageQueue()
+        private async Task CompleteMessageAsync(MessageConsumedEventArgs e, CancellationToken cancellationToken)
+        {
+            await e.CompleteAsync(cancellationToken);
+            _diagnostics.RecordAcknowledged();
+        }
+
+        private async Task FailMessageAsync(MessageConsumedEventArgs e, Exception exception, CancellationToken cancellationToken)
+        {
+            await e.FailAsync(exception, cancellationToken);
+            _diagnostics.RecordRejected();
+        }
+
+        private Channel<QueuedConsumedMessage> CreateMessageQueue()
         {
             var queueCapacity = GetQueueCapacity();
 
             if (queueCapacity.HasValue)
             {
-                return Channel.CreateBounded<MessageConsumedEventArgs>(new BoundedChannelOptions(queueCapacity.Value)
+                return Channel.CreateBounded<QueuedConsumedMessage>(new BoundedChannelOptions(queueCapacity.Value)
                 {
                     FullMode = BoundedChannelFullMode.Wait,
                     SingleReader = false,
@@ -190,7 +229,7 @@
                 });
             }
 
-            return Channel.CreateUnbounded<MessageConsumedEventArgs>(new UnboundedChannelOptions
+            return Channel.CreateUnbounded<QueuedConsumedMessage>(new UnboundedChannelOptions
             {
                 SingleReader = false,
                 SingleWriter = false

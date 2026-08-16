@@ -24,6 +24,12 @@ namespace Pigeon.Messaging.Consuming.Management
         public int? QueueCapacity { get; set; }
 
         /// <summary>
+        /// Gets or sets the broker prefetch count when the adapter supports it.
+        /// When null, RabbitMQ derives prefetch from <see cref="MaxConcurrency"/> when that value is configured.
+        /// </summary>
+        public ushort? PrefetchCount { get; set; }
+
+        /// <summary>
         /// Gets or sets the maximum time allowed for each handler dispatch.
         /// </summary>
         public TimeSpan HandlerTimeout { get; set; } = TimeSpan.FromSeconds(30);

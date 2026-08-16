@@ -318,6 +318,109 @@
             await manager.StopAsync();
         }
 
+        [Fact]
+        public async Task MessageConsumed_Should_Apply_Backpressure_When_Bounded_Queue_Is_Full()
+        {
+            var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var dispatcher = Substitute.For<IConsumingDispatcher>();
+            dispatcher
+                .DispatchAsync(
+                    Arg.Any<string>(),
+                    Arg.Any<string>(),
+                    Arg.Any<RawPayload>(),
+                    Arg.Any<Func<CancellationToken, Task>>(),
+                    Arg.Any<Func<Exception, CancellationToken, Task>>(),
+                    Arg.Any<CancellationToken>())
+                .Returns(_ => release.Task);
+            var adapter = Substitute.For<IMessageBrokerConsumingAdapter>();
+            var logger = Substitute.For<ILogger<ConsumingManager>>();
+            var options = Options.Create(new GlobalSettings
+            {
+                Domain = "test-domain",
+                ConsumerExecution = new ConsumerExecutionSettings
+                {
+                    MaxConcurrency = 1,
+                    QueueCapacity = 1
+                }
+            });
+            var manager = new ConsumingManager(dispatcher, new[] { adapter }, options, logger);
+
+            await manager.StartAsync();
+
+            adapter.MessageConsumed += Raise.EventWith(adapter, new MessageConsumedEventArgs("topic1", RawJson));
+            adapter.MessageConsumed += Raise.EventWith(adapter, new MessageConsumedEventArgs("topic1", RawJson));
+
+            var blockedRaise = Task.Run(() =>
+                adapter.MessageConsumed += Raise.EventWith(adapter, new MessageConsumedEventArgs("topic1", RawJson)));
+
+            await Task.Delay(150);
+
+            Assert.False(blockedRaise.IsCompleted);
+
+            release.SetResult();
+            await blockedRaise.WaitAsync(TimeSpan.FromSeconds(2));
+            await manager.StopAsync();
+        }
+
+        [Fact]
+        public async Task Diagnostics_Should_Report_Internal_Backlog()
+        {
+            var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var dispatcher = Substitute.For<IConsumingDispatcher>();
+            dispatcher
+                .DispatchAsync(
+                    Arg.Any<string>(),
+                    Arg.Any<string>(),
+                    Arg.Any<RawPayload>(),
+                    Arg.Any<Func<CancellationToken, Task>>(),
+                    Arg.Any<Func<Exception, CancellationToken, Task>>(),
+                    Arg.Any<CancellationToken>())
+                .Returns(_ => release.Task);
+            var adapter = Substitute.For<IMessageBrokerConsumingAdapter>();
+            var logger = Substitute.For<ILogger<ConsumingManager>>();
+            var consumingConfigurator = Substitute.For<IConsumingConfigurator>();
+            var topologyProvisioningService = Substitute.For<ITopologyProvisioningService>();
+            var diagnostics = new ConsumerExecutionDiagnostics();
+            var options = Options.Create(new GlobalSettings
+            {
+                Domain = "test-domain",
+                ConsumerExecution = new ConsumerExecutionSettings
+                {
+                    MaxConcurrency = 1,
+                    QueueCapacity = 10,
+                    PrefetchCount = 5
+                }
+            });
+            var manager = new ConsumingManager(
+                dispatcher,
+                new[] { adapter },
+                consumingConfigurator,
+                topologyProvisioningService,
+                options,
+                diagnostics,
+                logger);
+
+            await manager.StartAsync();
+
+            adapter.MessageConsumed += Raise.EventWith(adapter, new MessageConsumedEventArgs("topic1", RawJson));
+            adapter.MessageConsumed += Raise.EventWith(adapter, new MessageConsumedEventArgs("topic1", RawJson));
+
+            await WaitUntilAsync(() => diagnostics.GetSnapshot().ActiveHandlers == 1 && diagnostics.GetSnapshot().QueuedMessages == 1);
+
+            var snapshot = diagnostics.GetSnapshot();
+
+            Assert.Equal(2, snapshot.ReceivedMessages);
+            Assert.Equal(1, snapshot.ActiveHandlers);
+            Assert.Equal(1, snapshot.QueuedMessages);
+            Assert.True(snapshot.IsQueueBounded);
+            Assert.Equal(10, snapshot.QueueCapacity);
+            Assert.Equal(1, snapshot.MaxConcurrency);
+            Assert.Equal((ushort)5, snapshot.PrefetchCount);
+
+            release.SetResult();
+            await manager.StopAsync();
+        }
+
         private static async Task WaitUntilAsync(Func<bool> condition)
         {
             var timeout = DateTimeOffset.UtcNow.AddSeconds(2);

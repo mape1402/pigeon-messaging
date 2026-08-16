@@ -112,10 +112,10 @@
 
             await _topologyProvisioningService.EnsureConsumeTopologyAsync(endpoint, cancellationToken);
             var autoAck = GetAcknowledgementMode() == MessageAcknowledgementMode.OnReceive;
-            var maxConcurrency = GetMaxConcurrency();
+            var prefetchCount = GetPrefetchCount();
 
-            if (!autoAck && maxConcurrency.HasValue)
-                await channel.BasicQosAsync(0, maxConcurrency.Value, false, cancellationToken);
+            if (!autoAck && prefetchCount.HasValue)
+                await channel.BasicQosAsync(0, prefetchCount.Value, false, cancellationToken);
 
             var consumer = new AsyncEventingBasicConsumer(channel);
 
@@ -188,8 +188,13 @@
         private MessageAcknowledgementMode GetAcknowledgementMode()
             => _globalSettings.ConsumerExecution?.AcknowledgementMode ?? MessageAcknowledgementMode.Manual;
 
-        private ushort? GetMaxConcurrency()
+        private ushort? GetPrefetchCount()
         {
+            var prefetchCount = _globalSettings.ConsumerExecution?.PrefetchCount;
+
+            if (prefetchCount is > 0)
+                return prefetchCount.Value;
+
             var maxConcurrency = _globalSettings.ConsumerExecution?.MaxConcurrency;
 
             if (maxConcurrency is not > 0)

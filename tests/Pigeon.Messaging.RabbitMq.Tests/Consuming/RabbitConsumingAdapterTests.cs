@@ -192,6 +192,29 @@
         }
 
         [Fact]
+        public async Task Should_Use_Explicit_Prefetch_Over_MaxConcurrency()
+        {
+            var topic = "topic1";
+            var options = Options.Create(new GlobalSettings
+            {
+                Domain = "test",
+                ConsumerExecution = new ConsumerExecutionSettings
+                {
+                    MaxConcurrency = 32,
+                    PrefetchCount = 128
+                }
+            });
+            _consumingConfigurator.GetAllTopics().Returns(new[] { topic });
+            _connectionProvider.CreateChannelAsync(Arg.Any<CancellationToken>()).Returns(_channel);
+
+            var adapter = new RabbitConsumingAdapter(_connectionProvider, _consumingConfigurator, options, _rabbitOptions, _logger);
+
+            await adapter.StartConsumeAsync();
+
+            await _channel.Received(1).BasicQosAsync(0, 128, false, Arg.Any<CancellationToken>());
+        }
+
+        [Fact]
         public async Task Should_Bind_Queue_To_Configured_Exchange()
         {
             // Arrange
