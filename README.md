@@ -423,10 +423,38 @@ config.ConfigureConsumerExecution(execution =>
 {
     execution.MaxConcurrency = 128;
     execution.QueueCapacity = 10_000;
+    execution.PrefetchCount = 128;
 });
 ```
 
-When `MaxConcurrency` is `null` or less than `1`, Pigeon does not apply an internal concurrency limit. When `QueueCapacity` is `null` or less than `1`, the internal dispatch queue is unbounded. RabbitMQ prefetch is only configured when `MaxConcurrency` is explicitly set.
+When `MaxConcurrency` is `null` or less than `1`, Pigeon does not apply an internal concurrency limit. When `QueueCapacity` is `null` or less than `1`, the internal dispatch queue is unbounded. If `QueueCapacity` is set, the internal queue is bounded and applies backpressure before handlers run.
+
+RabbitMQ prefetch uses `ConsumerExecution.PrefetchCount` when configured. If `PrefetchCount` is not configured but `MaxConcurrency` is configured, RabbitMQ derives prefetch from `MaxConcurrency`. With `OnReceive`, RabbitMQ uses auto-ack and Pigeon does not apply QoS.
+
+For productive high-throughput defaults, opt in explicitly:
+
+```csharp
+config.ConfigureHighThroughputConsumers();
+```
+
+That helper sets a bounded `MaxConcurrency`, bounded `QueueCapacity`, `PrefetchCount`, and keeps the existing handler timeout unless one is provided:
+
+```csharp
+config.ConfigureHighThroughputConsumers(
+    concurrencyMultiplier: 8,
+    queueCapacityMultiplier: 100,
+    handlerTimeout: TimeSpan.FromMinutes(2));
+```
+
+Consumer backlog can be inspected through `IConsumerExecutionDiagnostics`:
+
+```csharp
+var snapshot = diagnostics.GetSnapshot();
+
+Console.WriteLine(snapshot.QueuedMessages);
+Console.WriteLine(snapshot.ActiveHandlers);
+Console.WriteLine(snapshot.AverageQueueWait);
+```
 
 Manual acknowledgement works from consumer methods and hub consumers:
 
@@ -490,12 +518,26 @@ builder.Services.AddPigeon(builder.Configuration, config =>
         outbox.SchemaMode = OutboxSchemaMode.AutoCreate;
         outbox.DispatchInterval = TimeSpan.FromSeconds(5);
         outbox.ImmediateDispatch = true;
-        outbox.DispatchQueueCapacity = 1000;
+        outbox.DispatchQueueCapacity = 100_000;
         outbox.CleanInterval = TimeSpan.FromMinutes(10);
         outbox.PublishedMessageRetention = TimeSpan.FromDays(1);
-        outbox.DispatchBatchSize = 50;
+        outbox.DispatchBatchSize = 500;
+        outbox.WorkerCount = Environment.ProcessorCount;
+        outbox.MaxDegreeOfParallelism = Environment.ProcessorCount * 8;
+        outbox.MaxDrainBatchesPerCycle = 8;
+        outbox.MaxDrainActionsPerCycle = 10_000;
+        outbox.DrainUntilEmpty = true;
         outbox.MaxRetries = 10;
     });
+});
+```
+
+For the common high-throughput profile, use the outbox helper:
+
+```csharp
+config.UseEntityFrameworkOutbox<AppDbContext>(outbox =>
+{
+    outbox.ConfigureHighThroughput();
 });
 ```
 
@@ -574,6 +616,8 @@ public class OutboxHealthProbe
 }
 ```
 
+The snapshot includes durable state and Mule runtime metrics such as pending, locked, completed, failed, throughput per minute, backlog by lane, completed per minute by lane, runtime failures, and dispatch latency averages when the selected Mule provider reports them.
+
 ### Add Interceptors
 
 Interceptors let you attach and read metadata around publishing and consuming.
@@ -625,6 +669,25 @@ builder.Services
 {
   "Pigeon": {
     "Domain": "YourApp.Domain",
+    "ConsumerExecution": {
+      "AcknowledgementMode": "OnHandlerSuccess",
+      "MaxConcurrency": 256,
+      "QueueCapacity": 10000,
+      "PrefetchCount": 256,
+      "HandlerTimeout": "00:02:00"
+    },
+    "Outbox": {
+      "Enabled": true,
+      "ImmediateDispatch": true,
+      "DispatchQueueCapacity": 100000,
+      "DispatchBatchSize": 500,
+      "WorkerCount": 16,
+      "MaxDegreeOfParallelism": 128,
+      "MaxDrainBatchesPerCycle": 8,
+      "MaxDrainActionsPerCycle": 10000,
+      "DrainUntilEmpty": true,
+      "DispatchInterval": "00:00:05"
+    },
     "MessageBrokers": {
       "RabbitMq": {
         "Url": "amqp://guest:guest@localhost:5672"

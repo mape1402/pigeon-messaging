@@ -42,6 +42,8 @@
             services.AddSingleton(consumingConfigurator);
             services.AddSingleton<ConsumeContextAccessor>();
             services.AddSingleton<IConsumeContextAccessor>(provider => provider.GetRequiredService<ConsumeContextAccessor>());
+            services.AddSingleton<ConsumerExecutionDiagnostics>();
+            services.AddSingleton<IConsumerExecutionDiagnostics>(provider => provider.GetRequiredService<ConsumerExecutionDiagnostics>());
             services.AddSingleton<IConsumingDispatcher, ConsumingDispatcher>();
             services.AddSingleton<ITopologyProvisioningService, TopologyProvisioningService>();
             services.AddHostedService<TopologyProvisioningHostedService>();
@@ -62,6 +64,10 @@
             // Initialize the global settings builder.
             var settingsBuilder = new GlobalSettingsBuilder(
                 services, configuration, consumingConfigurator, settings);
+
+            configuration
+                .GetSection(PigeonSettingsKeyMap)
+                .Bind(settingsBuilder.GlobalSettings);
 
             // Apply user configuration via the callback.
             config(settingsBuilder);

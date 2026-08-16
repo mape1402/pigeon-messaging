@@ -30,6 +30,12 @@ namespace Pigeon.Messaging.Outbox
                     mule.DispatchInterval = settings.DispatchInterval;
                     mule.DispatchQueueCapacity = settings.DispatchQueueCapacity;
                     mule.DispatchBatchSize = settings.DispatchBatchSize;
+                    mule.WorkerCount = settings.WorkerCount;
+                    mule.MaxDegreeOfParallelism = settings.MaxDegreeOfParallelism;
+                    mule.MaxDrainBatchesPerCycle = settings.MaxDrainBatchesPerCycle;
+                    mule.MaxDrainActionsPerCycle = settings.MaxDrainActionsPerCycle;
+                    mule.DrainUntilEmpty = settings.DrainUntilEmpty;
+                    mule.YieldBetweenDrainBatches = settings.YieldBetweenDrainBatches;
                     mule.MaxAttempts = settings.MaxRetries;
                     mule.RetryDelay = settings.RetryDelay;
                     mule.LockTimeout = settings.LockTimeout;
@@ -38,6 +44,28 @@ namespace Pigeon.Messaging.Outbox
                     mule.CompletedRetention = settings.PublishedMessageRetention;
                     mule.RecoveryMode = MuleRecoveryMode.Scheduled;
                     mule.CleanupMode = MuleCleanupMode.Scheduled;
+
+                    foreach (var lane in settings.Lanes)
+                    {
+                        var laneSettings = new MuleLaneSettings
+                        {
+                            WorkerCount = lane.Value.WorkerCount,
+                            MaxDegreeOfParallelism = lane.Value.MaxDegreeOfParallelism,
+                            DispatchBatchSize = lane.Value.DispatchBatchSize,
+                            MaxDrainBatchesPerCycle = lane.Value.MaxDrainBatchesPerCycle,
+                            MaxDrainActionsPerCycle = lane.Value.MaxDrainActionsPerCycle,
+                            DrainUntilEmpty = lane.Value.DrainUntilEmpty,
+                            YieldBetweenDrainBatches = lane.Value.YieldBetweenDrainBatches,
+                            DispatchQueueCapacity = lane.Value.DispatchQueueCapacity,
+                            PollingInterval = lane.Value.PollingInterval,
+                            MaxAttempts = lane.Value.MaxAttempts,
+                            RetryDelay = lane.Value.RetryDelay,
+                            Priority = lane.Value.Priority,
+                            Weight = lane.Value.Weight
+                        };
+
+                        mule.Lanes[lane.Key] = laneSettings;
+                    }
                 })
                 .For<PigeonPublishOutboxAction, OutboxMessage>(PigeonOutboxActionKeys.Publish);
         }

@@ -115,6 +115,30 @@
         }
 
         /// <summary>
+        /// Configures productive bounded defaults for high-throughput consumers.
+        /// </summary>
+        /// <param name="concurrencyMultiplier">Multiplier applied to <see cref="Environment.ProcessorCount"/> for handler concurrency.</param>
+        /// <param name="queueCapacityMultiplier">Multiplier applied to max concurrency for the internal dispatch queue capacity.</param>
+        /// <param name="handlerTimeout">Optional handler timeout override.</param>
+        /// <returns>The same <see cref="GlobalSettingsBuilder"/> instance for chaining.</returns>
+        public GlobalSettingsBuilder ConfigureHighThroughputConsumers(
+            int concurrencyMultiplier = 8,
+            int queueCapacityMultiplier = 100,
+            TimeSpan? handlerTimeout = null)
+        {
+            var maxConcurrency = Math.Max(1, Environment.ProcessorCount * Math.Max(1, concurrencyMultiplier));
+
+            GlobalSettings.ConsumerExecution.MaxConcurrency = maxConcurrency;
+            GlobalSettings.ConsumerExecution.QueueCapacity = maxConcurrency * Math.Max(1, queueCapacityMultiplier);
+            GlobalSettings.ConsumerExecution.PrefetchCount = (ushort)Math.Min(ushort.MaxValue, maxConcurrency);
+
+            if (handlerTimeout.HasValue)
+                GlobalSettings.ConsumerExecution.HandlerTimeout = handlerTimeout.Value;
+
+            return this;
+        }
+
+        /// <summary>
         /// Configures global publishing behavior.
         /// </summary>
         /// <param name="configure">The publishing configuration action.</param>

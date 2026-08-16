@@ -29,8 +29,16 @@ namespace Pigeon.Messaging.Outbox
                 LockedMessages = snapshot.Locked,
                 PublishedMessages = snapshot.Completed,
                 FailedMessages = snapshot.Failed,
+                RuntimeCompletedMessages = snapshot.RuntimeCompleted,
+                RuntimeFailedMessages = snapshot.RuntimeFailed,
+                ThroughputPerMinute = snapshot.ThroughputPerMinute,
                 OldestPendingMessageOnUtc = snapshot.OldestPendingOnUtc,
-                OldestFailedMessageOnUtc = snapshot.OldestFailedOnUtc
+                OldestFailedMessageOnUtc = snapshot.OldestFailedOnUtc,
+                AverageEnqueueToDispatchLatency = snapshot.AverageEnqueueToExecutionLatency,
+                AverageDispatchToPublishedLatency = snapshot.AverageExecutionLatency,
+                BacklogByLane = snapshot.BacklogByLane,
+                CompletedPerMinuteByLane = snapshot.CompletedPerMinuteByLane,
+                RuntimeFailedByLane = snapshot.RuntimeFailedByLane
             };
         }
     }

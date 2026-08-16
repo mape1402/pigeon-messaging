@@ -9,10 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [v2.5.0] - 2026-08-16
 
+### Added
+
+- `ConsumerExecution.PrefetchCount` for broker prefetch control, with RabbitMQ prioritizing explicit prefetch over `MaxConcurrency`.
+- `ConfigureHighThroughputConsumers` helper for opt-in bounded consumer concurrency, queue capacity, prefetch, and handler timeout defaults.
+- Mule-backed outbox throughput settings for worker count, max degree of parallelism, drain limits, drain-until-empty behavior, yield between drain batches, and lane configuration.
+- `OutboxSettings.ConfigureHighThroughput` helper for Mule-backed outbox providers.
+- `IConsumerExecutionDiagnostics` for inspecting received messages, queued backlog, active handlers, acknowledgements, failures, queue wait time, and current consumer execution settings.
+- Additional Mule runtime fields on `OutboxDiagnosticsSnapshot`, including throughput, lane backlog, runtime failures, and dispatch latency averages.
+
 ### Changed
 
 - Updated Mule durable action dependencies to `1.3.0` for the core, in-memory outbox, and Entity Framework Core outbox providers.
 - Pigeon outbox providers now consume Mule's high-throughput durable action runtime improvements.
+- `Pigeon:ConsumerExecution` and `Pigeon:Outbox` configuration sections now bind into the global Pigeon settings before code-based configuration callbacks run.
 
 ------
 
