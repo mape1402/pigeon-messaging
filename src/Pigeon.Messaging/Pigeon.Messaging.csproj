@@ -18,7 +18,7 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Options" />
-    <PackageReference Include="Mule.DurableActions" Version="1.1.0" />
+    <PackageReference Include="Mule.DurableActions" Version="1.3.0" />
     <PackageReference Include="MinVer" />
   </ItemGroup>
 
