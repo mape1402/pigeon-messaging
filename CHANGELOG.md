@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ------
 
+## [v2.5.0] - 2026-08-16
+
+### Changed
+
+- Updated Mule durable action dependencies to `1.3.0` for the core, in-memory outbox, and Entity Framework Core outbox providers.
+- Pigeon outbox providers now consume Mule's high-throughput durable action runtime improvements.
+
+------
+
 ## [v2.4.0] - 2026-08-14
 
 ### Changed
