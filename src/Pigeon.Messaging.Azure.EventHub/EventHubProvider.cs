@@ -36,7 +36,7 @@ namespace Pigeon.Messaging.Azure.EventHub
     /// <summary>
     /// Defines a contract for processing events from Event Hubs.
     /// </summary>
-    public interface IEventHubProcessor : IDisposable
+    public interface IEventHubProcessor : IAsyncDisposable
     {
         /// <summary>
         /// Reads events asynchronously from the Event Hub.
@@ -241,10 +241,12 @@ namespace Pigeon.Messaging.Azure.EventHub
             }
         }
 
-        public void Dispose()
+        public async ValueTask DisposeAsync()
         {
             _cancellationTokenSource?.Cancel();
-            _consumerClient?.DisposeAsync().AsTask().Wait(TimeSpan.FromSeconds(30));
+            if (_consumerClient != null)
+                await _consumerClient.DisposeAsync();
+
             _cancellationTokenSource?.Dispose();
         }
     }

@@ -64,6 +64,9 @@
         /// </summary>
         public event EventHandler<MessageConsumedEventArgs> MessageConsumed;
 
+        /// <inheritdoc />
+        public event MessageConsumedAsyncHandler MessageConsumedAsync;
+
         /// <summary>
         /// Starts consuming messages asynchronously from all configured topics.
         /// Declares queues and configures consumers for each topic.
@@ -135,7 +138,7 @@
                             token => channel.BasicAckAsync(e.DeliveryTag, multiple: false, cancellationToken: token).AsTask(),
                             (_, token) => channel.BasicNackAsync(e.DeliveryTag, multiple: false, requeue: _settings.RequeueOnFailure, cancellationToken: token).AsTask());
 
-                    MessageConsumed?.Invoke(this, messageConsumed);
+                    await OnMessageConsumedAsync(messageConsumed, cancellationToken);
                 }
                 catch (Exception ex)
                 {
@@ -187,6 +190,22 @@
 
         private MessageAcknowledgementMode GetAcknowledgementMode()
             => _globalSettings.ConsumerExecution?.AcknowledgementMode ?? MessageAcknowledgementMode.Manual;
+
+        private async ValueTask OnMessageConsumedAsync(MessageConsumedEventArgs args, CancellationToken cancellationToken)
+        {
+            var asyncHandler = MessageConsumedAsync;
+            if (asyncHandler == null)
+            {
+                var syncHandler = MessageConsumed;
+                if (syncHandler != null)
+                    _ = Task.Run(() => syncHandler(this, args), CancellationToken.None);
+
+                return;
+            }
+
+            foreach (MessageConsumedAsyncHandler handler in asyncHandler.GetInvocationList())
+                await handler(this, args, cancellationToken);
+        }
 
         private ushort? GetPrefetchCount()
         {

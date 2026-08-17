@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ------
 
+## [v2.6.0] - 2026-08-17
+
+### Added
+
+- Async consume acceptance contract for broker adapters, allowing bounded consumer queues to apply async backpressure without sync-over-async calls in provider hot paths.
+- Configurable RabbitMQ publisher channel pool through `RabbitSettings.PublisherChannelPoolSize`.
+- Startup publish topology warmup through `GlobalSettingsBuilder.PreProvisionPublishRoutes`.
+
+### Changed
+
+- RabbitMQ publishing now uses pooled channels with one lock per channel instead of serializing all publishes through one shared channel.
+- Azure Service Bus and Azure Event Grid now map `ConsumerExecution.MaxConcurrency` and `ConsumerExecution.PrefetchCount` to processor options.
+- Event Hub processor disposal is async and no longer blocks on `DisposeAsync`.
+
+------
+
 ## [v2.5.0] - 2026-08-16
 
 ### Added

@@ -398,6 +398,20 @@ config.SetTopologyProvisioningMode(
 
 Pigeon keeps an in-memory registry of provisioned topology so the same queue, topic, subscription, exchange, or binding is not recreated on every publish or consume.
 
+For high-throughput publishers, avoid first-message topology latency by warming known publish routes during startup:
+
+```csharp
+config.SetTopologyProvisioningMode(
+    TopologyProvisioningMode.OnStartup |
+    TopologyProvisioningMode.OnPublish);
+
+config.PreProvisionPublishRoutes(
+    PublishingRoute.ForExchange("events", "orders.created"),
+    PublishingRoute.ForExchange("events", "orders.cancelled"));
+```
+
+`OnPublish` is useful for dynamic routes, but known hot-path routes should be pre-provisioned when possible.
+
 ### Configure Consumer Acknowledgements
 
 Consumer acknowledgements are configured globally. The default is `Manual`, which means Pigeon does not ack automatically:
@@ -431,6 +445,8 @@ When `MaxConcurrency` is `null` or less than `1`, Pigeon does not apply an inter
 
 RabbitMQ prefetch uses `ConsumerExecution.PrefetchCount` when configured. If `PrefetchCount` is not configured but `MaxConcurrency` is configured, RabbitMQ derives prefetch from `MaxConcurrency`. With `OnReceive`, RabbitMQ uses auto-ack and Pigeon does not apply QoS.
 
+Azure Service Bus and Azure Event Grid consumption map the same common settings into Azure processor options: `MaxConcurrency` becomes `MaxConcurrentCalls`, and `PrefetchCount` becomes the processor `PrefetchCount`. Kafka concurrency remains partition-driven by the Kafka consumer group and assigned partitions; Pigeon does not fake queue-style parallelism on top of Kafka partitions.
+
 For productive high-throughput defaults, opt in explicitly:
 
 ```csharp
@@ -455,6 +471,8 @@ Console.WriteLine(snapshot.QueuedMessages);
 Console.WriteLine(snapshot.ActiveHandlers);
 Console.WriteLine(snapshot.AverageQueueWait);
 ```
+
+Broker adapters accept consumed messages through an async consume contract, so bounded `QueueCapacity` applies async backpressure instead of blocking broker callback threads with sync-over-async calls.
 
 Manual acknowledgement works from consumer methods and hub consumers:
 
@@ -690,7 +708,8 @@ builder.Services
     },
     "MessageBrokers": {
       "RabbitMq": {
-        "Url": "amqp://guest:guest@localhost:5672"
+        "Url": "amqp://guest:guest@localhost:5672",
+        "PublisherChannelPoolSize": 16
       },
       "Kafka": {
         "BootstrapServers": "localhost:9092",

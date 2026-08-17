@@ -1,5 +1,7 @@
 using global::Azure.Messaging.ServiceBus;
 using Microsoft.Extensions.Options;
+using Pigeon.Messaging.Consuming.Management;
+using System.Reflection;
 
 namespace Pigeon.Messaging.Azure.EventGrid.Tests
 {
@@ -10,6 +12,34 @@ namespace Pigeon.Messaging.Azure.EventGrid.Tests
         {
             // Act & Assert
             Assert.Throws<ArgumentNullException>(() => new EventGridProvider(null));
+        }
+
+        [Fact]
+        public void CreateProcessorOptions_Should_Map_ConsumerExecution_Throughput_Settings()
+        {
+            var settings = new AzureEventGridSettings
+            {
+                ServiceBusEndPoint = "Endpoint=sb://test.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=testkey",
+                Endpoints = new Dictionary<string, Endpoint>()
+            };
+            var globalSettings = Options.Create(new GlobalSettings
+            {
+                ConsumerExecution = new ConsumerExecutionSettings
+                {
+                    AcknowledgementMode = MessageAcknowledgementMode.OnReceive,
+                    MaxConcurrency = 64,
+                    PrefetchCount = 256
+                }
+            });
+            var provider = new EventGridProvider(Options.Create(settings), globalSettings);
+
+            var processorOptions = (ServiceBusProcessorOptions)typeof(EventGridProvider)
+                .GetMethod("CreateProcessorOptions", BindingFlags.Instance | BindingFlags.NonPublic)
+                .Invoke(provider, []);
+
+            Assert.True(processorOptions.AutoCompleteMessages);
+            Assert.Equal(64, processorOptions.MaxConcurrentCalls);
+            Assert.Equal(256, processorOptions.PrefetchCount);
         }
 
         [Fact]

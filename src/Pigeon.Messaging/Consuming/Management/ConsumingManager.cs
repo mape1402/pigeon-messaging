@@ -82,6 +82,7 @@
             foreach (var adapter in _messageBrokerAdapters)
             {
                 adapter.MessageConsumed += MessageConsumed;
+                adapter.MessageConsumedAsync += MessageConsumedAsync;
                 await adapter.StartConsumeAsync(cancellationToken);
             } 
         }
@@ -89,7 +90,10 @@
         public async Task StopAsync(CancellationToken cancellationToken = default)
         {
             foreach (var adapter in _messageBrokerAdapters)
+            {
                 adapter.MessageConsumed -= MessageConsumed;
+                adapter.MessageConsumedAsync -= MessageConsumedAsync;
+            }
 
             if (_messageQueue != null)
                 _messageQueue.Writer.TryComplete();
@@ -115,22 +119,27 @@
             _workerCancellationTokenSource?.Dispose();
         }
 
-        private void MessageConsumed(object sender, MessageConsumedEventArgs e)
+        private async ValueTask MessageConsumedAsync(object sender, MessageConsumedEventArgs e, CancellationToken cancellationToken = default)
         {
             try
             {
                 _diagnostics.RecordReceived();
                 _diagnostics.RecordQueued();
-                _messageQueue.Writer.WriteAsync(new QueuedConsumedMessage(e, DateTimeOffset.UtcNow), _backgroundCancellationToken).AsTask().GetAwaiter().GetResult();
+                await _messageQueue.Writer.WriteAsync(
+                    new QueuedConsumedMessage(e, DateTimeOffset.UtcNow),
+                    cancellationToken.CanBeCanceled ? cancellationToken : _backgroundCancellationToken);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Has occurred an unexpected error when a message was enqueued for dispatch.");
                 _diagnostics.RecordQueueWriteFailed();
                 _diagnostics.RecordRejected();
-                e.FailAsync(ex, _backgroundCancellationToken).GetAwaiter().GetResult();
+                await e.FailAsync(ex, cancellationToken.CanBeCanceled ? cancellationToken : _backgroundCancellationToken);
             }
         }
+
+        private void MessageConsumed(object sender, MessageConsumedEventArgs e)
+            => _ = MessageConsumedAsync(sender, e, _backgroundCancellationToken).AsTask();
 
         private async Task ProcessMessagesAsync(CancellationToken cancellationToken)
         {

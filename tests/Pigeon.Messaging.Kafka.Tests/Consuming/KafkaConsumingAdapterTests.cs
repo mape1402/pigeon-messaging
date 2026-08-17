@@ -74,18 +74,18 @@ namespace Pigeon.Messaging.Kafka.Tests.Consuming
             var adapter = new KafkaConsumingAdapter(consumingConfigurator, configProvider, globalSettings, logger);
             var consumer = Substitute.For<IConsumer<Ignore, string>>();
             var tokenSource = new CancellationTokenSource();
-            var called = false;
-            adapter.MessageConsumed += (s, e) => called = true;
+            var called = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            adapter.MessageConsumed += (s, e) => called.TrySetResult();
             consumer.Consume(Arg.Any<CancellationToken>()).Returns(new ConsumeResult<Ignore, string> { Topic = "topic", Message = new Message<Ignore, string> { Value = "msg" } });
 
             // Act
-            var listenTask = Task.Run(() => adapter.GetType().GetMethod("Listen", BindingFlags.NonPublic | BindingFlags.Instance)
+            var listenTask = Task.Run(() => adapter.GetType().GetMethod("ListenAsync", BindingFlags.NonPublic | BindingFlags.Instance)
                 .Invoke(adapter, [ consumer, tokenSource.Token ]));
-            tokenSource.CancelAfter(100);
-            await Task.Delay(200);
+            await called.Task.WaitAsync(TimeSpan.FromSeconds(2));
+            await tokenSource.CancelAsync();
 
             // Assert
-            Assert.True(called);
+            Assert.True(called.Task.IsCompletedSuccessfully);
         }
     }
 }

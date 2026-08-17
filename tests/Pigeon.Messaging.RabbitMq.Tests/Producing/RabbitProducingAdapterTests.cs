@@ -117,16 +117,15 @@ namespace Pigeon.Messaging.RabbitMq.Tests.Producing
         [Fact]
         public async Task Should_Create_New_Channel_When_Existing_Channel_IsClosed()
         {
-            // Arrange: _channel.IsOpen returns false
-            _channel.IsOpen.Returns(false);
-            _connectionProvider.CreateChannelAsync(Arg.Any<CancellationToken>()).Returns(_channel);
+            var firstChannel = Substitute.For<IChannel>();
+            var secondChannel = Substitute.For<IChannel>();
+            firstChannel.IsOpen.Returns(true);
+            secondChannel.IsOpen.Returns(true);
+            _connectionProvider.CreateChannelAsync(Arg.Any<CancellationToken>()).Returns(firstChannel, secondChannel);
             var serializer = Substitute.For<ISerializer>();
             serializer.Serialize(Arg.Any<object>()).Returns("{}");
-            var adapter = new RabbitProducingAdapter(_connectionProvider, serializer, _options, _logger);
-
-            // Force internal _channel
-            adapter.GetType().GetField("_channel", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
-                .SetValue(adapter, _channel);
+            var options = Options.Create(new RabbitSettings { PublisherChannelPoolSize = 1 });
+            var adapter = new RabbitProducingAdapter(_connectionProvider, serializer, options, _logger);
             var payload = new WrappedPayload<SampleMessage>()
             {
                 CreatedOnUtc = DateTimeOffset.UtcNow,
@@ -138,9 +137,50 @@ namespace Pigeon.Messaging.RabbitMq.Tests.Producing
 
             // Act
             await adapter.PublishMessageAsync(payload, "queue");
+            firstChannel.IsOpen.Returns(false);
+            await adapter.PublishMessageAsync(payload, "queue");
 
             // Assert: Should recreate channel if closed
-            await _connectionProvider.Received(1).CreateChannelAsync(Arg.Any<CancellationToken>());
+            await _connectionProvider.Received(2).CreateChannelAsync(Arg.Any<CancellationToken>());
+        }
+
+        [Fact]
+        public async Task Should_Use_Multiple_Publisher_Channels_When_Pool_Size_Is_Configured()
+        {
+            var channels = Enumerable.Range(0, 4)
+                .Select(_ =>
+                {
+                    var channel = Substitute.For<IChannel>();
+                    channel.IsOpen.Returns(true);
+                    return channel;
+                })
+                .ToArray();
+            _connectionProvider.CreateChannelAsync(Arg.Any<CancellationToken>()).Returns(channels[0], channels[1], channels[2], channels[3]);
+            var serializer = Substitute.For<ISerializer>();
+            serializer.Serialize(Arg.Any<object>()).Returns("{}");
+            var options = Options.Create(new RabbitSettings { PublisherChannelPoolSize = 4 });
+            var adapter = new RabbitProducingAdapter(_connectionProvider, serializer, options, _logger);
+            var payload = new WrappedPayload<SampleMessage>
+            {
+                CreatedOnUtc = DateTimeOffset.UtcNow,
+                Domain = "domain",
+                Message = SampleMessage.Instance,
+                MessageVersion = SemanticVersion.Default,
+                Metadata = new ReadOnlyDictionary<string, object>(new Dictionary<string, object>())
+            };
+
+            await Task.WhenAll(Enumerable.Range(0, 4).Select(_ => adapter.PublishMessageAsync(payload, "queue").AsTask()));
+
+            await _connectionProvider.Received(4).CreateChannelAsync(Arg.Any<CancellationToken>());
+
+            foreach (var channel in channels)
+                await channel.Received(1).BasicPublishAsync(
+                    string.Empty,
+                    "queue",
+                    Arg.Any<bool>(),
+                    Arg.Any<BasicProperties>(),
+                    Arg.Any<ReadOnlyMemory<byte>>(),
+                    Arg.Any<CancellationToken>());
         }
 
         [Fact]

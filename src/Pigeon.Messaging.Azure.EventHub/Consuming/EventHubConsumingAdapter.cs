@@ -49,13 +49,16 @@
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
             _onTopicCreated = async (s, e) => await StartNewProcessor(e.Endpoint, CancellationToken.None);
-            _onTopicRemoved = (s, e) => StopProcessor(e.Endpoint);
+            _onTopicRemoved = async (s, e) => await StopProcessorAsync(e.Endpoint);
         }
 
         /// <summary>
         /// Event raised when a message is consumed from any of the configured topics.
         /// </summary>
         public event EventHandler<MessageConsumedEventArgs> MessageConsumed;
+
+        /// <inheritdoc />
+        public event MessageConsumedAsyncHandler MessageConsumedAsync;
 
         /// <summary>
         /// Starts consuming messages asynchronously from all configured topics.
@@ -100,7 +103,7 @@
             }
 
             foreach (var endpoint in _processors.Keys.Select(ParseEndpointKey))
-                StopProcessor(endpoint);
+                await StopProcessorAsync(endpoint);
 
             _processors.Clear();
             _listeners.Clear();
@@ -120,7 +123,7 @@
 
                 if (!_processors.TryAdd(endpoint.Key, processor))
                 {
-                    processor.Dispose();
+                    await processor.DisposeAsync();
                     _logger.LogWarning("AzureEventHubConsumingAdapter: Processor for topic '{Topic}' and subscription '{Subscription}' already exists. Skipping creation.", endpoint.Topic, endpoint.Subscription);
                     return;
                 }
@@ -136,14 +139,14 @@
             }
         }
 
-        private void StopProcessor(ConsumerEndpoint endpoint)
+        private async Task StopProcessorAsync(ConsumerEndpoint endpoint)
         {
             if (!_processors.TryRemove(endpoint.Key, out var processor))
                 return;
 
             try
             {
-                processor.Dispose();
+                await processor.DisposeAsync();
                 _listeners[endpoint.Key] = default;
 
                 _logger.LogInformation("AzureEventHubConsumingAdapter: Stopped processor for topic '{Topic}' and subscription '{Subscription}'.", endpoint.Topic, endpoint.Subscription);
@@ -168,7 +171,7 @@
                         var eventData = partitionEvent.Data;
                         var json = eventData.EventBody.ToArray().FromBytes();
 
-                        MessageConsumed?.Invoke(this, new MessageConsumedEventArgs(endpoint.Topic, json, endpoint.Subscription));
+                        await OnMessageConsumedAsync(new MessageConsumedEventArgs(endpoint.Topic, json, endpoint.Subscription), cancellationToken);
                     }
                     catch (Exception ex)
                     {
@@ -196,6 +199,22 @@
                 return endpoints;
 
             return _consumingConfigurator.GetAllTopics()?.Select(topic => new ConsumerEndpoint(topic)) ?? Enumerable.Empty<ConsumerEndpoint>();
+        }
+
+        private async ValueTask OnMessageConsumedAsync(MessageConsumedEventArgs args, CancellationToken cancellationToken)
+        {
+            var asyncHandler = MessageConsumedAsync;
+            if (asyncHandler == null)
+            {
+                var syncHandler = MessageConsumed;
+                if (syncHandler != null)
+                    _ = Task.Run(() => syncHandler(this, args), CancellationToken.None);
+
+                return;
+            }
+
+            foreach (MessageConsumedAsyncHandler handler in asyncHandler.GetInvocationList())
+                await handler(this, args, cancellationToken);
         }
     }
 }

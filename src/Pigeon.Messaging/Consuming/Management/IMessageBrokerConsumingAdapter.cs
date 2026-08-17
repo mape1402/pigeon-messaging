@@ -26,7 +26,13 @@
 
         /// <summary>
         /// Raised when a new message is consumed from the broker.
+        /// Prefer <see cref="MessageConsumedAsync"/> for broker callback paths that need async backpressure.
         /// </summary>
         event EventHandler<MessageConsumedEventArgs> MessageConsumed;
+
+        /// <summary>
+        /// Raised when a new message is consumed from the broker and should be accepted asynchronously by Pigeon.
+        /// </summary>
+        event MessageConsumedAsyncHandler MessageConsumedAsync;
     }
 }

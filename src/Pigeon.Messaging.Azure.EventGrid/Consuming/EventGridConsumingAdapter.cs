@@ -58,6 +58,9 @@
         /// </summary>
         public event EventHandler<MessageConsumedEventArgs> MessageConsumed;
 
+        /// <inheritdoc />
+        public event MessageConsumedAsyncHandler MessageConsumedAsync;
+
         /// <summary>
         /// Starts consuming messages asynchronously from all configured topics.
         /// </summary>
@@ -127,7 +130,7 @@
                             token => args.CompleteMessageAsync(args.Message, token),
                             (_, token) => args.AbandonMessageAsync(args.Message, cancellationToken: token));
 
-                    MessageConsumed?.Invoke(this, consumed);
+                    await OnMessageConsumedAsync(consumed, args.CancellationToken);
                 }
                 catch (Exception ex)
                 {
@@ -174,6 +177,22 @@
                 return endpoints;
 
             return _consumingConfigurator.GetAllTopics()?.Select(topic => new ConsumerEndpoint(topic)) ?? Enumerable.Empty<ConsumerEndpoint>();
+        }
+
+        private async ValueTask OnMessageConsumedAsync(MessageConsumedEventArgs args, CancellationToken cancellationToken)
+        {
+            var asyncHandler = MessageConsumedAsync;
+            if (asyncHandler == null)
+            {
+                var syncHandler = MessageConsumed;
+                if (syncHandler != null)
+                    _ = Task.Run(() => syncHandler(this, args), CancellationToken.None);
+
+                return;
+            }
+
+            foreach (MessageConsumedAsyncHandler handler in asyncHandler.GetInvocationList())
+                await handler(this, args, cancellationToken);
         }
 
         private class EventData

@@ -106,10 +106,22 @@ namespace Pigeon.Messaging.Azure.EventGrid
             => _client.CreateProcessor(topic, subscription, CreateProcessorOptions());
 
         private ServiceBusProcessorOptions CreateProcessorOptions()
-            => new()
+        {
+            var options = new ServiceBusProcessorOptions
             {
                 AutoCompleteMessages = _globalSettings.ConsumerExecution?.AcknowledgementMode == MessageAcknowledgementMode.OnReceive
             };
+
+            var maxConcurrency = _globalSettings.ConsumerExecution?.MaxConcurrency;
+            if (maxConcurrency is > 0)
+                options.MaxConcurrentCalls = maxConcurrency.Value;
+
+            var prefetchCount = _globalSettings.ConsumerExecution?.PrefetchCount;
+            if (prefetchCount is > 0)
+                options.PrefetchCount = prefetchCount.Value;
+
+            return options;
+        }
     }
 
     /// <summary>

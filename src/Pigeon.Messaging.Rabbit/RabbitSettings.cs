@@ -31,5 +31,11 @@
         /// Gets or sets whether failed messages should be requeued when a consumer handler fails.
         /// </summary>
         public bool RequeueOnFailure { get; set; }
+
+        /// <summary>
+        /// Gets or sets the number of RabbitMQ channels used for concurrent publishing.
+        /// When less than one, Pigeon uses a productive default based on the current process CPU count.
+        /// </summary>
+        public int PublisherChannelPoolSize { get; set; }
     }
 }

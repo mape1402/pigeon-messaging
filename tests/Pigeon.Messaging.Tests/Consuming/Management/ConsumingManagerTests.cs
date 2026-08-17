@@ -98,6 +98,20 @@
         public async Task MessageConsumed_InvokesDispatchAsync()
         {
             var dispatcher = Substitute.For<IConsumingDispatcher>();
+            var dispatched = false;
+            dispatcher
+                .DispatchAsync(
+                    Arg.Any<string>(),
+                    Arg.Any<string>(),
+                    Arg.Any<RawPayload>(),
+                    Arg.Any<Func<CancellationToken, Task>>(),
+                    Arg.Any<Func<Exception, CancellationToken, Task>>(),
+                    Arg.Any<CancellationToken>())
+                .Returns(_ =>
+                {
+                    dispatched = true;
+                    return Task.CompletedTask;
+                });
             var adapter = Substitute.For<IMessageBrokerConsumingAdapter>();
             var logger = Substitute.For<ILogger<ConsumingManager>>();
             var options = CreateOptions();
@@ -111,8 +125,7 @@
             // Raise event
             adapter.MessageConsumed += Raise.EventWith(adapter, eventArgs);
 
-            // Allow some delay for async fire-and-forget
-            await Task.Delay(100);
+            await WaitUntilAsync(() => dispatched);
 
             await dispatcher.Received(1).DispatchAsync(
                 "topic1",
@@ -332,7 +345,7 @@
                     Arg.Any<Func<Exception, CancellationToken, Task>>(),
                     Arg.Any<CancellationToken>())
                 .Returns(_ => release.Task);
-            var adapter = Substitute.For<IMessageBrokerConsumingAdapter>();
+            var adapter = new TestConsumingAdapter();
             var logger = Substitute.For<ILogger<ConsumingManager>>();
             var options = Options.Create(new GlobalSettings
             {
@@ -347,11 +360,10 @@
 
             await manager.StartAsync();
 
-            adapter.MessageConsumed += Raise.EventWith(adapter, new MessageConsumedEventArgs("topic1", RawJson));
-            adapter.MessageConsumed += Raise.EventWith(adapter, new MessageConsumedEventArgs("topic1", RawJson));
+            await adapter.RaiseAsync(new MessageConsumedEventArgs("topic1", RawJson));
+            await adapter.RaiseAsync(new MessageConsumedEventArgs("topic1", RawJson));
 
-            var blockedRaise = Task.Run(() =>
-                adapter.MessageConsumed += Raise.EventWith(adapter, new MessageConsumedEventArgs("topic1", RawJson)));
+            var blockedRaise = adapter.RaiseAsync(new MessageConsumedEventArgs("topic1", RawJson)).AsTask();
 
             await Task.Delay(150);
 
@@ -434,6 +446,32 @@
             }
 
             throw new TimeoutException("The expected condition was not reached.");
+        }
+
+        private sealed class TestConsumingAdapter : IMessageBrokerConsumingAdapter
+        {
+            public event EventHandler<MessageConsumedEventArgs> MessageConsumed;
+
+            public event MessageConsumedAsyncHandler MessageConsumedAsync;
+
+            public ValueTask StartConsumeAsync(CancellationToken cancellationToken = default)
+                => ValueTask.CompletedTask;
+
+            public ValueTask StopConsumeAsync(CancellationToken cancellationToken = default)
+                => ValueTask.CompletedTask;
+
+            public async ValueTask RaiseAsync(MessageConsumedEventArgs args, CancellationToken cancellationToken = default)
+            {
+                var asyncHandler = MessageConsumedAsync;
+                if (asyncHandler == null)
+                {
+                    MessageConsumed?.Invoke(this, args);
+                    return;
+                }
+
+                foreach (MessageConsumedAsyncHandler handler in asyncHandler.GetInvocationList())
+                    await handler(this, args, cancellationToken);
+            }
         }
     }
 }
