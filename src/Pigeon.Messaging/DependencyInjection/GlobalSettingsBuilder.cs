@@ -101,6 +101,22 @@
         }
 
         /// <summary>
+        /// Adds known publish routes to the startup topology warmup list.
+        /// </summary>
+        /// <param name="routes">The publish routes to pre-provision when startup topology provisioning is enabled.</param>
+        /// <returns>The same <see cref="GlobalSettingsBuilder"/> instance for chaining.</returns>
+        public GlobalSettingsBuilder PreProvisionPublishRoutes(params PublishingRoute[] routes)
+        {
+            if (routes == null)
+                throw new ArgumentNullException(nameof(routes));
+
+            foreach (var route in routes.Where(route => route != null))
+                GlobalSettings.PublishTopologyRoutes.Add(route);
+
+            return this;
+        }
+
+        /// <summary>
         /// Configures bounded consumer dispatch execution.
         /// </summary>
         /// <param name="configure">The consumer execution configuration action.</param>

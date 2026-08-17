@@ -10,6 +10,12 @@ namespace Pigeon.Testing
             remove { }
         }
 
+        event MessageConsumedAsyncHandler IMessageBrokerConsumingAdapter.MessageConsumedAsync
+        {
+            add { }
+            remove { }
+        }
+
         public ValueTask StartConsumeAsync(CancellationToken cancellationToken = default)
             => ValueTask.CompletedTask;
 

@@ -69,7 +69,7 @@ namespace Pigeon.Messaging.Azure.EventHub.Tests.Consuming
             await adapter.StopConsumeAsync();
 
             // Assert
-            processor.Received(1).Dispose();
+            await processor.Received(1).DisposeAsync();
             
             // Verificar que se logueó la información de parada
             logger.Received().Log(
@@ -197,7 +197,7 @@ namespace Pigeon.Messaging.Azure.EventHub.Tests.Consuming
             configurator.GetAllTopics().Returns(topics);
             
             var processor = Substitute.For<IEventHubProcessor>();
-            processor.When(p => p.Dispose()).Do(_ => throw new Exception("Disposal failed"));
+            processor.DisposeAsync().Returns(_ => throw new Exception("Disposal failed"));
             provider.CreateProcessor("hub1").Returns(processor);
             
             var adapter = new EventHubConsumingAdapter(configurator, provider, options, logger);

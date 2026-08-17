@@ -60,6 +60,9 @@
         /// </summary>
         public event EventHandler<MessageConsumedEventArgs> MessageConsumed;
 
+        /// <inheritdoc />
+        public event MessageConsumedAsyncHandler MessageConsumedAsync;
+
         /// <summary>
         /// Starts consuming messages asynchronously from all configured topics.
         /// </summary>
@@ -116,14 +119,16 @@
         /// </summary>
         /// <param name="consumer">The Kafka consumer to listen on.</param>
         /// <param name="cancellationToken">A cancellation token to observe while waiting for messages.</param>
-        private void Listen(IConsumer<Ignore, string> consumer, CancellationToken cancellationToken)
+        private async Task ListenAsync(IConsumer<Ignore, string> consumer, CancellationToken cancellationToken)
         {
             while (!cancellationToken.IsCancellationRequested)
             {
                 try
                 {
                     var result = consumer.Consume(cancellationToken);
-                    MessageConsumed?.Invoke(this, CreateConsumedEvent(result.Topic, result.Message.Value, ConsumerEndpoint.DefaultSubscription, consumer, result));
+                    await OnMessageConsumedAsync(
+                        CreateConsumedEvent(result.Topic, result.Message.Value, ConsumerEndpoint.DefaultSubscription, consumer, result),
+                        cancellationToken);
                 }
                 catch (Exception ex)
                 {
@@ -132,7 +137,7 @@
             }
         }
 
-        private void ListenEndpoint(IConsumer<Ignore, string> consumer, ConsumerEndpoint endpoint, CancellationToken cancellationToken)
+        private async Task ListenEndpointAsync(IConsumer<Ignore, string> consumer, ConsumerEndpoint endpoint, CancellationToken cancellationToken)
         {
             while (!cancellationToken.IsCancellationRequested)
             {
@@ -140,7 +145,9 @@
                 {
                     var result = consumer.Consume(cancellationToken);
                     var topic = string.IsNullOrWhiteSpace(endpoint.Topic) ? result.Topic : endpoint.Topic;
-                    MessageConsumed?.Invoke(this, CreateConsumedEvent(topic, result.Message.Value, endpoint.Subscription, consumer, result));
+                    await OnMessageConsumedAsync(
+                        CreateConsumedEvent(topic, result.Message.Value, endpoint.Subscription, consumer, result),
+                        cancellationToken);
                 }
                 catch (Exception ex)
                 {
@@ -167,7 +174,7 @@
 
             consumer.Subscribe(endpoint.Topic);
 
-            var listener = Task.Run(() => ListenEndpoint(consumer, endpoint, _cancellationTokenSource.Token));
+            var listener = Task.Run(() => ListenEndpointAsync(consumer, endpoint, _cancellationTokenSource.Token));
 
             _listeners.TryAdd(endpoint.Key, listener);
         }
@@ -228,6 +235,22 @@
                 return endpoints;
 
             return _consumingConfigurator.GetAllTopics()?.Select(topic => new ConsumerEndpoint(topic)) ?? Enumerable.Empty<ConsumerEndpoint>();
+        }
+
+        private async ValueTask OnMessageConsumedAsync(MessageConsumedEventArgs args, CancellationToken cancellationToken)
+        {
+            var asyncHandler = MessageConsumedAsync;
+            if (asyncHandler == null)
+            {
+                var syncHandler = MessageConsumed;
+                if (syncHandler != null)
+                    _ = Task.Run(() => syncHandler(this, args), CancellationToken.None);
+
+                return;
+            }
+
+            foreach (MessageConsumedAsyncHandler handler in asyncHandler.GetInvocationList())
+                await handler(this, args, cancellationToken);
         }
     }
 }

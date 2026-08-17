@@ -29,6 +29,9 @@ namespace Pigeon.Messaging.Topology
 
             foreach (var endpoint in _consumingConfigurator.GetAllEndpoints())
                 await EnsureConsumeTopologyCoreAsync(endpoint, cancellationToken);
+
+            foreach (var route in _settings.PublishTopologyRoutes)
+                await EnsurePublishTopologyCoreAsync(route, cancellationToken);
         }
 
         public Task EnsurePublishTopologyAsync(PublishingRoute route, CancellationToken cancellationToken = default)

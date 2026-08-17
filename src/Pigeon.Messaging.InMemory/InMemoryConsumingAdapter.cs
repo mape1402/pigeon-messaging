@@ -17,6 +17,8 @@ namespace Pigeon.Messaging.InMemory
 
         public event EventHandler<MessageConsumedEventArgs> MessageConsumed;
 
+        public event MessageConsumedAsyncHandler MessageConsumedAsync;
+
         public ValueTask StartConsumeAsync(CancellationToken cancellationToken = default)
         {
             if (Interlocked.Exchange(ref _started, 1) == 1)
@@ -35,10 +37,10 @@ namespace Pigeon.Messaging.InMemory
             return ValueTask.CompletedTask;
         }
 
-        private ValueTask OnMessagePublishedAsync(InMemoryPublishedMessage message, CancellationToken cancellationToken)
+        private async ValueTask OnMessagePublishedAsync(InMemoryPublishedMessage message, CancellationToken cancellationToken)
         {
             if (message.IsRaw)
-                return ValueTask.CompletedTask;
+                return;
 
             var endpoints = _consumingConfigurator.GetAllEndpoints()
                 .Where(endpoint => string.Equals(endpoint.Topic, message.Route.Topic, StringComparison.Ordinal))
@@ -47,8 +49,7 @@ namespace Pigeon.Messaging.InMemory
             foreach (var endpoint in endpoints)
             {
                 var delivery = _broker.CreateDelivery(message, endpoint);
-                MessageConsumed?.Invoke(
-                    this,
+                await OnMessageConsumedAsync(
                     new MessageConsumedEventArgs(
                         endpoint.Topic,
                         message.Payload,
@@ -63,10 +64,27 @@ namespace Pigeon.Messaging.InMemory
                             delivery.Failed = true;
                             delivery.Error = exception?.Message;
                             return Task.CompletedTask;
-                        }));
+                        }),
+                    cancellationToken);
             }
 
-            return ValueTask.CompletedTask;
+            return;
+        }
+
+        private async ValueTask OnMessageConsumedAsync(MessageConsumedEventArgs args, CancellationToken cancellationToken)
+        {
+            var asyncHandler = MessageConsumedAsync;
+            if (asyncHandler == null)
+            {
+                var syncHandler = MessageConsumed;
+                if (syncHandler != null)
+                    _ = Task.Run(() => syncHandler(this, args), CancellationToken.None);
+
+                return;
+            }
+
+            foreach (MessageConsumedAsyncHandler handler in asyncHandler.GetInvocationList())
+                await handler(this, args, cancellationToken);
         }
     }
 }

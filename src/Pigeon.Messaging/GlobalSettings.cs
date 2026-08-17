@@ -51,6 +51,11 @@
         public PublishingSettings Publishing { get; set; } = new();
 
         /// <summary>
+        /// Gets or sets publish routes that should be pre-provisioned during startup topology provisioning.
+        /// </summary>
+        public IList<PublishingRoute> PublishTopologyRoutes { get; set; } = new List<PublishingRoute>();
+
+        /// <summary>
         /// Gets or sets transactional outbox settings.
         /// </summary>
         public OutboxSettings Outbox { get; set; } = new();

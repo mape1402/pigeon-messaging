@@ -11,20 +11,17 @@
 
     /// <summary>
     /// Adapter implementation to publish messages to RabbitMQ using the new IChannel API.
-    /// This class manages a single channel and ensures thread-safe access for publishing.
+    /// This class manages a pool of channels and ensures thread-safe access per channel.
     /// </summary>
-    internal class RabbitProducingAdapter : IMessageBrokerProducingAdapter
+    internal class RabbitProducingAdapter : IMessageBrokerProducingAdapter, IAsyncDisposable
     {
         private readonly IConnectionProvider _connectionProvider;
         private readonly ISerializer _serializer;
         private readonly RabbitSettings _settings;
         private readonly ILogger<RabbitProducingAdapter> _logger;
+        private readonly RabbitPublisherChannel[] _channels;
 
-        // Single channel instance reused for publishing
-        private IChannel _channel;
-
-        // SemaphoreSlim to provide async thread-safe access to the channel
-        private readonly SemaphoreSlim _channelLock = new(1, 1);
+        private int _nextChannelIndex;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="RabbitProducingAdapter"/> class.
@@ -40,6 +37,9 @@
             _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
             _settings = settings?.Value ?? throw new ArgumentNullException(nameof(settings));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _channels = Enumerable.Range(0, GetPublisherChannelPoolSize())
+                .Select(index => new RabbitPublisherChannel(index))
+                .ToArray();
         }
 
         /// <summary>
@@ -71,27 +71,47 @@
 
         private async ValueTask PublishCoreAsync(object payload, PublishingRoute route, CancellationToken cancellationToken = default)
         {
-            await _channelLock.WaitAsync(cancellationToken);
+            var publisherChannel = GetNextPublisherChannel();
+            await publisherChannel.Lock.WaitAsync(cancellationToken);
 
             try
             {
-                if (_channel == null || !_channel.IsOpen)
-                    _channel = await _connectionProvider.CreateChannelAsync(cancellationToken);
+                if (publisherChannel.Channel == null || !publisherChannel.Channel.IsOpen)
+                    publisherChannel.Channel = await _connectionProvider.CreateChannelAsync(cancellationToken);
 
                 var exchange = ResolveExchange(route);
 
                 var body = _serializer.SerializeAsBytes(payload);
 
-                await _channel.BasicPublishAsync(exchange, route.RoutingKey, false, new BasicProperties(), body,  cancellationToken);
+                await publisherChannel.Channel.BasicPublishAsync(exchange, route.RoutingKey, false, new BasicProperties(), body,  cancellationToken);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error while publishing message using Rabbit Adapter.");
+                _logger.LogError(ex, "Error while publishing message using Rabbit Adapter channel {ChannelIndex}.", publisherChannel.Index);
                 throw;
             }
             finally
             {
-                _channelLock.Release();
+                publisherChannel.Lock.Release();
+            }
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            foreach (var publisherChannel in _channels)
+            {
+                await publisherChannel.Lock.WaitAsync();
+
+                try
+                {
+                    if (publisherChannel.Channel != null)
+                        await publisherChannel.Channel.DisposeAsync();
+                }
+                finally
+                {
+                    publisherChannel.Lock.Release();
+                    publisherChannel.Lock.Dispose();
+                }
             }
         }
 
@@ -99,5 +119,30 @@
             => !string.IsNullOrWhiteSpace(route.Exchange)
                 ? route.Exchange
                 : _settings.Exchange ?? string.Empty;
+
+        private RabbitPublisherChannel GetNextPublisherChannel()
+        {
+            var index = Interlocked.Increment(ref _nextChannelIndex);
+            return _channels[Math.Abs(index % _channels.Length)];
+        }
+
+        private int GetPublisherChannelPoolSize()
+            => _settings.PublisherChannelPoolSize > 0
+                ? _settings.PublisherChannelPoolSize
+                : Math.Max(4, Environment.ProcessorCount * 2);
+
+        private sealed class RabbitPublisherChannel
+        {
+            public RabbitPublisherChannel(int index)
+            {
+                Index = index;
+            }
+
+            public int Index { get; }
+
+            public IChannel Channel { get; set; }
+
+            public SemaphoreSlim Lock { get; } = new(1, 1);
+        }
     }
 }
