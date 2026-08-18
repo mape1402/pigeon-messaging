@@ -29,6 +29,7 @@ namespace Pigeon.Messaging.Outbox
                     mule.ImmediateDispatch = settings.ImmediateDispatch;
                     mule.DispatchInterval = settings.DispatchInterval;
                     mule.DispatchQueueCapacity = settings.DispatchQueueCapacity;
+                    mule.ExecutionQueueCapacity = settings.ExecutionQueueCapacity;
                     mule.DispatchBatchSize = settings.DispatchBatchSize;
                     mule.WorkerCount = settings.WorkerCount;
                     mule.MaxDegreeOfParallelism = settings.MaxDegreeOfParallelism;
@@ -57,6 +58,7 @@ namespace Pigeon.Messaging.Outbox
                             DrainUntilEmpty = lane.Value.DrainUntilEmpty,
                             YieldBetweenDrainBatches = lane.Value.YieldBetweenDrainBatches,
                             DispatchQueueCapacity = lane.Value.DispatchQueueCapacity,
+                            ExecutionQueueCapacity = lane.Value.ExecutionQueueCapacity,
                             PollingInterval = lane.Value.PollingInterval,
                             MaxAttempts = lane.Value.MaxAttempts,
                             RetryDelay = lane.Value.RetryDelay,
