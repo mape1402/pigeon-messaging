@@ -26,6 +26,11 @@ namespace Pigeon.Messaging.Outbox
         public int DispatchQueueCapacity { get; set; }
 
         /// <summary>
+        /// Gets or sets the in-memory execution queue capacity. A value less than or equal to zero uses an unbounded queue.
+        /// </summary>
+        public int ExecutionQueueCapacity { get; set; }
+
+        /// <summary>
         /// Gets or sets the interval used to clean already published messages.
         /// </summary>
         public TimeSpan CleanInterval { get; set; } = TimeSpan.FromMinutes(10);
@@ -112,6 +117,7 @@ namespace Pigeon.Messaging.Outbox
         {
             WorkerCount = Math.Max(WorkerCount, Environment.ProcessorCount);
             MaxDegreeOfParallelism = Math.Max(MaxDegreeOfParallelism, Environment.ProcessorCount * 8);
+            ExecutionQueueCapacity = Math.Max(ExecutionQueueCapacity, 10_000);
             DispatchBatchSize = Math.Max(DispatchBatchSize, 250);
             MaxDrainBatchesPerCycle = Math.Max(MaxDrainBatchesPerCycle, 8);
             MaxDrainActionsPerCycle = Math.Max(MaxDrainActionsPerCycle, 2_000);

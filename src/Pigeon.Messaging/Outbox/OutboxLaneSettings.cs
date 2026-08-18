@@ -46,6 +46,11 @@ namespace Pigeon.Messaging.Outbox
         public int DispatchQueueCapacity { get; set; }
 
         /// <summary>
+        /// Gets or sets the in-memory execution queue capacity for this lane.
+        /// </summary>
+        public int ExecutionQueueCapacity { get; set; }
+
+        /// <summary>
         /// Gets or sets the polling interval for this lane.
         /// </summary>
         public TimeSpan PollingInterval { get; set; }

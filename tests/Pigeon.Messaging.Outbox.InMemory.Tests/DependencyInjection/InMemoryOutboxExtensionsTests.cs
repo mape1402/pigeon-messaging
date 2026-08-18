@@ -54,6 +54,7 @@ namespace Pigeon.Messaging.Outbox.InMemory.Tests.DependencyInjection
             builder.UseInMemoryOutbox(settings =>
             {
                 settings.DispatchQueueCapacity = 100_000;
+                settings.ExecutionQueueCapacity = 50_000;
                 settings.DispatchBatchSize = 500;
                 settings.WorkerCount = 16;
                 settings.MaxDegreeOfParallelism = 128;
@@ -70,6 +71,7 @@ namespace Pigeon.Messaging.Outbox.InMemory.Tests.DependencyInjection
                     MaxDrainActionsPerCycle = 2_000,
                     DrainUntilEmpty = true,
                     DispatchQueueCapacity = 10_000,
+                    ExecutionQueueCapacity = 5_000,
                     PollingInterval = TimeSpan.FromSeconds(2),
                     Priority = 10,
                     Weight = 5
@@ -80,6 +82,7 @@ namespace Pigeon.Messaging.Outbox.InMemory.Tests.DependencyInjection
             var muleSettings = provider.GetRequiredService<IOptions<MuleSettings>>().Value;
 
             Assert.Equal(100_000, muleSettings.DispatchQueueCapacity);
+            Assert.Equal(50_000, muleSettings.ExecutionQueueCapacity);
             Assert.Equal(500, muleSettings.DispatchBatchSize);
             Assert.Equal(16, muleSettings.WorkerCount);
             Assert.Equal(128, muleSettings.MaxDegreeOfParallelism);
@@ -95,6 +98,7 @@ namespace Pigeon.Messaging.Outbox.InMemory.Tests.DependencyInjection
             Assert.Equal(2_000, muleSettings.Lanes["critical"].MaxDrainActionsPerCycle);
             Assert.True(muleSettings.Lanes["critical"].DrainUntilEmpty);
             Assert.Equal(10_000, muleSettings.Lanes["critical"].DispatchQueueCapacity);
+            Assert.Equal(5_000, muleSettings.Lanes["critical"].ExecutionQueueCapacity);
             Assert.Equal(TimeSpan.FromSeconds(2), muleSettings.Lanes["critical"].PollingInterval);
             Assert.Equal(10, muleSettings.Lanes["critical"].Priority);
             Assert.Equal(5, muleSettings.Lanes["critical"].Weight);
@@ -111,6 +115,7 @@ namespace Pigeon.Messaging.Outbox.InMemory.Tests.DependencyInjection
             Assert.True(settings.ImmediateDispatch);
             Assert.Equal(Environment.ProcessorCount, settings.WorkerCount);
             Assert.Equal(Environment.ProcessorCount * 8, settings.MaxDegreeOfParallelism);
+            Assert.True(settings.ExecutionQueueCapacity >= 10_000);
             Assert.True(settings.DispatchBatchSize >= 250);
             Assert.True(settings.MaxDrainBatchesPerCycle >= 8);
             Assert.True(settings.MaxDrainActionsPerCycle >= 2_000);
