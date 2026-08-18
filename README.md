@@ -515,7 +515,7 @@ public class CurrentMessageTenantProvider
 
 The transactional outbox plugs into the producer pipeline. `PublishAsync` still runs publish interceptors in the current scope, builds the final `WrappedPayload`, and then stores that exact payload in the outbox instead of sending it directly to the broker. Pigeon stores the publish intent as a Mule durable action and Mule handles retry, recovery scanning, immediate dispatch, and cleanup.
 
-Pigeon 2.5 uses Mule Durable Actions 1.3 for the outbox providers, including Mule's high-throughput durable action runtime improvements.
+Pigeon 2.7 uses Mule Durable Actions 1.4 for the outbox providers, including Mule's bounded dispatch and execution queues, lane-aware runtime settings, and high-throughput durable action improvements.
 
 This keeps scoped metadata, tracing, tenant data, and other publish interceptor output exactly as it existed at publish time. The dispatch step is intentionally separated from the original request scope.
 
@@ -537,6 +537,7 @@ builder.Services.AddPigeon(builder.Configuration, config =>
         outbox.DispatchInterval = TimeSpan.FromSeconds(5);
         outbox.ImmediateDispatch = true;
         outbox.DispatchQueueCapacity = 100_000;
+        outbox.ExecutionQueueCapacity = 50_000;
         outbox.CleanInterval = TimeSpan.FromMinutes(10);
         outbox.PublishedMessageRetention = TimeSpan.FromDays(1);
         outbox.DispatchBatchSize = 500;
@@ -549,6 +550,8 @@ builder.Services.AddPigeon(builder.Configuration, config =>
     });
 });
 ```
+
+`DispatchQueueCapacity` controls how many durable actions can wait for Mule dispatch. `ExecutionQueueCapacity` controls how many actions can wait for execution after they have been locked and accepted by Mule's executor. Both can be configured globally or per outbox lane.
 
 For the common high-throughput profile, use the outbox helper:
 
@@ -698,6 +701,7 @@ builder.Services
       "Enabled": true,
       "ImmediateDispatch": true,
       "DispatchQueueCapacity": 100000,
+      "ExecutionQueueCapacity": 50000,
       "DispatchBatchSize": 500,
       "WorkerCount": 16,
       "MaxDegreeOfParallelism": 128,
