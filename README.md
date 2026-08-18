@@ -441,7 +441,7 @@ config.ConfigureConsumerExecution(execution =>
 });
 ```
 
-When `MaxConcurrency` is `null` or less than `1`, Pigeon does not apply an internal concurrency limit. When `QueueCapacity` is `null` or less than `1`, the internal dispatch queue is unbounded. If `QueueCapacity` is set, the internal queue is bounded and applies backpressure before handlers run.
+When `MaxConcurrency` and `QueueCapacity` are both `null` or less than `1`, Pigeon does not create an internal dispatch queue; broker adapters dispatch directly into the consumer pipeline. If either setting is configured, Pigeon enables the internal dispatch queue so it can apply concurrency control and backpressure before handlers run.
 
 RabbitMQ prefetch uses `ConsumerExecution.PrefetchCount` when configured. If `PrefetchCount` is not configured but `MaxConcurrency` is configured, RabbitMQ derives prefetch from `MaxConcurrency`. With `OnReceive`, RabbitMQ uses auto-ack and Pigeon does not apply QoS.
 
@@ -515,7 +515,7 @@ public class CurrentMessageTenantProvider
 
 The transactional outbox plugs into the producer pipeline. `PublishAsync` still runs publish interceptors in the current scope, builds the final `WrappedPayload`, and then stores that exact payload in the outbox instead of sending it directly to the broker. Pigeon stores the publish intent as a Mule durable action and Mule handles retry, recovery scanning, immediate dispatch, and cleanup.
 
-Pigeon 2.7 uses Mule Durable Actions 1.4 for the outbox providers, including Mule's bounded dispatch and execution queues, lane-aware runtime settings, and high-throughput durable action improvements.
+Pigeon 2.8 uses Mule Durable Actions 1.4.1 for the outbox providers, including Mule's bounded dispatch and execution queues, lane-aware runtime settings, and high-throughput durable action improvements.
 
 This keeps scoped metadata, tracing, tenant data, and other publish interceptor output exactly as it existed at publish time. The dispatch step is intentionally separated from the original request scope.
 

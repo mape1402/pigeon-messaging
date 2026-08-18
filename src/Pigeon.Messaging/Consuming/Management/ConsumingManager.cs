@@ -23,6 +23,7 @@
         private readonly ConcurrentDictionary<Guid, Task> _inFlightDispatches = new();
         private CancellationTokenSource _workerCancellationTokenSource;
         private Task[] _workers = Array.Empty<Task>();
+        private bool _useQueuedDispatch;
 
         public ConsumingManager(
             IConsumingDispatcher dispatcher,
@@ -66,15 +67,21 @@
         {
             _backgroundCancellationToken = cancellationToken;
             _workerCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            _messageQueue = CreateMessageQueue();
             _diagnostics.Configure(_globalSettings.ConsumerExecution);
 
             var maxConcurrency = GetMaxConcurrency();
-            _workers = maxConcurrency.HasValue
-                ? Enumerable.Range(0, maxConcurrency.Value)
-                    .Select(_ => Task.Run(() => ProcessMessagesAsync(_workerCancellationTokenSource.Token), CancellationToken.None))
-                    .ToArray()
-                : new[] { Task.Run(() => ProcessMessagesWithoutConcurrencyLimitAsync(_workerCancellationTokenSource.Token), CancellationToken.None) };
+            var queueCapacity = GetQueueCapacity();
+            _useQueuedDispatch = maxConcurrency.HasValue || queueCapacity.HasValue;
+
+            if (_useQueuedDispatch)
+            {
+                _messageQueue = CreateMessageQueue(queueCapacity);
+                _workers = maxConcurrency.HasValue
+                    ? Enumerable.Range(0, maxConcurrency.Value)
+                        .Select(_ => Task.Run(() => ProcessMessagesAsync(_workerCancellationTokenSource.Token), CancellationToken.None))
+                        .ToArray()
+                    : new[] { Task.Run(() => ProcessMessagesWithoutConcurrencyLimitAsync(_workerCancellationTokenSource.Token), CancellationToken.None) };
+            }
 
             foreach (var endpoint in _consumingConfigurator.GetAllEndpoints())
                 await _topologyProvisioningService.EnsureConsumeTopologyAsync(endpoint, cancellationToken);
@@ -124,27 +131,49 @@
             try
             {
                 _diagnostics.RecordReceived();
-                _diagnostics.RecordQueued();
-                await _messageQueue.Writer.WriteAsync(
-                    new QueuedConsumedMessage(e, DateTimeOffset.UtcNow),
+
+                if (_useQueuedDispatch)
+                {
+                    await EnqueueMessageAsync(e, cancellationToken);
+                    return;
+                }
+
+                await DispatchMessageAsync(
+                    e,
+                    null,
                     cancellationToken.CanBeCanceled ? cancellationToken : _backgroundCancellationToken);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Has occurred an unexpected error when a message was enqueued for dispatch.");
-                _diagnostics.RecordQueueWriteFailed();
+                _logger.LogError(ex, "Has occurred an unexpected error when a message was accepted for dispatch.");
+
+                if (_useQueuedDispatch)
+                    _diagnostics.RecordQueueWriteFailed();
+
                 _diagnostics.RecordRejected();
                 await e.FailAsync(ex, cancellationToken.CanBeCanceled ? cancellationToken : _backgroundCancellationToken);
             }
         }
 
         private void MessageConsumed(object sender, MessageConsumedEventArgs e)
-            => _ = MessageConsumedAsync(sender, e, _backgroundCancellationToken).AsTask();
+        {
+            if (_useQueuedDispatch)
+            {
+                _ = MessageConsumedAsync(sender, e, _backgroundCancellationToken).AsTask();
+                return;
+            }
+
+            _diagnostics.RecordReceived();
+            TrackDispatch(e, null, _backgroundCancellationToken);
+        }
 
         private async Task ProcessMessagesAsync(CancellationToken cancellationToken)
         {
             await foreach (var message in _messageQueue.Reader.ReadAllAsync(cancellationToken))
-                await DispatchMessageAsync(message, cancellationToken);
+                await DispatchMessageAsync(
+                    message.Message,
+                    DateTimeOffset.UtcNow - message.EnqueuedOnUtc,
+                    cancellationToken);
         }
 
         private async Task ProcessMessagesWithoutConcurrencyLimitAsync(CancellationToken cancellationToken)
@@ -154,9 +183,20 @@
         }
 
         private void TrackDispatch(QueuedConsumedMessage message, CancellationToken cancellationToken)
+            => TrackDispatch(
+                message.Message,
+                DateTimeOffset.UtcNow - message.EnqueuedOnUtc,
+                cancellationToken);
+
+        private void TrackDispatch(MessageConsumedEventArgs message, TimeSpan? queueWait, CancellationToken cancellationToken)
         {
             var id = Guid.NewGuid();
-            var dispatch = Task.Run(() => DispatchMessageAsync(message, cancellationToken), CancellationToken.None);
+            var dispatch = Task.Run(
+                () => DispatchMessageAsync(
+                    message,
+                    queueWait,
+                    cancellationToken),
+                CancellationToken.None);
 
             _inFlightDispatches.TryAdd(id, dispatch);
             _ = dispatch.ContinueWith(
@@ -166,10 +206,11 @@
                 TaskScheduler.Default);
         }
 
-        private async Task DispatchMessageAsync(QueuedConsumedMessage queuedMessage, CancellationToken cancellationToken)
+        private async Task DispatchMessageAsync(MessageConsumedEventArgs e, TimeSpan? queueWait, CancellationToken cancellationToken)
         {
-            var e = queuedMessage.Message;
-            _diagnostics.RecordDequeued(DateTimeOffset.UtcNow - queuedMessage.EnqueuedOnUtc);
+            if (queueWait.HasValue)
+                _diagnostics.RecordDequeued(queueWait.Value);
+
             _diagnostics.RecordHandlerStarted();
 
             try
@@ -224,10 +265,16 @@
             _diagnostics.RecordRejected();
         }
 
-        private Channel<QueuedConsumedMessage> CreateMessageQueue()
+        private async ValueTask EnqueueMessageAsync(MessageConsumedEventArgs e, CancellationToken cancellationToken)
         {
-            var queueCapacity = GetQueueCapacity();
+            _diagnostics.RecordQueued();
+            await _messageQueue.Writer.WriteAsync(
+                new QueuedConsumedMessage(e, DateTimeOffset.UtcNow),
+                cancellationToken.CanBeCanceled ? cancellationToken : _backgroundCancellationToken);
+        }
 
+        private static Channel<QueuedConsumedMessage> CreateMessageQueue(int? queueCapacity)
+        {
             if (queueCapacity.HasValue)
             {
                 return Channel.CreateBounded<QueuedConsumedMessage>(new BoundedChannelOptions(queueCapacity.Value)

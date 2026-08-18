@@ -280,6 +280,47 @@
         }
 
         [Fact]
+        public async Task MessageConsumedAsync_Should_Dispatch_Directly_When_Execution_Is_Unbounded()
+        {
+            var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var dispatcher = Substitute.For<IConsumingDispatcher>();
+            dispatcher
+                .DispatchAsync(
+                    Arg.Any<string>(),
+                    Arg.Any<string>(),
+                    Arg.Any<RawPayload>(),
+                    Arg.Any<Func<CancellationToken, Task>>(),
+                    Arg.Any<Func<Exception, CancellationToken, Task>>(),
+                    Arg.Any<CancellationToken>())
+                .Returns(_ => release.Task);
+            var adapter = new TestConsumingAdapter();
+            var logger = Substitute.For<ILogger<ConsumingManager>>();
+            var diagnostics = new ConsumerExecutionDiagnostics();
+            var manager = new ConsumingManager(
+                dispatcher,
+                new[] { adapter },
+                Substitute.For<IConsumingConfigurator>(),
+                Substitute.For<ITopologyProvisioningService>(),
+                CreateOptions(),
+                diagnostics,
+                logger);
+
+            await manager.StartAsync();
+
+            var raise = adapter.RaiseAsync(new MessageConsumedEventArgs("topic1", RawJson)).AsTask();
+
+            await Task.Delay(100);
+
+            Assert.False(raise.IsCompleted);
+            Assert.Equal(1, diagnostics.GetSnapshot().ReceivedMessages);
+            Assert.Equal(0, diagnostics.GetSnapshot().QueuedMessages);
+
+            release.SetResult();
+            await raise.WaitAsync(TimeSpan.FromSeconds(2));
+            await manager.StopAsync();
+        }
+
+        [Fact]
         public async Task MessageConsumed_Should_Respect_Configured_MaxConcurrency()
         {
             var started = 0;

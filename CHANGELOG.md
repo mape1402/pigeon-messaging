@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ------
 
+## [v2.8.0] - 2026-08-18
+
+### Changed
+
+- Consumer dispatch now bypasses Pigeon's internal dispatch queue by default when no `MaxConcurrency` or `QueueCapacity` is configured.
+- Pigeon's internal consumer dispatch queue is now enabled only when concurrency control or backpressure is explicitly configured.
+- Updated Mule durable action dependencies to `1.4.1` for the core, in-memory outbox, and Entity Framework Core outbox providers.
+
+------
+
 ## [v2.7.0] - 2026-08-18
 
 ### Added

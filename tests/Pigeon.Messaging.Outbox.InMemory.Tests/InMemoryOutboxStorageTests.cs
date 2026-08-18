@@ -47,9 +47,11 @@ namespace Pigeon.Messaging.Outbox.InMemory.Tests
             await producer.PublishAsync(new InMemoryOutboxTestMessage { Text = "hello" }, "tests.outbox");
 
             var broker = provider.GetRequiredService<IInMemoryBroker>();
-            await WaitUntilAsync(() => broker.PublishedMessages.Count == 1);
-
             var outbox = provider.GetRequiredService<IInMemoryOutbox>();
+            await WaitUntilAsync(() =>
+                broker.PublishedMessages.Count == 1 &&
+                outbox.Messages.SingleOrDefault()?.Status == OutboxMessageStatus.Published);
+
             Assert.Equal(OutboxMessageStatus.Published, outbox.Messages.Single().Status);
 
             await StopHostedServicesAsync(provider);
