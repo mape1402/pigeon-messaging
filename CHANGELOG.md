@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ------
 
+## [v2.7.0] - 2026-08-18
+
+### Added
+
+- `OutboxSettings.ExecutionQueueCapacity` for configuring Mule's bounded execution queue from Pigeon outbox settings.
+- `OutboxLaneSettings.ExecutionQueueCapacity` for lane-specific Mule execution queue capacity.
+
+### Changed
+
+- Updated Mule durable action dependencies to `1.4.0` for the core, in-memory outbox, and Entity Framework Core outbox providers.
+- Pigeon outbox high-throughput defaults now configure Mule execution queue capacity.
+
+------
+
 ## [v2.6.0] - 2026-08-17
 
 ### Added
