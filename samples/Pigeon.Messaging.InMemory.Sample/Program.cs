@@ -37,6 +37,10 @@ namespace Pigeon.Messaging.InMemory.Sample
                 .AddConsumeDecisionInterceptor<DeferredBillingConsumeInterceptor>();
 
             pigeon
+                .ForConsumer(OrderRoutes.CreatedForAudit)
+                .AddConsumeExecutionInterceptor<InlineAuditExecutionInterceptor>();
+
+            pigeon
                 .AddConsumeHandler<OrderCreatedMessage>(
                     OrderRoutes.CreatedForBilling,
                     (context, message) =>

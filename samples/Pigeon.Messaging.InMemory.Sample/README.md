@@ -13,6 +13,7 @@ The sample also shows:
 
 - centralized route keys with `PigeonRouteKey`
 - route-specific consume decision interceptors
+- route-specific consume execution interceptors around the handler
 - global publish decision interceptors
 - replay using the same registered consume handler
 - `IConsumeContextAccessor` compatibility during replay
@@ -25,4 +26,4 @@ No external broker is required.
 dotnet run --project samples\Pigeon.Messaging.InMemory.Sample\Pigeon.Messaging.InMemory.Sample.csproj
 ```
 
-The console output shows the inline delivery, deferred replay, published message count, delivery count, and acknowledgement state for each subscription.
+The console output shows the inline delivery, deferred replay, audit execution interceptor events, published message count, delivery count, and acknowledgement state for each subscription.
