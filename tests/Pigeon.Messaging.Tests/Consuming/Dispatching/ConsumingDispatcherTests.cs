@@ -363,6 +363,192 @@
         }
 
         [Fact]
+        public async Task DispatchAsync_Should_Run_Global_Execution_Interceptor_Around_Handler()
+        {
+            var consumingConfigurator = Substitute.For<IConsumingConfigurator>();
+            var serializer = Substitute.For<ISerializer>();
+            var events = new List<string>();
+
+            serializer.Deserialize(Arg.Any<string>(), Arg.Any<Type>()).Returns(new TestMessage());
+
+            var consumerConfig = new ConsumerConfiguration<TestMessage>((ctx, message) =>
+            {
+                events.Add(ctx.Services.GetRequiredService<IConsumeContextAccessor>().ConsumeContext == ctx
+                    ? "handler-context"
+                    : "handler-no-context");
+                return Task.CompletedTask;
+            })
+            {
+                Topic = "test-topic",
+                Version = SemanticVersion.Default
+            };
+
+            consumingConfigurator.GetConfiguration("test-topic", SemanticVersion.Default).Returns(consumerConfig);
+
+            var services = new ServiceCollection();
+            services.AddSingleton(consumingConfigurator);
+            services.AddSingleton(serializer);
+            services.AddSingleton<ConsumeContextAccessor>();
+            services.AddSingleton<IConsumeContextAccessor>(provider => provider.GetRequiredService<ConsumeContextAccessor>());
+            services.AddScoped<IConsumeExecutionInterceptor>(_ => new RecordingExecutionInterceptor(events, "global"));
+            services.AddSingleton(new PigeonRouteInterceptorRegistry());
+            services.AddSingleton<IConsumeHandlerPipeline, ConsumeHandlerPipeline>();
+
+            var serviceProvider = services.BuildServiceProvider();
+            var dispatcher = new ConsumingDispatcher(serviceProvider);
+
+            await dispatcher.DispatchAsync("test-topic", new RawPayload(ValidJson), CancellationToken.None);
+
+            Assert.Equal(
+                new[] { "global-before", "handler-context", "global-after", "global-finally" },
+                events);
+            Assert.Null(serviceProvider.GetRequiredService<IConsumeContextAccessor>().ConsumeContext);
+        }
+
+        [Fact]
+        public async Task DispatchAsync_Should_Run_Route_Execution_Interceptor_Around_Handler()
+        {
+            var consumingConfigurator = Substitute.For<IConsumingConfigurator>();
+            var serializer = Substitute.For<ISerializer>();
+            var registry = new PigeonRouteInterceptorRegistry();
+            var events = new List<string>();
+
+            serializer.Deserialize(Arg.Any<string>(), Arg.Any<Type>()).Returns(new TestMessage());
+
+            var consumerConfig = new ConsumerConfiguration<TestMessage>((ctx, message) =>
+            {
+                events.Add("handler");
+                return Task.CompletedTask;
+            })
+            {
+                Topic = "test-topic",
+                Version = SemanticVersion.Default,
+                Subscription = "billing"
+            };
+
+            registry.AddConsumeExecutionInterceptor(
+                new PigeonRouteKey("test-topic", SemanticVersion.Default, "billing"),
+                typeof(RouteRecordingExecutionInterceptor));
+
+            consumingConfigurator.GetConfiguration("test-topic", SemanticVersion.Default, "billing").Returns(consumerConfig);
+
+            var services = new ServiceCollection();
+            services.AddSingleton(consumingConfigurator);
+            services.AddSingleton(serializer);
+            services.AddSingleton(registry);
+            services.AddSingleton(events);
+            services.AddScoped<RouteRecordingExecutionInterceptor>();
+            services.AddSingleton<IConsumeHandlerPipeline, ConsumeHandlerPipeline>();
+
+            var dispatcher = new ConsumingDispatcher(services.BuildServiceProvider(), registry);
+
+            await dispatcher.DispatchAsync("test-topic", "billing", new RawPayload(ValidJson), CancellationToken.None);
+
+            Assert.Equal(new[] { "route-before", "handler", "route-after", "route-finally" }, events);
+        }
+
+        [Fact]
+        public async Task DispatchAsync_Should_Not_Run_Execution_Interceptor_When_Decision_Short_Circuits()
+        {
+            var consumingConfigurator = Substitute.For<IConsumingConfigurator>();
+            var serializer = Substitute.For<ISerializer>();
+            var events = new List<string>();
+
+            serializer.Deserialize(Arg.Any<string>(), Arg.Any<Type>()).Returns(new TestMessage());
+
+            var consumerConfig = new ConsumerConfiguration<TestMessage>((ctx, message) =>
+            {
+                events.Add("handler");
+                return Task.CompletedTask;
+            })
+            {
+                Topic = "test-topic",
+                Version = SemanticVersion.Default
+            };
+
+            consumingConfigurator.GetConfiguration("test-topic", SemanticVersion.Default).Returns(consumerConfig);
+
+            var services = new ServiceCollection();
+            services.AddSingleton(consumingConfigurator);
+            services.AddSingleton(serializer);
+            services.AddScoped<IConsumeDecisionInterceptor>(_ => new FixedDecisionInterceptor(PigeonConsumeDecision.AckAndSkip));
+            services.AddScoped<IConsumeExecutionInterceptor>(_ => new RecordingExecutionInterceptor(events, "global"));
+            services.AddSingleton(new PigeonRouteInterceptorRegistry());
+            services.AddSingleton<IConsumeHandlerPipeline, ConsumeHandlerPipeline>();
+
+            var dispatcher = new ConsumingDispatcher(services.BuildServiceProvider());
+
+            await dispatcher.DispatchAsync("test-topic", new RawPayload(ValidJson), CancellationToken.None);
+
+            Assert.Empty(events);
+        }
+
+        [Fact]
+        public async Task DispatchAsync_Should_Run_Execution_Interceptor_Finally_And_Rethrow_When_Handler_Fails()
+        {
+            var consumingConfigurator = Substitute.For<IConsumingConfigurator>();
+            var serializer = Substitute.For<ISerializer>();
+            var events = new List<string>();
+
+            serializer.Deserialize(Arg.Any<string>(), Arg.Any<Type>()).Returns(new TestMessage());
+
+            var consumerConfig = new ConsumerConfiguration<TestMessage>((ctx, message) =>
+            {
+                events.Add("handler");
+                throw new InvalidOperationException("boom");
+            })
+            {
+                Topic = "test-topic",
+                Version = SemanticVersion.Default
+            };
+
+            consumingConfigurator.GetConfiguration("test-topic", SemanticVersion.Default).Returns(consumerConfig);
+
+            var services = new ServiceCollection();
+            services.AddSingleton(consumingConfigurator);
+            services.AddSingleton(serializer);
+            services.AddScoped<IConsumeExecutionInterceptor>(_ => new RecordingExecutionInterceptor(events, "global"));
+            services.AddSingleton(new PigeonRouteInterceptorRegistry());
+            services.AddSingleton<IConsumeHandlerPipeline, ConsumeHandlerPipeline>();
+
+            var dispatcher = new ConsumingDispatcher(services.BuildServiceProvider());
+
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+                () => dispatcher.DispatchAsync("test-topic", new RawPayload(ValidJson), CancellationToken.None));
+
+            Assert.Equal("boom", exception.Message);
+            Assert.Equal(new[] { "global-before", "handler", "global-error", "global-finally" }, events);
+        }
+
+        [Fact]
+        public async Task DispatchAsync_Should_Run_Execution_Interceptor_Around_HubConsumer_Method()
+        {
+            var consumingConfigurator = new ConsumingConfigurator();
+            var serializer = Substitute.For<ISerializer>();
+            var events = new List<string>();
+
+            serializer.Deserialize(Arg.Any<string>(), Arg.Any<Type>()).Returns(new TestMessage());
+
+            var services = new ServiceCollection();
+            services.AddSingleton<IConsumingConfigurator>(consumingConfigurator);
+            services.AddSingleton(serializer);
+            services.AddSingleton(events);
+            services.AddScoped<ExecutionHubConsumer>();
+            services.AddScoped<IConsumeExecutionInterceptor>(_ => new RecordingExecutionInterceptor(events, "global"));
+            services.AddSingleton(new PigeonRouteInterceptorRegistry());
+            services.AddSingleton<IConsumeHandlerPipeline, ConsumeHandlerPipeline>();
+
+            new ConsumerScanner(services, consumingConfigurator)
+                .ScanHubConsumers(new[] { typeof(ExecutionHubConsumer) });
+
+            var dispatcher = new ConsumingDispatcher(services.BuildServiceProvider());
+
+            await dispatcher.DispatchAsync("hub-topic", new RawPayload(ValidJson), CancellationToken.None);
+
+            Assert.Equal(new[] { "global-before", "hub-handler", "global-after", "global-finally" }, events);
+        }
+
+        [Fact]
         public async Task PigeonConsumerInvoker_Should_Replay_Envelope_Through_Handler_And_Accessor()
         {
             var consumingConfigurator = new ConsumingConfigurator();
@@ -390,6 +576,7 @@
             services.AddSingleton<IConsumeContextAccessor>(provider => provider.GetRequiredService<ConsumeContextAccessor>());
             services.AddSingleton<PigeonRouteInterceptorRegistry>();
             services.AddSingleton<IPigeonConsumeEnvelopeFactory, PigeonConsumeEnvelopeFactory>();
+            services.AddSingleton<IConsumeHandlerPipeline, ConsumeHandlerPipeline>();
             services.AddSingleton<IPigeonConsumerInvoker, PigeonConsumerInvoker>();
 
             var provider = services.BuildServiceProvider();
@@ -418,6 +605,52 @@
             Assert.Null(provider.GetRequiredService<IConsumeContextAccessor>().ConsumeContext);
         }
 
+        [Fact]
+        public async Task PigeonConsumerInvoker_Should_Run_Execution_Interceptor_During_Replay()
+        {
+            var consumingConfigurator = new ConsumingConfigurator();
+            var serializer = new TestSerializer();
+            var events = new List<string>();
+
+            consumingConfigurator.AddConsumer<TestMessage>(
+                "test-topic",
+                SemanticVersion.Default,
+                "billing",
+                (context, message) =>
+                {
+                    events.Add(context.ExecutionSource == ConsumeExecutionSource.DeferredReplay
+                        ? "handler-replay"
+                        : "handler-live");
+                    return Task.CompletedTask;
+                });
+
+            var services = new ServiceCollection();
+            services.AddSingleton<IConsumingConfigurator>(consumingConfigurator);
+            services.AddSingleton<ISerializer>(serializer);
+            services.AddSingleton(new PigeonRouteInterceptorRegistry());
+            services.AddScoped<IConsumeExecutionInterceptor>(_ => new RecordingExecutionInterceptor(events, "global"));
+            services.AddSingleton<IPigeonConsumeEnvelopeFactory, PigeonConsumeEnvelopeFactory>();
+            services.AddSingleton<IConsumeHandlerPipeline, ConsumeHandlerPipeline>();
+            services.AddSingleton<IPigeonConsumerInvoker, PigeonConsumerInvoker>();
+
+            var provider = services.BuildServiceProvider();
+            var envelope = new PigeonConsumeEnvelope
+            {
+                Topic = "test-topic",
+                Version = SemanticVersion.Default,
+                Subscription = "billing",
+                PayloadType = typeof(TestMessage).AssemblyQualifiedName,
+                Payload = System.Text.Encoding.UTF8.GetBytes(serializer.Serialize(new TestMessage())),
+                CreatedOnUtc = DateTimeOffset.UtcNow
+            };
+
+            await provider.GetRequiredService<IPigeonConsumerInvoker>().InvokeAsync(envelope);
+
+            Assert.Equal(
+                new[] { "global-before", "handler-replay", "global-after", "global-finally" },
+                events);
+        }
+
         private class TestMessage { }
 
         private sealed class FixedDecisionInterceptor : IConsumeDecisionInterceptor
@@ -441,6 +674,85 @@
                 ConsumeContext context,
                 CancellationToken cancellationToken = default)
                 => ValueTask.FromResult(new PigeonConsumeDecisionResult(PigeonConsumeDecision.AckAndSkip));
+        }
+
+        private sealed class RecordingExecutionInterceptor : IConsumeExecutionInterceptor
+        {
+            private readonly IList<string> _events;
+            private readonly string _name;
+
+            public RecordingExecutionInterceptor(IList<string> events, string name)
+            {
+                _events = events;
+                _name = name;
+            }
+
+            public async ValueTask InvokeAsync(
+                ConsumeContext context,
+                ConsumeExecutionDelegate next,
+                CancellationToken cancellationToken = default)
+            {
+                _events.Add($"{_name}-before");
+
+                try
+                {
+                    await next(context, cancellationToken);
+                    _events.Add($"{_name}-after");
+                }
+                catch
+                {
+                    _events.Add($"{_name}-error");
+                    throw;
+                }
+                finally
+                {
+                    _events.Add($"{_name}-finally");
+                }
+            }
+        }
+
+        private sealed class RouteRecordingExecutionInterceptor : IConsumeExecutionInterceptor
+        {
+            private readonly List<string> _events;
+
+            public RouteRecordingExecutionInterceptor(List<string> events)
+            {
+                _events = events;
+            }
+
+            public async ValueTask InvokeAsync(
+                ConsumeContext context,
+                ConsumeExecutionDelegate next,
+                CancellationToken cancellationToken = default)
+            {
+                _events.Add("route-before");
+                try
+                {
+                    await next(context, cancellationToken);
+                    _events.Add("route-after");
+                }
+                finally
+                {
+                    _events.Add("route-finally");
+                }
+            }
+        }
+
+        private sealed class ExecutionHubConsumer : HubConsumer
+        {
+            private readonly List<string> _events;
+
+            public ExecutionHubConsumer(List<string> events)
+            {
+                _events = events;
+            }
+
+            [Consumer("hub-topic", "1.0.0")]
+            public Task Handle(TestMessage message, CancellationToken cancellationToken = default)
+            {
+                _events.Add("hub-handler");
+                return Task.CompletedTask;
+            }
         }
 
         private sealed class TestSerializer : ISerializer
