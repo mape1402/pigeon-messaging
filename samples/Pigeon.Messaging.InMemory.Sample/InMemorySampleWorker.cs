@@ -59,6 +59,7 @@ namespace Pigeon.Messaging.InMemory.Sample
                 await WaitForCompletedDeliveriesAsync(2, linked.Token);
 
                 _logger.LogInformation("Audit consumed inline and billing consumed through deferred replay.");
+                _logger.LogInformation("Audit execution interceptor events: {ExecutionEvents}", string.Join(", ", _scenario.ExecutionEvents));
                 _logger.LogInformation("Published messages: {PublishedMessages}", _broker.PublishedMessages.Count);
                 _logger.LogInformation("Deliveries: {Deliveries}", _broker.Deliveries.Count);
 

@@ -1,5 +1,6 @@
 namespace Pigeon.Messaging.InMemory.Sample
 {
+    using System.Collections.Concurrent;
     using Pigeon.Messaging.Consuming.Dispatching;
 
     internal sealed class InMemorySampleScenario
@@ -7,8 +8,12 @@ namespace Pigeon.Messaging.InMemory.Sample
         private readonly TaskCompletionSource _billingReceived = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly TaskCompletionSource _auditReceived = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly TaskCompletionSource<PigeonConsumeEnvelope> _deferredEnvelope = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly ConcurrentQueue<string> _executionEvents = new();
 
         public string OrderId { get; } = Guid.NewGuid().ToString("N");
+
+        public IReadOnlyCollection<string> ExecutionEvents
+            => _executionEvents.ToArray();
 
         public void MarkBilling(string orderId)
         {
@@ -24,6 +29,9 @@ namespace Pigeon.Messaging.InMemory.Sample
 
         public void CaptureDeferredEnvelope(PigeonConsumeEnvelope envelope)
             => _deferredEnvelope.TrySetResult(envelope);
+
+        public void RecordExecution(string eventName)
+            => _executionEvents.Enqueue(eventName);
 
         public Task WaitForBothModulesAsync(CancellationToken cancellationToken)
             => Task.WhenAll(
