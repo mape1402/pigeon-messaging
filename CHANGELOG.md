@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ------
 
+## [v3.1.0] - 2026-09-09
+
+### Added
+
+- `IConsumeExecutionInterceptor` and `ConsumeExecutionDelegate` for wrapping consumer handler execution.
+- Global consume execution interceptor registration through `AddConsumeExecutionInterceptor<TInterceptor>()`.
+- Route-specific consume execution interceptor registration through `ForConsumer(...).AddConsumeExecutionInterceptor<TInterceptor>()`.
+- Shared consume handler pipeline for live broker deliveries, deferred replay, direct handlers, and `HubConsumer` methods.
+
+------
+
 ## [v3.0.0] - 2026-09-09
 
 ### Added

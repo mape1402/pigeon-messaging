@@ -2,7 +2,7 @@
 
 **Simple. Fast. Broker-agnostic messaging for .NET.**
 
-[![Build](https://github.com/mape1402/pigeon-messaging/actions/workflows/CI.yml/badge.svg)](https://github.com/mape1402/pigeon-messaging/actions/workflows/CI.yml)
+[![Build](https://github.com/mape1402/pigeon-messaging/actions/workflows/build-and-release.yml/badge.svg)](https://github.com/mape1402/pigeon-messaging/actions/workflows/build-and-release.yml)
 [![NuGet](https://img.shields.io/nuget/v/Pigeon.Messaging.svg)](https://www.nuget.org/packages/Pigeon.Messaging/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
@@ -23,6 +23,7 @@ Its goal is to simplify publishing and consuming messages through a unified, dec
 - **Routed publishing** for broker-native fan-out patterns such as RabbitMQ exchanges, routing keys, queues, and bindings.
 - **Consumer discovery** through `HubConsumer` and `ConsumerAttribute`.
 - **Publish and consume interceptors** for metadata, tracing, security context, sagas, and other cross-cutting behavior.
+- **Consume execution interceptors** for wrapping the actual handler globally or by route.
 - **Configurable topology provisioning** to create broker infrastructure on startup, publish, consume, or leave it fully manual.
 - **Configurable acknowledgement behavior** with manual ack, auto-ack on receive, or ack after a successful handler.
 - **Broker adapters** that keep business code independent from the transport.
@@ -45,7 +46,7 @@ Pigeon is a good fit for microservices, distributed architectures, and applicati
 
 ## Supported Frameworks
 
-Pigeon 3.0 supports:
+Pigeon 3.1 supports:
 
 - .NET 8
 - .NET 9
@@ -405,6 +406,52 @@ public sealed class PublishPolicy : IPublishDecisionInterceptor
 
 Available publish decisions are `Continue`, `Skip`, `Reject`, `UseOutbox`, and `PublishNow`.
 
+### Use Consume Execution Interceptors
+
+Consume execution interceptors wrap the actual consumer handler. Use them when work must happen immediately before and after the handler, including timing, scoped logging, metrics, unit-of-work boundaries, auditing, and failure observation.
+
+```csharp
+public sealed class HandlerTimingInterceptor : IConsumeExecutionInterceptor
+{
+    private readonly ILogger<HandlerTimingInterceptor> _logger;
+
+    public HandlerTimingInterceptor(ILogger<HandlerTimingInterceptor> logger)
+    {
+        _logger = logger;
+    }
+
+    public async ValueTask InvokeAsync(
+        ConsumeContext context,
+        ConsumeExecutionDelegate next,
+        CancellationToken cancellationToken = default)
+    {
+        var startedAt = Stopwatch.GetTimestamp();
+
+        try
+        {
+            await next(context, cancellationToken);
+            _logger.LogInformation("Consumed {Topic} successfully.", context.Topic);
+        }
+        finally
+        {
+            var elapsed = Stopwatch.GetElapsedTime(startedAt);
+            _logger.LogInformation("Consumer handler elapsed {Elapsed}.", elapsed);
+        }
+    }
+}
+```
+
+Register execution interceptors globally or for one route:
+
+```csharp
+pigeon.AddConsumeExecutionInterceptor<HandlerTimingInterceptor>();
+
+pigeon.ForConsumer(OrderRoutes.CreatedForBilling)
+    .AddConsumeExecutionInterceptor<BillingUnitOfWorkInterceptor>();
+```
+
+Execution interceptors run after consume interceptors and consume decision interceptors that return `Continue`. They are skipped when a decision interceptor returns `AckAndSkip`, `Retry`, `Reject`, or `Defer` because the handler is not executed. Deferred replay through `IPigeonConsumerInvoker` uses the same execution pipeline.
+
 ### Replay a Consumed Message
 
 Pigeon can capture a consume context as a transport-neutral envelope and invoke the same consumer pipeline later:
@@ -457,7 +504,7 @@ public sealed class DeferredConsumeWorker
 }
 ```
 
-The invoker creates a new DI scope, rebuilds `ConsumeContext`, restores `IConsumeContextAccessor`, resolves the same route, and executes the same registered handler or `HubConsumer` method.
+The invoker creates a new DI scope, rebuilds `ConsumeContext`, restores `IConsumeContextAccessor`, resolves the same route, and executes the same registered handler or `HubConsumer` method through the consume execution interceptor pipeline.
 
 ### Test Pigeon Without a Broker
 
@@ -836,6 +883,8 @@ builder.Services
     .AddConsumeInterceptor<TraceConsumeInterceptor>()
     .AddPublishInterceptor<TracePublishInterceptor>();
 ```
+
+Use `IConsumeExecutionInterceptor` when the code must wrap the actual handler instead of only inspecting metadata before routing decisions complete.
 
 ### Sample `appsettings.json`
 
