@@ -72,6 +72,8 @@
             // Apply user configuration via the callback.
             config(settingsBuilder);
 
+            services.AddSingleton(settingsBuilder.RouteInterceptorRegistry);
+
             services.AddSingleton<ISerializer>(p => new DefaultSerializer(settingsBuilder.JsonSerializerOptions));
 
             // Scan assemblies for consumers and register them.
@@ -99,6 +101,20 @@
         }
 
         /// <summary>
+        /// Registers a global consume decision interceptor.
+        /// </summary>
+        /// <typeparam name="TInterceptor">The interceptor type.</typeparam>
+        /// <param name="builder">The Pigeon service builder.</param>
+        /// <returns>The same <see cref="IPigeonServiceBuilder"/> instance for chaining.</returns>
+        public static IPigeonServiceBuilder AddConsumeDecisionInterceptor<TInterceptor>(
+            this IPigeonServiceBuilder builder)
+            where TInterceptor : class, IConsumeDecisionInterceptor
+        {
+            builder.GlobalSettingsBuilder.AddService<IConsumeDecisionInterceptor, TInterceptor>(ServiceLifetime.Scoped);
+            return builder;
+        }
+
+        /// <summary>
         /// Registers a custom publish interceptor that can run logic before or after
         /// publishing messages to the message broker.
         /// </summary>
@@ -114,6 +130,72 @@
             builder.GlobalSettingsBuilder.AddService<IPublishInterceptor, TInterceptor>(ServiceLifetime.Scoped);
             return builder;
         }
+
+        /// <summary>
+        /// Registers a global publish decision interceptor.
+        /// </summary>
+        /// <typeparam name="TInterceptor">The interceptor type.</typeparam>
+        /// <param name="builder">The Pigeon service builder.</param>
+        /// <returns>The same <see cref="IPigeonServiceBuilder"/> instance for chaining.</returns>
+        public static IPigeonServiceBuilder AddPublishDecisionInterceptor<TInterceptor>(
+            this IPigeonServiceBuilder builder)
+            where TInterceptor : class, IPublishDecisionInterceptor
+        {
+            builder.GlobalSettingsBuilder.AddService<IPublishDecisionInterceptor, TInterceptor>(ServiceLifetime.Scoped);
+            return builder;
+        }
+
+        /// <summary>
+        /// Begins route-specific consume configuration.
+        /// </summary>
+        /// <param name="builder">The Pigeon service builder.</param>
+        /// <param name="route">The route key to configure.</param>
+        /// <returns>A route-specific consumer builder.</returns>
+        public static PigeonConsumerRouteBuilder ForConsumer(
+            this IPigeonServiceBuilder builder,
+            PigeonRouteKey route)
+            => new(builder.GlobalSettingsBuilder, route);
+
+        /// <summary>
+        /// Begins route-specific consume configuration.
+        /// </summary>
+        /// <param name="builder">The Pigeon service builder.</param>
+        /// <param name="topic">The topic name.</param>
+        /// <param name="version">The semantic version.</param>
+        /// <param name="subscription">The optional subscription, queue name, or consumer group.</param>
+        /// <returns>A route-specific consumer builder.</returns>
+        public static PigeonConsumerRouteBuilder ForConsumer(
+            this IPigeonServiceBuilder builder,
+            string topic,
+            SemanticVersion version,
+            string subscription = null)
+            => builder.ForConsumer(new PigeonRouteKey(topic, version, subscription));
+
+        /// <summary>
+        /// Begins route-specific publish configuration.
+        /// </summary>
+        /// <param name="builder">The Pigeon service builder.</param>
+        /// <param name="route">The route key to configure.</param>
+        /// <returns>A route-specific publish builder.</returns>
+        public static PigeonPublishRouteBuilder ForPublish(
+            this IPigeonServiceBuilder builder,
+            PigeonRouteKey route)
+            => new(builder.GlobalSettingsBuilder, route);
+
+        /// <summary>
+        /// Begins route-specific publish configuration.
+        /// </summary>
+        /// <param name="builder">The Pigeon service builder.</param>
+        /// <param name="topic">The topic name.</param>
+        /// <param name="version">The semantic version.</param>
+        /// <param name="subscription">The optional logical subscription for route matching.</param>
+        /// <returns>A route-specific publish builder.</returns>
+        public static PigeonPublishRouteBuilder ForPublish(
+            this IPigeonServiceBuilder builder,
+            string topic,
+            SemanticVersion version,
+            string subscription = null)
+            => builder.ForPublish(new PigeonRouteKey(topic, version, subscription));
 
         /// <summary>
         /// Registers a custom consume handler for a specific topic and version.
@@ -134,6 +216,24 @@
             where T : class
         {
             builder.GlobalSettingsBuilder.AddConsumeHandler(topic, version, handler);
+            return builder;
+        }
+
+        /// <summary>
+        /// Registers a custom consume handler for a specific route key.
+        /// </summary>
+        /// <typeparam name="T">The type of message that the handler consumes.</typeparam>
+        /// <param name="builder">The Pigeon service builder.</param>
+        /// <param name="route">The route key that the handler should listen to.</param>
+        /// <param name="handler">The delegate that handles incoming messages.</param>
+        /// <returns>The same <see cref="IPigeonServiceBuilder"/> instance for chaining.</returns>
+        public static IPigeonServiceBuilder AddConsumeHandler<T>(
+            this IPigeonServiceBuilder builder,
+            PigeonRouteKey route,
+            ConsumeHandler<T> handler)
+            where T : class
+        {
+            builder.GlobalSettingsBuilder.AddConsumeHandler(route.Topic, route.Version, route.Subscription, handler);
             return builder;
         }
 
