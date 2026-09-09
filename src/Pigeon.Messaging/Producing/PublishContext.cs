@@ -12,6 +12,31 @@
         private readonly ConcurrentDictionary<string, object> _metadata = new();
 
         /// <summary>
+        /// Gets the message instance being published.
+        /// </summary>
+        public object Message { get; init; }
+
+        /// <summary>
+        /// Gets the message CLR type.
+        /// </summary>
+        public Type MessageType { get; init; }
+
+        /// <summary>
+        /// Gets the route selected for the publish operation.
+        /// </summary>
+        public PublishingRoute Route { get; internal set; }
+
+        /// <summary>
+        /// Gets the message semantic version.
+        /// </summary>
+        public Contracts.SemanticVersion Version { get; init; }
+
+        /// <summary>
+        /// Gets a value indicating whether the message will be published without a Pigeon wrapper.
+        /// </summary>
+        public bool IsRaw { get; init; }
+
+        /// <summary>
         /// Adds a metadata entry with the specified key and value.
         /// Throws <see cref="InvalidOperationException"/> if the key already exists.
         /// </summary>
@@ -38,6 +63,15 @@
         /// </returns>
         internal IReadOnlyDictionary<string, object> GetMetadata()
             => new ReadOnlyDictionary<string, object>(_metadata);
+
+        internal void MergeMetadata(IReadOnlyDictionary<string, object> metadata)
+        {
+            if (metadata == null)
+                return;
+
+            foreach (var item in metadata)
+                _metadata[item.Key] = item.Value;
+        }
 
     }
 }
