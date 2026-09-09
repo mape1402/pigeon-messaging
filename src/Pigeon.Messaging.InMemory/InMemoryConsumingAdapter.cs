@@ -64,6 +64,18 @@ namespace Pigeon.Messaging.InMemory
                             delivery.Failed = true;
                             delivery.Error = exception?.Message;
                             return Task.CompletedTask;
+                        },
+                        (exception, _) =>
+                        {
+                            delivery.Failed = true;
+                            delivery.Error = exception?.Message;
+                            return Task.CompletedTask;
+                        },
+                        (exception, _) =>
+                        {
+                            delivery.Failed = true;
+                            delivery.Error = exception?.Message;
+                            return Task.CompletedTask;
                         }),
                     cancellationToken);
             }

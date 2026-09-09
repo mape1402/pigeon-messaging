@@ -136,7 +136,9 @@
                             message,
                             endpoint.Subscription,
                             token => channel.BasicAckAsync(e.DeliveryTag, multiple: false, cancellationToken: token).AsTask(),
-                            (_, token) => channel.BasicNackAsync(e.DeliveryTag, multiple: false, requeue: _settings.RequeueOnFailure, cancellationToken: token).AsTask());
+                            (_, token) => channel.BasicNackAsync(e.DeliveryTag, multiple: false, requeue: _settings.RequeueOnFailure, cancellationToken: token).AsTask(),
+                            (_, token) => channel.BasicNackAsync(e.DeliveryTag, multiple: false, requeue: true, cancellationToken: token).AsTask(),
+                            (_, token) => channel.BasicNackAsync(e.DeliveryTag, multiple: false, requeue: false, cancellationToken: token).AsTask());
 
                     await OnMessageConsumedAsync(messageConsumed, cancellationToken);
                 }
