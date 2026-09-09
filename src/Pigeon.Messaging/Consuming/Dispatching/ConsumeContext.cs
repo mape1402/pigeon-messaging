@@ -54,6 +54,21 @@
         public string From { get; init; }
 
         /// <summary>
+        /// Optional broker or publisher message identifier.
+        /// </summary>
+        public string MessageId { get; init; }
+
+        /// <summary>
+        /// Optional correlation identifier propagated with the message.
+        /// </summary>
+        public string CorrelationId { get; init; }
+
+        /// <summary>
+        /// Optional logical operation name.
+        /// </summary>
+        public string Operation { get; init; }
+
+        /// <summary>
         /// The deserialized message payload.
         /// </summary>
         public object Message { get; init; }
@@ -72,6 +87,12 @@
         /// Optional metadata attached to the message envelope.
         /// </summary>
         public IReadOnlyDictionary<string, string> RawMetadata { get; init; } =
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Optional transport headers attached to the delivery.
+        /// </summary>
+        public IReadOnlyDictionary<string, string> Headers { get; init; } =
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>
