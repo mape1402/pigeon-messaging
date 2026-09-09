@@ -45,7 +45,7 @@ Pigeon is a good fit for microservices, distributed architectures, and applicati
 
 ## Supported Frameworks
 
-Pigeon 2.0 supports:
+Pigeon 3.0 supports:
 
 - .NET 8
 - .NET 9
@@ -305,6 +305,159 @@ Run the in-memory sample:
 ```bash
 dotnet run --project samples/Pigeon.Messaging.InMemory.Sample/Pigeon.Messaging.InMemory.Sample.csproj
 ```
+
+### Use Route Keys
+
+Use `PigeonRouteKey` to centralize topic, version, and subscription values for runtime configuration:
+
+```csharp
+public static class OrderRoutes
+{
+    public const string CreatedTopic = "orders.created";
+    public const string CreatedVersion = "1.0.0";
+    public const string BillingSubscription = "billing-module";
+
+    public static readonly PigeonRouteKey CreatedForBilling =
+        new(CreatedTopic, CreatedVersion, BillingSubscription);
+}
+```
+
+Use constants for attributes because C# attributes require compile-time values:
+
+```csharp
+[Consumer(
+    OrderRoutes.CreatedTopic,
+    OrderRoutes.CreatedVersion,
+    Subscription = OrderRoutes.BillingSubscription)]
+public Task Handle(OrderCreatedMessage message)
+{
+    return Task.CompletedTask;
+}
+```
+
+Use the route key in fluent configuration:
+
+```csharp
+pigeon.AddConsumeHandler<OrderCreatedMessage>(
+    OrderRoutes.CreatedForBilling,
+    (context, message) => Task.CompletedTask);
+```
+
+String overloads remain available for dynamic scenarios.
+
+### Use Decision Interceptors
+
+Decision interceptors let normal routing decisions happen without throwing exceptions for control flow.
+
+Consume decision interceptors run after existing `IConsumeInterceptor` instances and before the consumer handler:
+
+```csharp
+public sealed class InboxDecisionInterceptor : IConsumeDecisionInterceptor
+{
+    public ValueTask<PigeonConsumeDecisionResult> InterceptAsync(
+        ConsumeContext context,
+        CancellationToken cancellationToken = default)
+    {
+        if (context.ExecutionSource == ConsumeExecutionSource.DeferredReplay)
+            return ValueTask.FromResult(PigeonConsumeDecisionResult.Continue);
+
+        return ValueTask.FromResult(new PigeonConsumeDecisionResult(
+            PigeonConsumeDecision.Defer,
+            "The message was persisted for deferred execution."));
+    }
+}
+```
+
+Register decision interceptors globally or for one route:
+
+```csharp
+pigeon.AddConsumeDecisionInterceptor<GlobalConsumePolicy>();
+
+pigeon.ForConsumer(OrderRoutes.CreatedForBilling)
+    .AddConsumeDecisionInterceptor<InboxDecisionInterceptor>();
+```
+
+Consume decisions map to portable settlement:
+
+- `Continue`: executes the handler.
+- `AckAndSkip`: skips the handler and acknowledges the broker delivery.
+- `Retry`: skips the handler and asks the broker to retry or requeue.
+- `Reject`: skips the handler and rejects or dead-letters where supported.
+- `Defer`: skips the handler and acknowledges after the interceptor has persisted durable work.
+
+Publish decision interceptors run after existing `IPublishInterceptor` instances and before outbox or direct broker publishing:
+
+```csharp
+public sealed class PublishPolicy : IPublishDecisionInterceptor
+{
+    public ValueTask<PigeonPublishDecisionResult> InterceptAsync(
+        PublishContext context,
+        CancellationToken cancellationToken = default)
+        => ValueTask.FromResult(new PigeonPublishDecisionResult(PigeonPublishDecision.Continue)
+        {
+            Metadata = new Dictionary<string, object>
+            {
+                ["correlation-id"] = Guid.NewGuid().ToString("N")
+            }
+        });
+}
+```
+
+Available publish decisions are `Continue`, `Skip`, `Reject`, `UseOutbox`, and `PublishNow`.
+
+### Replay a Consumed Message
+
+Pigeon can capture a consume context as a transport-neutral envelope and invoke the same consumer pipeline later:
+
+```csharp
+public sealed class DeferredConsumeInterceptor : IConsumeDecisionInterceptor
+{
+    private readonly IPigeonConsumeEnvelopeFactory _envelopeFactory;
+    private readonly IDurableScheduler _scheduler;
+
+    public DeferredConsumeInterceptor(
+        IPigeonConsumeEnvelopeFactory envelopeFactory,
+        IDurableScheduler scheduler)
+    {
+        _envelopeFactory = envelopeFactory;
+        _scheduler = scheduler;
+    }
+
+    public async ValueTask<PigeonConsumeDecisionResult> InterceptAsync(
+        ConsumeContext context,
+        CancellationToken cancellationToken = default)
+    {
+        if (context.ExecutionSource == ConsumeExecutionSource.DeferredReplay)
+            return PigeonConsumeDecisionResult.Continue;
+
+        var envelope = _envelopeFactory.Create(context);
+        await _scheduler.ScheduleAsync(envelope, cancellationToken);
+
+        return new PigeonConsumeDecisionResult(PigeonConsumeDecision.Defer);
+    }
+}
+```
+
+A background worker can replay the envelope without depending on the original broker delivery:
+
+```csharp
+public sealed class DeferredConsumeWorker
+{
+    private readonly IPigeonConsumerInvoker _consumerInvoker;
+
+    public DeferredConsumeWorker(IPigeonConsumerInvoker consumerInvoker)
+    {
+        _consumerInvoker = consumerInvoker;
+    }
+
+    public async Task ExecuteAsync(PigeonConsumeEnvelope envelope, CancellationToken cancellationToken)
+    {
+        await _consumerInvoker.InvokeAsync(envelope, cancellationToken);
+    }
+}
+```
+
+The invoker creates a new DI scope, rebuilds `ConsumeContext`, restores `IConsumeContextAccessor`, resolves the same route, and executes the same registered handler or `HubConsumer` method.
 
 ### Test Pigeon Without a Broker
 

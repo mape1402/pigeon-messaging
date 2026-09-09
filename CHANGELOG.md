@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ------
 
+## [v3.0.0] - 2026-09-09
+
+### Added
+
+- `PigeonRouteKey` for reusable topic, version, and subscription route declarations across consume and publish configuration.
+- Global and route-specific consume decision interceptors through `IConsumeDecisionInterceptor`.
+- Consume decisions for `Continue`, `AckAndSkip`, `Reject`, `Retry`, and `Defer`.
+- Global and route-specific publish decision interceptors through `IPublishDecisionInterceptor`.
+- Publish decisions for `Continue`, `Skip`, `Reject`, `UseOutbox`, and `PublishNow`.
+- Replayable consume envelopes through `PigeonConsumeEnvelope` and `IPigeonConsumeEnvelopeFactory`.
+- Public deferred consume invocation through `IPigeonConsumerInvoker`.
+- `ConsumeExecutionSource` to distinguish live broker delivery, deferred replay, and manual invocation.
+- Portable settlement operations for complete, retry, and reject.
+- Reply headers and reply metadata collections on `ConsumeContext`.
+
+### Changed
+
+- Consume dispatch now evaluates decision interceptors before handlers, allowing normal control flow without exceptions.
+- Publish dispatch now evaluates decision interceptors after existing publish interceptors and before outbox or broker dispatch.
+- RabbitMQ and Azure Service Bus consumers now map retry and reject decisions to broker-native settlement operations where available.
+
+------
+
 ## [v2.8.0] - 2026-08-18
 
 ### Changed
