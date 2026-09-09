@@ -1,5 +1,6 @@
 namespace Pigeon.Messaging.Producing
 {
+    using Microsoft.Extensions.DependencyInjection;
     using Microsoft.Extensions.Options;
     using Mule;
     using Pigeon.Messaging;
@@ -15,12 +16,15 @@ namespace Pigeon.Messaging.Producing
     public class Producer : IProducer
     {
         private readonly IEnumerable<IPublishInterceptor> _interceptors;
+        private readonly IEnumerable<IPublishDecisionInterceptor> _decisionInterceptors;
         private readonly IProducingManager _producingManager;
         private readonly GlobalSettings _settings;
         private readonly IOutboxStorage _outboxStorage;
         private readonly OutboxMessageFactory _outboxMessageFactory;
         private readonly IOutboxCommitNotifier _outboxCommitNotifier;
         private readonly IMuleClient _muleClient;
+        private readonly PigeonRouteInterceptorRegistry _routeInterceptorRegistry;
+        private readonly IServiceProvider _serviceProvider;
 
         /// <summary>
         /// Initializes a new producer without outbox persistence.
@@ -28,8 +32,17 @@ namespace Pigeon.Messaging.Producing
         /// <param name="interceptors">The publish interceptors executed before wrapped publishing.</param>
         /// <param name="producingManager">The producing manager that dispatches messages to broker adapters.</param>
         /// <param name="settings">The global Pigeon settings.</param>
-        public Producer(IEnumerable<IPublishInterceptor> interceptors, IProducingManager producingManager, IOptions<GlobalSettings> settings)
-            : this(interceptors, producingManager, settings, (OutboxMessageFactory)null, (IMuleClient)null)
+        /// <param name="decisionInterceptors">The publish decision interceptors executed before broker or outbox dispatch.</param>
+        /// <param name="routeInterceptorRegistry">The route-specific interceptor registry.</param>
+        /// <param name="serviceProvider">The current scoped service provider.</param>
+        public Producer(
+            IEnumerable<IPublishInterceptor> interceptors,
+            IProducingManager producingManager,
+            IOptions<GlobalSettings> settings,
+            IEnumerable<IPublishDecisionInterceptor> decisionInterceptors = null,
+            PigeonRouteInterceptorRegistry routeInterceptorRegistry = null,
+            IServiceProvider serviceProvider = null)
+            : this(interceptors, producingManager, settings, (OutboxMessageFactory)null, (IMuleClient)null, decisionInterceptors, routeInterceptorRegistry, serviceProvider)
         {
         }
 
@@ -41,13 +54,19 @@ namespace Pigeon.Messaging.Producing
         /// <param name="settings">The global Pigeon settings.</param>
         /// <param name="outboxStorage">The optional outbox storage used when outbox is enabled.</param>
         /// <param name="outboxMessageFactory">The optional factory that creates persisted outbox messages.</param>
+        /// <param name="decisionInterceptors">The publish decision interceptors executed before broker or outbox dispatch.</param>
+        /// <param name="routeInterceptorRegistry">The route-specific interceptor registry.</param>
+        /// <param name="serviceProvider">The current scoped service provider.</param>
         public Producer(
             IEnumerable<IPublishInterceptor> interceptors,
             IProducingManager producingManager,
             IOptions<GlobalSettings> settings,
             IOutboxStorage outboxStorage,
-            OutboxMessageFactory outboxMessageFactory)
-            : this(interceptors, producingManager, settings, outboxStorage, outboxMessageFactory, null, null)
+            OutboxMessageFactory outboxMessageFactory,
+            IEnumerable<IPublishDecisionInterceptor> decisionInterceptors = null,
+            PigeonRouteInterceptorRegistry routeInterceptorRegistry = null,
+            IServiceProvider serviceProvider = null)
+            : this(interceptors, producingManager, settings, outboxStorage, outboxMessageFactory, null, null, decisionInterceptors, routeInterceptorRegistry, serviceProvider)
         {
         }
 
@@ -60,14 +79,20 @@ namespace Pigeon.Messaging.Producing
         /// <param name="outboxStorage">The optional outbox storage used when outbox is enabled.</param>
         /// <param name="outboxMessageFactory">The optional factory that creates persisted outbox messages.</param>
         /// <param name="outboxCommitNotifier">The optional notifier that queues messages after save or transaction commit.</param>
+        /// <param name="decisionInterceptors">The publish decision interceptors executed before broker or outbox dispatch.</param>
+        /// <param name="routeInterceptorRegistry">The route-specific interceptor registry.</param>
+        /// <param name="serviceProvider">The current scoped service provider.</param>
         public Producer(
             IEnumerable<IPublishInterceptor> interceptors,
             IProducingManager producingManager,
             IOptions<GlobalSettings> settings,
             IOutboxStorage outboxStorage,
             OutboxMessageFactory outboxMessageFactory,
-            IOutboxCommitNotifier outboxCommitNotifier)
-            : this(interceptors, producingManager, settings, outboxStorage, outboxMessageFactory, outboxCommitNotifier, null)
+            IOutboxCommitNotifier outboxCommitNotifier,
+            IEnumerable<IPublishDecisionInterceptor> decisionInterceptors = null,
+            PigeonRouteInterceptorRegistry routeInterceptorRegistry = null,
+            IServiceProvider serviceProvider = null)
+            : this(interceptors, producingManager, settings, outboxStorage, outboxMessageFactory, outboxCommitNotifier, null, decisionInterceptors, routeInterceptorRegistry, serviceProvider)
         {
         }
 
@@ -79,13 +104,19 @@ namespace Pigeon.Messaging.Producing
         /// <param name="settings">The global Pigeon settings.</param>
         /// <param name="outboxMessageFactory">The factory that creates persisted outbox messages.</param>
         /// <param name="muleClient">The durable action client used when outbox is enabled.</param>
+        /// <param name="decisionInterceptors">The publish decision interceptors executed before broker or outbox dispatch.</param>
+        /// <param name="routeInterceptorRegistry">The route-specific interceptor registry.</param>
+        /// <param name="serviceProvider">The current scoped service provider.</param>
         public Producer(
             IEnumerable<IPublishInterceptor> interceptors,
             IProducingManager producingManager,
             IOptions<GlobalSettings> settings,
             OutboxMessageFactory outboxMessageFactory,
-            IMuleClient muleClient)
-            : this(interceptors, producingManager, settings, null, outboxMessageFactory, null, muleClient)
+            IMuleClient muleClient,
+            IEnumerable<IPublishDecisionInterceptor> decisionInterceptors = null,
+            PigeonRouteInterceptorRegistry routeInterceptorRegistry = null,
+            IServiceProvider serviceProvider = null)
+            : this(interceptors, producingManager, settings, null, outboxMessageFactory, null, muleClient, decisionInterceptors, routeInterceptorRegistry, serviceProvider)
         {
         }
 
@@ -96,15 +127,21 @@ namespace Pigeon.Messaging.Producing
             IOutboxStorage outboxStorage,
             OutboxMessageFactory outboxMessageFactory,
             IOutboxCommitNotifier outboxCommitNotifier,
-            IMuleClient muleClient)
+            IMuleClient muleClient,
+            IEnumerable<IPublishDecisionInterceptor> decisionInterceptors,
+            PigeonRouteInterceptorRegistry routeInterceptorRegistry,
+            IServiceProvider serviceProvider)
         {
             _interceptors = interceptors ?? throw new ArgumentNullException(nameof(interceptors));
+            _decisionInterceptors = decisionInterceptors ?? Array.Empty<IPublishDecisionInterceptor>();
             _producingManager = producingManager ?? throw new ArgumentNullException(nameof(producingManager));
             _settings = settings?.Value ?? throw new ArgumentNullException(nameof(settings));
             _outboxStorage = outboxStorage;
             _outboxMessageFactory = outboxMessageFactory;
             _outboxCommitNotifier = outboxCommitNotifier;
             _muleClient = muleClient;
+            _routeInterceptorRegistry = routeInterceptorRegistry;
+            _serviceProvider = serviceProvider;
         }
 
         /// <summary>
@@ -203,10 +240,30 @@ namespace Pigeon.Messaging.Producing
         /// <returns>A value task that completes when the message has been published or persisted to outbox.</returns>
         protected virtual async ValueTask PublishCore<T>(T message, PublishingRoute route, SemanticVersion version, CancellationToken cancellationToken = default) where T : class
         {
-            var publishContext = new PublishContext();
+            var publishContext = new PublishContext
+            {
+                IsRaw = false,
+                Message = message,
+                MessageType = typeof(T),
+                Route = route,
+                Version = version
+            };
 
             foreach (var interceptor in _interceptors)
                 await interceptor.Intercept(publishContext, cancellationToken);
+
+            var decision = await GetPublishDecisionAsync(publishContext, cancellationToken);
+            publishContext.Route = decision.Route ?? publishContext.Route;
+            publishContext.MergeMetadata(decision.Metadata);
+
+            if (await ApplyPublishDecisionAsync(
+                    decision,
+                    () => EnqueueOutboxAsync(CreatePayload(message, publishContext, version), publishContext.Route, false, cancellationToken),
+                    () => PublishDirectAsync(() => _producingManager.PushAsync(
+                        CreatePayload(message, publishContext, version),
+                        publishContext.Route,
+                        cancellationToken))))
+                return;
 
             var payload = new WrappedPayload<T>
             {
@@ -219,24 +276,113 @@ namespace Pigeon.Messaging.Producing
 
             if (IsOutboxEnabled())
             {
-                await EnqueueOutboxAsync(payload, route, false, cancellationToken);
+                await EnqueueOutboxAsync(payload, publishContext.Route, false, cancellationToken);
                 return;
             }
 
             await PublishDirectAsync(
-                () => _producingManager.PushAsync(payload, route, cancellationToken));
+                () => _producingManager.PushAsync(payload, publishContext.Route, cancellationToken));
         }
 
         private async ValueTask PublishRawCore<T>(T message, PublishingRoute route, CancellationToken cancellationToken = default) where T : class
         {
+            var publishContext = new PublishContext
+            {
+                IsRaw = true,
+                Message = message,
+                MessageType = typeof(T),
+                Route = route,
+                Version = SemanticVersion.Default
+            };
+
+            var decision = await GetPublishDecisionAsync(publishContext, cancellationToken);
+            publishContext.Route = decision.Route ?? publishContext.Route;
+            publishContext.MergeMetadata(decision.Metadata);
+
+            if (await ApplyPublishDecisionAsync(
+                    decision,
+                    () => EnqueueOutboxAsync(message, publishContext.Route, true, cancellationToken),
+                    () => PublishDirectAsync(() => _producingManager.PushRawAsync(message, publishContext.Route, cancellationToken))))
+                return;
+
             if (IsOutboxEnabled())
             {
-                await EnqueueOutboxAsync(message, route, true, cancellationToken);
+                await EnqueueOutboxAsync(message, publishContext.Route, true, cancellationToken);
                 return;
             }
 
             await PublishDirectAsync(
-                () => _producingManager.PushRawAsync(message, route, cancellationToken));
+                () => _producingManager.PushRawAsync(message, publishContext.Route, cancellationToken));
+        }
+
+        private WrappedPayload<T> CreatePayload<T>(T message, PublishContext publishContext, SemanticVersion version)
+            where T : class
+            => new()
+            {
+                CreatedOnUtc = DateTimeOffset.UtcNow,
+                Message = message,
+                MessageVersion = version,
+                Metadata = publishContext.GetMetadata(),
+                Domain = _settings.Domain
+            };
+
+        private async ValueTask<PigeonPublishDecisionResult> GetPublishDecisionAsync(
+            PublishContext publishContext,
+            CancellationToken cancellationToken)
+        {
+            foreach (var interceptor in _decisionInterceptors)
+            {
+                var decision = await interceptor.InterceptAsync(publishContext, cancellationToken)
+                    ?? PigeonPublishDecisionResult.Continue;
+
+                if (decision.Decision != PigeonPublishDecision.Continue)
+                    return decision;
+            }
+
+            if (_routeInterceptorRegistry == null)
+                return PigeonPublishDecisionResult.Continue;
+
+            var route = new PigeonRouteKey(publishContext.Route.Topic, publishContext.Version);
+            foreach (var interceptorType in _routeInterceptorRegistry.GetPublishDecisionInterceptors(route))
+            {
+                if (_serviceProvider == null)
+                    continue;
+
+                var interceptor = (IPublishDecisionInterceptor)_serviceProvider.GetRequiredService(interceptorType);
+                var decision = await interceptor.InterceptAsync(publishContext, cancellationToken)
+                    ?? PigeonPublishDecisionResult.Continue;
+
+                if (decision.Decision != PigeonPublishDecision.Continue)
+                    return decision;
+            }
+
+            return PigeonPublishDecisionResult.Continue;
+        }
+
+        private async ValueTask<bool> ApplyPublishDecisionAsync(
+            PigeonPublishDecisionResult decision,
+            Func<Task> enqueueOutboxAsync,
+            Func<ValueTask> publishNowAsync)
+        {
+            switch (decision.Decision)
+            {
+                case PigeonPublishDecision.Skip:
+                    return true;
+                case PigeonPublishDecision.Reject:
+                    throw new InvalidOperationException(
+                        string.IsNullOrWhiteSpace(decision.Reason)
+                            ? "The publish operation was rejected by a Pigeon publish decision interceptor."
+                            : decision.Reason);
+                case PigeonPublishDecision.UseOutbox:
+                    await enqueueOutboxAsync();
+                    return true;
+                case PigeonPublishDecision.PublishNow:
+                    await publishNowAsync();
+                    return true;
+                case PigeonPublishDecision.Continue:
+                default:
+                    return false;
+            }
         }
 
         private async Task EnqueueOutboxAsync(object payload, PublishingRoute route, bool isRaw, CancellationToken cancellationToken)
