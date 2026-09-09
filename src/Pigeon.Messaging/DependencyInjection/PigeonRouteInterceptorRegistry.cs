@@ -9,6 +9,7 @@ namespace Microsoft.Extensions.DependencyInjection
     public sealed class PigeonRouteInterceptorRegistry
     {
         private readonly List<RouteInterceptorRegistration> _consumeDecisionInterceptors = new();
+        private readonly List<RouteInterceptorRegistration> _consumeExecutionInterceptors = new();
         private readonly List<RouteInterceptorRegistration> _publishDecisionInterceptors = new();
 
         /// <summary>
@@ -18,6 +19,14 @@ namespace Microsoft.Extensions.DependencyInjection
         /// <param name="interceptorType">The interceptor implementation type.</param>
         public void AddConsumeDecisionInterceptor(PigeonRouteKey route, Type interceptorType)
             => _consumeDecisionInterceptors.Add(new RouteInterceptorRegistration(Normalize(route), interceptorType));
+
+        /// <summary>
+        /// Registers a consume execution interceptor for a route.
+        /// </summary>
+        /// <param name="route">The route key.</param>
+        /// <param name="interceptorType">The interceptor implementation type.</param>
+        public void AddConsumeExecutionInterceptor(PigeonRouteKey route, Type interceptorType)
+            => _consumeExecutionInterceptors.Add(new RouteInterceptorRegistration(Normalize(route), interceptorType));
 
         /// <summary>
         /// Registers a publish decision interceptor for a route.
@@ -34,6 +43,14 @@ namespace Microsoft.Extensions.DependencyInjection
         /// <returns>The matching interceptor implementation types.</returns>
         public IReadOnlyCollection<Type> GetConsumeDecisionInterceptors(PigeonRouteKey route)
             => GetInterceptors(_consumeDecisionInterceptors, Normalize(route));
+
+        /// <summary>
+        /// Gets consume execution interceptor types registered for the route.
+        /// </summary>
+        /// <param name="route">The route key.</param>
+        /// <returns>The matching interceptor implementation types.</returns>
+        public IReadOnlyCollection<Type> GetConsumeExecutionInterceptors(PigeonRouteKey route)
+            => GetInterceptors(_consumeExecutionInterceptors, Normalize(route));
 
         /// <summary>
         /// Gets publish decision interceptor types registered for the route.

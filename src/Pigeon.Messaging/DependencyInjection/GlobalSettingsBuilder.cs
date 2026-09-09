@@ -291,6 +291,14 @@
             return this;
         }
 
+        internal GlobalSettingsBuilder AddRouteConsumeExecutionInterceptor<TInterceptor>(PigeonRouteKey route)
+            where TInterceptor : class, IConsumeExecutionInterceptor
+        {
+            _services.AddScoped<TInterceptor>();
+            _routeInterceptorRegistry.AddConsumeExecutionInterceptor(route, typeof(TInterceptor));
+            return this;
+        }
+
         internal GlobalSettingsBuilder AddRoutePublishDecisionInterceptor<TInterceptor>(PigeonRouteKey route)
             where TInterceptor : class, IPublishDecisionInterceptor
         {
