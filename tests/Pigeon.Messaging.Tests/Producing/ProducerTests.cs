@@ -311,6 +311,119 @@ namespace Pigeon.Messaging.Tests.Producing
         }
 
         [Fact]
+        public async Task PublishAsync_Should_Skip_When_Decision_Interceptor_Skips()
+        {
+            var manager = Substitute.For<IProducingManager>();
+            var producer = new Producer(
+                Enumerable.Empty<IPublishInterceptor>(),
+                manager,
+                Options.Create(new GlobalSettings { Domain = "test-domain" }),
+                new[] { new FixedPublishDecisionInterceptor(PigeonPublishDecision.Skip) });
+
+            await producer.PublishAsync(new TestMessage { Text = "hello" }, "topic");
+
+            await manager.DidNotReceive().PushAsync(
+                Arg.Any<WrappedPayload<TestMessage>>(),
+                Arg.Any<PublishingRoute>(),
+                Arg.Any<CancellationToken>());
+        }
+
+        [Fact]
+        public async Task PublishAsync_Should_Reject_When_Decision_Interceptor_Rejects()
+        {
+            var manager = Substitute.For<IProducingManager>();
+            var producer = new Producer(
+                Enumerable.Empty<IPublishInterceptor>(),
+                manager,
+                Options.Create(new GlobalSettings { Domain = "test-domain" }),
+                new[] { new FixedPublishDecisionInterceptor(PigeonPublishDecision.Reject, "blocked") });
+
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+                async () => await producer.PublishAsync(new TestMessage { Text = "hello" }, "topic"));
+
+            Assert.Equal("blocked", exception.Message);
+            await manager.DidNotReceive().PushAsync(
+                Arg.Any<WrappedPayload<TestMessage>>(),
+                Arg.Any<PublishingRoute>(),
+                Arg.Any<CancellationToken>());
+        }
+
+        [Fact]
+        public async Task PublishAsync_Should_Use_Outbox_When_Decision_Interceptor_Forces_Outbox()
+        {
+            var manager = Substitute.For<IProducingManager>();
+            var storage = new TestOutboxStorage();
+            var serializer = new TestSerializer();
+            var producer = new Producer(
+                Enumerable.Empty<IPublishInterceptor>(),
+                manager,
+                Options.Create(new GlobalSettings { Domain = "test-domain" }),
+                storage,
+                new OutboxMessageFactory(serializer),
+                new[] { new FixedPublishDecisionInterceptor(PigeonPublishDecision.UseOutbox) });
+
+            await producer.PublishAsync(new TestMessage { Text = "hello" }, "topic");
+
+            await manager.DidNotReceive().PushAsync(
+                Arg.Any<WrappedPayload<TestMessage>>(),
+                Arg.Any<PublishingRoute>(),
+                Arg.Any<CancellationToken>());
+            Assert.Single(storage.Messages);
+        }
+
+        [Fact]
+        public async Task PublishAsync_Should_Publish_Now_When_Decision_Interceptor_Forces_Direct_Publish()
+        {
+            var manager = Substitute.For<IProducingManager>();
+            var storage = new TestOutboxStorage();
+            var serializer = new TestSerializer();
+            var producer = new Producer(
+                Enumerable.Empty<IPublishInterceptor>(),
+                manager,
+                Options.Create(new GlobalSettings
+                {
+                    Domain = "test-domain",
+                    Outbox = new OutboxSettings { Enabled = true }
+                }),
+                storage,
+                new OutboxMessageFactory(serializer),
+                new[] { new FixedPublishDecisionInterceptor(PigeonPublishDecision.PublishNow) });
+
+            await producer.PublishAsync(new TestMessage { Text = "hello" }, "topic");
+
+            await manager.Received(1).PushAsync(
+                Arg.Any<WrappedPayload<TestMessage>>(),
+                Arg.Any<PublishingRoute>(),
+                Arg.Any<CancellationToken>());
+            Assert.Empty(storage.Messages);
+        }
+
+        [Fact]
+        public async Task PublishAsync_Should_Include_Decision_Metadata_In_Wrapped_Payload()
+        {
+            var manager = Substitute.For<IProducingManager>();
+            WrappedPayload<TestMessage> captured = null;
+            manager
+                .PushAsync(Arg.Any<WrappedPayload<TestMessage>>(), Arg.Any<PublishingRoute>(), Arg.Any<CancellationToken>())
+                .Returns(call =>
+                {
+                    captured = call.Arg<WrappedPayload<TestMessage>>();
+                    return ValueTask.CompletedTask;
+                });
+
+            var producer = new Producer(
+                Enumerable.Empty<IPublishInterceptor>(),
+                manager,
+                Options.Create(new GlobalSettings { Domain = "test-domain" }),
+                new[] { new MetadataPublishDecisionInterceptor() });
+
+            await producer.PublishAsync(new TestMessage { Text = "hello" }, "topic");
+
+            Assert.NotNull(captured);
+            Assert.Equal("corr-1", captured.Metadata["correlation-id"]);
+        }
+
+        [Fact]
         public async Task PublishAsync_Should_Throw_If_Message_Null()
         {
             var producer = GetProducer();
@@ -350,6 +463,37 @@ namespace Pigeon.Messaging.Tests.Producing
         private sealed class TestMessage
         {
             public string Text { get; set; }
+        }
+
+        private sealed class FixedPublishDecisionInterceptor : IPublishDecisionInterceptor
+        {
+            private readonly PigeonPublishDecision _decision;
+            private readonly string _reason;
+
+            public FixedPublishDecisionInterceptor(PigeonPublishDecision decision, string reason = null)
+            {
+                _decision = decision;
+                _reason = reason;
+            }
+
+            public ValueTask<PigeonPublishDecisionResult> InterceptAsync(
+                PublishContext context,
+                CancellationToken cancellationToken = default)
+                => ValueTask.FromResult(new PigeonPublishDecisionResult(_decision, _reason));
+        }
+
+        private sealed class MetadataPublishDecisionInterceptor : IPublishDecisionInterceptor
+        {
+            public ValueTask<PigeonPublishDecisionResult> InterceptAsync(
+                PublishContext context,
+                CancellationToken cancellationToken = default)
+                => ValueTask.FromResult(new PigeonPublishDecisionResult(PigeonPublishDecision.Continue)
+                {
+                    Metadata = new Dictionary<string, object>
+                    {
+                        ["correlation-id"] = "corr-1"
+                    }
+                });
         }
 
         private sealed class TestSerializer : ISerializer

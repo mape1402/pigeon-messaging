@@ -335,6 +335,8 @@ namespace Pigeon.Messaging.Producing
                 var decision = await interceptor.InterceptAsync(publishContext, cancellationToken)
                     ?? PigeonPublishDecisionResult.Continue;
 
+                publishContext.MergeMetadata(decision.Metadata);
+
                 if (decision.Decision != PigeonPublishDecision.Continue)
                     return decision;
             }
@@ -351,6 +353,8 @@ namespace Pigeon.Messaging.Producing
                 var interceptor = (IPublishDecisionInterceptor)_serviceProvider.GetRequiredService(interceptorType);
                 var decision = await interceptor.InterceptAsync(publishContext, cancellationToken)
                     ?? PigeonPublishDecisionResult.Continue;
+
+                publishContext.MergeMetadata(decision.Metadata);
 
                 if (decision.Decision != PigeonPublishDecision.Continue)
                     return decision;
