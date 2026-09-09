@@ -1,9 +1,12 @@
 namespace Pigeon.Messaging.InMemory.Sample
 {
+    using Pigeon.Messaging.Consuming.Dispatching;
+
     internal sealed class InMemorySampleScenario
     {
         private readonly TaskCompletionSource _billingReceived = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly TaskCompletionSource _auditReceived = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource<PigeonConsumeEnvelope> _deferredEnvelope = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public string OrderId { get; } = Guid.NewGuid().ToString("N");
 
@@ -19,9 +22,18 @@ namespace Pigeon.Messaging.InMemory.Sample
                 _auditReceived.TrySetResult();
         }
 
+        public void CaptureDeferredEnvelope(PigeonConsumeEnvelope envelope)
+            => _deferredEnvelope.TrySetResult(envelope);
+
         public Task WaitForBothModulesAsync(CancellationToken cancellationToken)
             => Task.WhenAll(
                 _billingReceived.Task.WaitAsync(cancellationToken),
                 _auditReceived.Task.WaitAsync(cancellationToken));
+
+        public Task WaitForAuditAsync(CancellationToken cancellationToken)
+            => _auditReceived.Task.WaitAsync(cancellationToken);
+
+        public Task<PigeonConsumeEnvelope> WaitForDeferredEnvelopeAsync(CancellationToken cancellationToken)
+            => _deferredEnvelope.Task.WaitAsync(cancellationToken);
     }
 }
