@@ -125,7 +125,13 @@
                             json,
                             endpoint.Subscription,
                             token => args.CompleteMessageAsync(args.Message, token),
-                            (_, token) => args.AbandonMessageAsync(args.Message, cancellationToken: token));
+                            (_, token) => args.AbandonMessageAsync(args.Message, cancellationToken: token),
+                            (_, token) => args.AbandonMessageAsync(args.Message, cancellationToken: token),
+                            (exception, token) => args.DeadLetterMessageAsync(
+                                args.Message,
+                                deadLetterReason: exception?.GetType().Name ?? "Rejected",
+                                deadLetterErrorDescription: exception?.Message,
+                                cancellationToken: token));
 
                     await OnMessageConsumedAsync(consumed, args.CancellationToken);
                 }
