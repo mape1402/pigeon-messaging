@@ -45,6 +45,8 @@
             services.AddSingleton<ConsumerExecutionDiagnostics>();
             services.AddSingleton<IConsumerExecutionDiagnostics>(provider => provider.GetRequiredService<ConsumerExecutionDiagnostics>());
             services.AddSingleton<IConsumingDispatcher, ConsumingDispatcher>();
+            services.AddSingleton<IPigeonConsumeEnvelopeFactory, PigeonConsumeEnvelopeFactory>();
+            services.AddSingleton<IPigeonConsumerInvoker, PigeonConsumerInvoker>();
             services.AddSingleton<ITopologyProvisioningService, TopologyProvisioningService>();
             services.AddHostedService<TopologyProvisioningHostedService>();
             services.AddSingleton<IConsumingManager, ConsumingManager>();
