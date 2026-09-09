@@ -8,15 +8,18 @@ namespace Pigeon.Messaging.Consuming.Dispatching
         private readonly IServiceProvider _serviceProvider;
         private readonly IPigeonConsumeEnvelopeFactory _envelopeFactory;
         private readonly PigeonRouteInterceptorRegistry _routeInterceptorRegistry;
+        private readonly IConsumeHandlerPipeline _handlerPipeline;
 
         public PigeonConsumerInvoker(
             IServiceProvider serviceProvider,
             IPigeonConsumeEnvelopeFactory envelopeFactory,
-            PigeonRouteInterceptorRegistry routeInterceptorRegistry)
+            PigeonRouteInterceptorRegistry routeInterceptorRegistry,
+            IConsumeHandlerPipeline handlerPipeline)
         {
             _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
             _envelopeFactory = envelopeFactory ?? throw new ArgumentNullException(nameof(envelopeFactory));
             _routeInterceptorRegistry = routeInterceptorRegistry ?? throw new ArgumentNullException(nameof(routeInterceptorRegistry));
+            _handlerPipeline = handlerPipeline ?? throw new ArgumentNullException(nameof(handlerPipeline));
         }
 
         public async ValueTask InvokeAsync(PigeonConsumeEnvelope envelope, CancellationToken cancellationToken = default)
@@ -57,7 +60,7 @@ namespace Pigeon.Messaging.Consuming.Dispatching
                 if (configuration == null)
                     throw new InvalidOperationException($"No consumer configuration found for topic '{context.Topic}', version '{context.MessageVersion}', subscription '{context.Subscription}'.");
 
-                await configuration.Handler(context);
+                await _handlerPipeline.InvokeAsync(context, configuration, cancellationToken);
             }
         }
     }

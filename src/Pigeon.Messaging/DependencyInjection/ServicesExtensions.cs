@@ -45,6 +45,7 @@
             services.AddSingleton<ConsumerExecutionDiagnostics>();
             services.AddSingleton<IConsumerExecutionDiagnostics>(provider => provider.GetRequiredService<ConsumerExecutionDiagnostics>());
             services.AddSingleton<IConsumingDispatcher, ConsumingDispatcher>();
+            services.AddSingleton<IConsumeHandlerPipeline, ConsumeHandlerPipeline>();
             services.AddSingleton<IPigeonConsumeEnvelopeFactory, PigeonConsumeEnvelopeFactory>();
             services.AddSingleton<IPigeonConsumerInvoker, PigeonConsumerInvoker>();
             services.AddSingleton<ITopologyProvisioningService, TopologyProvisioningService>();
@@ -113,6 +114,20 @@
             where TInterceptor : class, IConsumeDecisionInterceptor
         {
             builder.GlobalSettingsBuilder.AddService<IConsumeDecisionInterceptor, TInterceptor>(ServiceLifetime.Scoped);
+            return builder;
+        }
+
+        /// <summary>
+        /// Registers a global consume execution interceptor.
+        /// </summary>
+        /// <typeparam name="TInterceptor">The interceptor type.</typeparam>
+        /// <param name="builder">The Pigeon service builder.</param>
+        /// <returns>The same <see cref="IPigeonServiceBuilder"/> instance for chaining.</returns>
+        public static IPigeonServiceBuilder AddConsumeExecutionInterceptor<TInterceptor>(
+            this IPigeonServiceBuilder builder)
+            where TInterceptor : class, IConsumeExecutionInterceptor
+        {
+            builder.GlobalSettingsBuilder.AddService<IConsumeExecutionInterceptor, TInterceptor>(ServiceLifetime.Scoped);
             return builder;
         }
 

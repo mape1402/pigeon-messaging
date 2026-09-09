@@ -8,11 +8,16 @@
     {
         private readonly IServiceProvider _serviceProvider;
         private readonly PigeonRouteInterceptorRegistry _routeInterceptorRegistry;
+        private readonly IConsumeHandlerPipeline _handlerPipeline;
 
-        public ConsumingDispatcher(IServiceProvider serviceProvider, PigeonRouteInterceptorRegistry routeInterceptorRegistry = null)
+        public ConsumingDispatcher(
+            IServiceProvider serviceProvider,
+            PigeonRouteInterceptorRegistry routeInterceptorRegistry = null,
+            IConsumeHandlerPipeline handlerPipeline = null)
         {
             _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
             _routeInterceptorRegistry = routeInterceptorRegistry;
+            _handlerPipeline = handlerPipeline;
         }
 
         public async Task DispatchAsync(string topic, RawPayload rawPayload, CancellationToken cancellationToken = default)
@@ -96,7 +101,14 @@
                         return;
                     }
 
-                    await configuration.Handler(context);
+                    var handlerPipeline = _handlerPipeline
+                        ?? scope.ServiceProvider.GetService<IConsumeHandlerPipeline>()
+                        ?? new ConsumeHandlerPipeline(
+                            _routeInterceptorRegistry
+                            ?? scope.ServiceProvider.GetService<PigeonRouteInterceptorRegistry>()
+                            ?? new PigeonRouteInterceptorRegistry());
+
+                    await handlerPipeline.InvokeAsync(context, configuration, cancellationToken);
                 }
             }
         }

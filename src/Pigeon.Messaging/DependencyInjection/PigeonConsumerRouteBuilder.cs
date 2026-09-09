@@ -28,5 +28,17 @@ namespace Microsoft.Extensions.DependencyInjection
             _builder.AddRouteConsumeDecisionInterceptor<TInterceptor>(_route);
             return this;
         }
+
+        /// <summary>
+        /// Registers a consume execution interceptor for this route.
+        /// </summary>
+        /// <typeparam name="TInterceptor">The interceptor type.</typeparam>
+        /// <returns>The same route builder for chaining.</returns>
+        public PigeonConsumerRouteBuilder AddConsumeExecutionInterceptor<TInterceptor>()
+            where TInterceptor : class, IConsumeExecutionInterceptor
+        {
+            _builder.AddRouteConsumeExecutionInterceptor<TInterceptor>(_route);
+            return this;
+        }
     }
 }
