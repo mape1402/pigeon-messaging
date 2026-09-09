@@ -20,6 +20,8 @@
         private readonly ConcurrentDictionary<string, object> _metadata = new();
         private Func<CancellationToken, Task> _completeAsync = _ => Task.CompletedTask;
         private Func<Exception, CancellationToken, Task> _failAsync = (_, _) => Task.CompletedTask;
+        private Func<Exception, CancellationToken, Task> _retryAsync = (_, _) => Task.CompletedTask;
+        private Func<Exception, CancellationToken, Task> _rejectAsync = (_, _) => Task.CompletedTask;
 
         /// <summary>
         /// Provides access to scoped services.
@@ -69,7 +71,25 @@
         /// <summary>
         /// Optional metadata attached to the message envelope.
         /// </summary>
-        public IReadOnlyDictionary<string, string> RawMetadata { get; init; }
+        public IReadOnlyDictionary<string, string> RawMetadata { get; init; } =
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Gets the execution source that produced this consume context.
+        /// </summary>
+        public ConsumeExecutionSource ExecutionSource { get; init; } = ConsumeExecutionSource.BrokerDelivery;
+
+        /// <summary>
+        /// Gets optional reply headers that can be propagated by request/reply integrations.
+        /// </summary>
+        public IDictionary<string, string> ReplyHeaders { get; } =
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Gets optional reply metadata that can be propagated by request/reply integrations.
+        /// </summary>
+        public IDictionary<string, string> ReplyMetadata { get; } =
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>
         /// Completes the message in the underlying broker when manual acknowledgement is used.
@@ -88,12 +108,39 @@
         public Task FailAsync(Exception exception, CancellationToken cancellationToken = default)
             => _failAsync(exception, cancellationToken);
 
+        /// <summary>
+        /// Requests retry semantics for the message in the underlying broker when supported.
+        /// </summary>
+        /// <param name="exception">The optional exception that caused the retry.</param>
+        /// <param name="cancellationToken">A token to observe for cancellation requests.</param>
+        /// <returns>A task that represents the asynchronous retry operation.</returns>
+        public Task RetryAsync(Exception exception = null, CancellationToken cancellationToken = default)
+            => _retryAsync(exception, cancellationToken);
+
+        /// <summary>
+        /// Rejects the message in the underlying broker when supported.
+        /// </summary>
+        /// <param name="exception">The optional exception that caused the rejection.</param>
+        /// <param name="cancellationToken">A token to observe for cancellation requests.</param>
+        /// <returns>A task that represents the asynchronous rejection operation.</returns>
+        public Task RejectAsync(Exception exception = null, CancellationToken cancellationToken = default)
+            => _rejectAsync(exception, cancellationToken);
+
         internal void SetAcknowledgementCallbacks(
             Func<CancellationToken, Task> completeAsync,
             Func<Exception, CancellationToken, Task> failAsync)
+            => SetAcknowledgementCallbacks(completeAsync, failAsync, failAsync, failAsync);
+
+        internal void SetAcknowledgementCallbacks(
+            Func<CancellationToken, Task> completeAsync,
+            Func<Exception, CancellationToken, Task> failAsync,
+            Func<Exception, CancellationToken, Task> retryAsync,
+            Func<Exception, CancellationToken, Task> rejectAsync)
         {
             _completeAsync = completeAsync ?? (_ => Task.CompletedTask);
             _failAsync = failAsync ?? ((_, _) => Task.CompletedTask);
+            _retryAsync = retryAsync ?? _failAsync;
+            _rejectAsync = rejectAsync ?? _failAsync;
         }
 
         /// <summary>

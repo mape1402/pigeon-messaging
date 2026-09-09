@@ -229,13 +229,29 @@
                     ? Configuration.ConsumerEndpoint.DefaultSubscription
                     : e.Subscription;
 
-                await _dispatcher.DispatchAsync(
-                    topic,
-                    subscription,
-                    rawPayload,
-                    token => CompleteMessageAsync(e, token),
-                    (ex, token) => FailMessageAsync(e, ex, token),
-                    linkedCts.Token);
+                if (_dispatcher is ConsumingDispatcher dispatcher)
+                {
+                    await dispatcher.DispatchAsync(
+                        topic,
+                        subscription,
+                        rawPayload,
+                        token => CompleteMessageAsync(e, token),
+                        (ex, token) => RetryMessageAsync(e, ex, token),
+                        (ex, token) => RetryMessageAsync(e, ex, token),
+                        (ex, token) => RejectMessageAsync(e, ex, token),
+                        ConsumeExecutionSource.BrokerDelivery,
+                        linkedCts.Token);
+                }
+                else
+                {
+                    await _dispatcher.DispatchAsync(
+                        topic,
+                        subscription,
+                        rawPayload,
+                        token => CompleteMessageAsync(e, token),
+                        (ex, token) => RetryMessageAsync(e, ex, token),
+                        linkedCts.Token);
+                }
 
                 if (GetAcknowledgementMode() == MessageAcknowledgementMode.OnHandlerSuccess)
                     await CompleteMessageAsync(e, cancellationToken);
@@ -247,7 +263,7 @@
                 _logger.LogError(ex, "Has occurred an unexpected error when a message has been consumed.");
 
                 if (GetAcknowledgementMode() == MessageAcknowledgementMode.OnHandlerSuccess)
-                    await FailMessageAsync(e, ex, cancellationToken);
+                    await RetryMessageAsync(e, ex, cancellationToken);
 
                 _diagnostics.RecordHandlerFailed();
             }
@@ -259,9 +275,15 @@
             _diagnostics.RecordAcknowledged();
         }
 
-        private async Task FailMessageAsync(MessageConsumedEventArgs e, Exception exception, CancellationToken cancellationToken)
+        private async Task RetryMessageAsync(MessageConsumedEventArgs e, Exception exception, CancellationToken cancellationToken)
         {
-            await e.FailAsync(exception, cancellationToken);
+            await e.RetryAsync(exception, cancellationToken);
+            _diagnostics.RecordRejected();
+        }
+
+        private async Task RejectMessageAsync(MessageConsumedEventArgs e, Exception exception, CancellationToken cancellationToken)
+        {
+            await e.RejectAsync(exception, cancellationToken);
             _diagnostics.RecordRejected();
         }
 
