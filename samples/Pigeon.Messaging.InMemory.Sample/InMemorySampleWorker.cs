@@ -3,6 +3,7 @@ namespace Pigeon.Messaging.InMemory.Sample
     using Microsoft.Extensions.DependencyInjection;
     using Microsoft.Extensions.Hosting;
     using Microsoft.Extensions.Logging;
+    using Pigeon.Messaging.Consuming.Dispatching;
     using Pigeon.Messaging.InMemory;
     using Pigeon.Messaging.Producing;
 
@@ -34,19 +35,30 @@ namespace Pigeon.Messaging.InMemory.Sample
 
             using var scope = _scopeFactory.CreateScope();
             var producer = scope.ServiceProvider.GetRequiredService<IProducer>();
+            var consumerInvoker = scope.ServiceProvider.GetRequiredService<IPigeonConsumerInvoker>();
 
             _logger.LogInformation("Publishing OrderCreatedMessage {OrderId} to the in-memory broker.", _scenario.OrderId);
-            await producer.PublishAsync(new OrderCreatedMessage { OrderId = _scenario.OrderId }, "orders.created", stoppingToken);
+            await producer.PublishAsync(new OrderCreatedMessage { OrderId = _scenario.OrderId }, OrderRoutes.CreatedTopic, stoppingToken);
 
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken, timeout.Token);
 
             try
             {
+                await _scenario.WaitForAuditAsync(linked.Token);
+                var envelope = await _scenario.WaitForDeferredEnvelopeAsync(linked.Token);
+
+                _logger.LogInformation(
+                    "Replaying deferred billing envelope for topic {Topic}, subscription {Subscription}.",
+                    envelope.Topic,
+                    envelope.Subscription);
+
+                await consumerInvoker.InvokeAsync(envelope, linked.Token);
+
                 await _scenario.WaitForBothModulesAsync(linked.Token);
                 await WaitForCompletedDeliveriesAsync(2, linked.Token);
 
-                _logger.LogInformation("Both modular consumers received the message.");
+                _logger.LogInformation("Audit consumed inline and billing consumed through deferred replay.");
                 _logger.LogInformation("Published messages: {PublishedMessages}", _broker.PublishedMessages.Count);
                 _logger.LogInformation("Deliveries: {Deliveries}", _broker.Deliveries.Count);
 

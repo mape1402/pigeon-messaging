@@ -20,29 +20,34 @@ namespace Pigeon.Messaging.InMemory.Sample
 
             builder.Services.AddSingleton<InMemorySampleScenario>();
 
-            builder.Services
-                .AddPigeon(builder.Configuration, pigeon =>
+            var pigeon = builder.Services
+                .AddPigeon(builder.Configuration, settings =>
                 {
-                    pigeon.ConfigureConsumerExecution(settings =>
+                    settings.ConfigureConsumerExecution(consumerExecution =>
                     {
-                        settings.AcknowledgementMode = MessageAcknowledgementMode.OnHandlerSuccess;
+                        consumerExecution.AcknowledgementMode = MessageAcknowledgementMode.OnHandlerSuccess;
                     });
 
-                    pigeon.UseInMemoryBroker();
-                })
+                    settings.UseInMemoryBroker();
+                });
+
+            pigeon
+                .AddPublishDecisionInterceptor<SamplePublishDecisionInterceptor>()
+                .ForConsumer(OrderRoutes.CreatedForBilling)
+                .AddConsumeDecisionInterceptor<DeferredBillingConsumeInterceptor>();
+
+            pigeon
                 .AddConsumeHandler<OrderCreatedMessage>(
-                    "orders.created",
-                    SemanticVersion.Default,
-                    "billing-module",
+                    OrderRoutes.CreatedForBilling,
                     (context, message) =>
                     {
                         context.Services.GetRequiredService<InMemorySampleScenario>().MarkBilling(message.OrderId);
                         return Task.CompletedTask;
-                    })
+                    });
+
+            pigeon
                 .AddConsumeHandler<OrderCreatedMessage>(
-                    "orders.created",
-                    SemanticVersion.Default,
-                    "audit-module",
+                    OrderRoutes.CreatedForAudit,
                     (context, message) =>
                     {
                         context.Services.GetRequiredService<InMemorySampleScenario>().MarkAudit(message.OrderId);
