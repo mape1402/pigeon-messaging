@@ -24,6 +24,7 @@
         private readonly IConfiguration _configuration;
         private readonly IConsumingConfigurator _consumingConfigurator;
         private readonly MessagingSettings _messagingSettings;
+        private readonly PigeonRouteInterceptorRegistry _routeInterceptorRegistry = new();
 
         private readonly FeatureBuilder _featureBuilder;
 
@@ -277,6 +278,24 @@
         public GlobalSettingsBuilder AddFeature(Action<FeatureBuilder> config)
         {
             config(_featureBuilder);
+            return this;
+        }
+
+        internal PigeonRouteInterceptorRegistry RouteInterceptorRegistry => _routeInterceptorRegistry;
+
+        internal GlobalSettingsBuilder AddRouteConsumeDecisionInterceptor<TInterceptor>(PigeonRouteKey route)
+            where TInterceptor : class, IConsumeDecisionInterceptor
+        {
+            _services.AddScoped<TInterceptor>();
+            _routeInterceptorRegistry.AddConsumeDecisionInterceptor(route, typeof(TInterceptor));
+            return this;
+        }
+
+        internal GlobalSettingsBuilder AddRoutePublishDecisionInterceptor<TInterceptor>(PigeonRouteKey route)
+            where TInterceptor : class, IPublishDecisionInterceptor
+        {
+            _services.AddScoped<TInterceptor>();
+            _routeInterceptorRegistry.AddPublishDecisionInterceptor(route, typeof(TInterceptor));
             return this;
         }
 
