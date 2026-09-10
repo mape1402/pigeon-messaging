@@ -4,6 +4,7 @@
 
 [![Build](https://github.com/mape1402/pigeon-messaging/actions/workflows/build-and-release.yml/badge.svg)](https://github.com/mape1402/pigeon-messaging/actions/workflows/build-and-release.yml)
 [![NuGet](https://img.shields.io/nuget/v/Pigeon.Messaging.svg)](https://www.nuget.org/packages/Pigeon.Messaging/)
+[![Downloads](https://img.shields.io/nuget/dt/Pigeon.Messaging.svg)](https://www.nuget.org/packages/Pigeon.Messaging/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 ---
@@ -28,7 +29,7 @@ Its goal is to simplify publishing and consuming messages through a unified, dec
 - **Configurable acknowledgement behavior** with manual ack, auto-ack on receive, or ack after a successful handler.
 - **Broker adapters** that keep business code independent from the transport.
 - **In-memory broker** for unit tests, examples, and modular monolith scenarios.
-- **Mule-backed transactional outbox** for durable broker dispatch with retry, recovery, cleanup, and diagnostics.
+- **External inbox/outbox integration hooks** for durable systems such as SquirrelBox.
 - **Lightweight core package** with adapter packages for each broker.
 
 Pigeon is a good fit for microservices, distributed architectures, and applications that need reliable asynchronous communication without coupling domain code to a specific broker SDK.
@@ -46,7 +47,7 @@ Pigeon is a good fit for microservices, distributed architectures, and applicati
 
 ## Supported Frameworks
 
-Pigeon 3.1 supports:
+Pigeon 4.0 supports:
 
 - .NET 8
 - .NET 9
@@ -56,7 +57,7 @@ Pigeon 3.1 supports:
 
 ## Installation
 
-Install the core package, one broker adapter, and any optional outbox providers you need:
+Install the core package and one broker adapter:
 
 ```bash
 dotnet add package Pigeon.Messaging
@@ -67,8 +68,15 @@ dotnet add package Pigeon.Messaging.Azure.EventGrid
 dotnet add package Pigeon.Messaging.Azure.EventHub
 dotnet add package Pigeon.Messaging.InMemory
 dotnet add package Pigeon.Testing
-dotnet add package Pigeon.Messaging.Outbox.EntityFrameworkCore
-dotnet add package Pigeon.Messaging.Outbox.InMemory
+```
+
+For durable inbox/outbox behavior, use SquirrelBox with its Pigeon integration:
+
+```bash
+dotnet add package SquirrelBox
+dotnet add package SquirrelBox.EntityFrameworkCore
+dotnet add package SquirrelBox.Mule
+dotnet add package SquirrelBox.Messaging.Pigeon
 ```
 
 ## Quick Start
@@ -406,6 +414,86 @@ public sealed class PublishPolicy : IPublishDecisionInterceptor
 
 Available publish decisions are `Continue`, `Skip`, `Reject`, `UseOutbox`, and `PublishNow`.
 
+### Integrate an External Outbox
+
+Pigeon 4.0 exposes prepared publish envelopes so an external durable outbox can persist exactly what Pigeon was going to send after publish interceptors have enriched the operation.
+
+Use `IPigeonPublishEnvelopeFactory` from a publish decision interceptor:
+
+```csharp
+public sealed class ExternalOutboxInterceptor : IPublishDecisionInterceptor
+{
+    private readonly IPigeonPublishEnvelopeFactory _envelopeFactory;
+    private readonly IExternalOutbox _outbox;
+
+    public ExternalOutboxInterceptor(
+        IPigeonPublishEnvelopeFactory envelopeFactory,
+        IExternalOutbox outbox)
+    {
+        _envelopeFactory = envelopeFactory;
+        _outbox = outbox;
+    }
+
+    public async ValueTask<PigeonPublishDecisionResult> InterceptAsync(
+        PublishContext context,
+        CancellationToken cancellationToken = default)
+    {
+        var envelope = await _envelopeFactory.CreateAsync(context, cancellationToken);
+        await _outbox.SaveAsync(envelope, cancellationToken);
+
+        return new PigeonPublishDecisionResult(PigeonPublishDecision.Skip);
+    }
+}
+```
+
+The envelope includes the prepared payload, payload type, raw flag, topic, exchange, routing key, content type, headers, metadata, correlation id, and trace id. If the external outbox fails to persist, let the exception bubble; Pigeon will not report the publish as successful and will not send the message inline.
+
+Replay the persisted envelope from a worker scope with `IPigeonPublisherInvoker`:
+
+```csharp
+public sealed class ExternalOutboxWorker
+{
+    private readonly IPigeonPublisherInvoker _publisherInvoker;
+
+    public ExternalOutboxWorker(IPigeonPublisherInvoker publisherInvoker)
+    {
+        _publisherInvoker = publisherInvoker;
+    }
+
+    public async Task DispatchAsync(
+        PigeonPublishEnvelope envelope,
+        CancellationToken cancellationToken)
+    {
+        await _publisherInvoker.PublishAsync(envelope, cancellationToken);
+    }
+}
+```
+
+The invoker sends the prepared envelope directly through the configured broker adapter. It does not rerun `IPublishInterceptor`, `IPublishDecisionInterceptor`, or Pigeon's internal outbox logic, which prevents duplicate metadata mutations and outbox replay loops.
+
+SquirrelBox should use these APIs for Pigeon outbox integration:
+
+```csharp
+services
+    .AddSquirrelBox(options =>
+    {
+        options.AllowPayloadHashAsIdempotencyKey = true;
+    })
+    .UseEntityFramework<AppDbContext>();
+
+services.AddSquirrelBoxMule();
+
+services.AddPigeon(configuration, pigeon =>
+{
+    pigeon.UseRabbitMq();
+});
+
+services.AddSquirrelBoxPigeon(options =>
+{
+    options.EnableOutbox = true;
+});
+```
+
 ### Use Consume Execution Interceptors
 
 Consume execution interceptors wrap the actual consumer handler. Use them when work must happen immediately before and after the handler, including timing, scoped logging, metrics, unit-of-work boundaries, auditing, and failure observation.
@@ -558,9 +646,9 @@ External test hosts can expose a thin wrapper over the adapter-friendly registra
 services.AddPigeonTestingAdapter(typeof(CustomersHubConsumer).Assembly);
 ```
 
-### Use the In-Memory Outbox
+### Deprecated: Use the In-Memory Outbox
 
-Use the in-memory outbox provider for tests and samples that need the real Pigeon outbox pipeline without a database. This provider uses Mule's in-memory durable action engine under the Pigeon outbox API:
+Pigeon's internal outbox providers are deprecated in 4.0. Use SquirrelBox for new inbox/outbox work. The in-memory Pigeon outbox remains available temporarily for compatibility with existing tests and samples that need the old Pigeon outbox pipeline without a database:
 
 ```csharp
 builder.Services.AddPigeon(builder.Configuration, config =>
@@ -578,7 +666,7 @@ var outbox = serviceProvider.GetRequiredService<IInMemoryOutbox>();
 Assert.Single(outbox.Messages);
 ```
 
-It is process-local and non-durable. Use `Pigeon.Messaging.Outbox.EntityFrameworkCore` for production durability.
+It is process-local and non-durable. For production durability, use SquirrelBox storage providers with `SquirrelBox.Messaging.Pigeon`.
 
 ### Configure Topology Provisioning
 
@@ -711,11 +799,13 @@ public class CurrentMessageTenantProvider
 
 `ConsumeContext` is only available while Pigeon is running consume interceptors or the consumer handler for the current message. Outside a consume pipeline, the accessor returns `null`.
 
-### Configure the Transactional Outbox
+### Deprecated: Configure the Transactional Outbox
 
-The transactional outbox plugs into the producer pipeline. `PublishAsync` still runs publish interceptors in the current scope, builds the final `WrappedPayload`, and then stores that exact payload in the outbox instead of sending it directly to the broker. Pigeon stores the publish intent as a Mule durable action and Mule handles retry, recovery scanning, immediate dispatch, and cleanup.
+Pigeon's internal transactional outbox is deprecated in 4.0 and remains available only for compatibility. New applications should use SquirrelBox Outbox with `SquirrelBox.Messaging.Pigeon`, which owns idempotency, outbox state, storage, diagnostics, and Mule scheduling while Pigeon remains focused on messaging.
 
-Pigeon 2.8 uses Mule Durable Actions 1.4.1 for the outbox providers, including Mule's bounded dispatch and execution queues, lane-aware runtime settings, and high-throughput durable action improvements.
+The deprecated internal transactional outbox plugs into the producer pipeline. `PublishAsync` still runs publish interceptors in the current scope, builds the final `WrappedPayload`, and then stores that exact payload in the outbox instead of sending it directly to the broker. Pigeon stores the publish intent as a Mule durable action and Mule handles retry, recovery scanning, immediate dispatch, and cleanup.
+
+Pigeon 4.0 keeps Mule Durable Actions 1.4.1 for the deprecated outbox providers.
 
 This keeps scoped metadata, tracing, tenant data, and other publish interceptor output exactly as it existed at publish time. The dispatch step is intentionally separated from the original request scope.
 
@@ -816,9 +906,9 @@ Run the transaction sample to see the expected commit and rollback behavior with
 dotnet run --project samples/Pigeon.Messaging.TransactionScope.Sample/Pigeon.Messaging.TransactionScope.Sample.csproj
 ```
 
-### Inspect Outbox State
+### Deprecated: Inspect Internal Outbox State
 
-When an outbox provider is registered, Pigeon exposes `IOutboxDiagnostics` so an application can build health checks, dashboards, or support endpoints without querying Mule's durable action table directly:
+When a deprecated Pigeon outbox provider is registered, Pigeon exposes `IOutboxDiagnostics` so an application can build health checks, dashboards, or support endpoints without querying Mule's durable action table directly:
 
 ```csharp
 public class OutboxHealthProbe
