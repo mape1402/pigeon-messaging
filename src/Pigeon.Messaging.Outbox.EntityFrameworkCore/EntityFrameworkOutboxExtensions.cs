@@ -18,6 +18,7 @@ namespace Microsoft.Extensions.DependencyInjection
         /// <param name="builder">The Pigeon global settings builder.</param>
         /// <param name="configure">An optional callback to configure outbox behavior.</param>
         /// <returns>The same global settings builder for chaining.</returns>
+        [Obsolete("Pigeon outbox is deprecated and will be replaced by SquirrelBox Outbox. Register SquirrelBox.Messaging.Pigeon and enable its outbox integration instead.")]
         public static GlobalSettingsBuilder UseEntityFrameworkOutbox<TDbContext>(
             this GlobalSettingsBuilder builder,
             Action<OutboxSettings> configure = null)

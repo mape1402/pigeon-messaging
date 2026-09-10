@@ -424,6 +424,66 @@ namespace Pigeon.Messaging.Tests.Producing
         }
 
         [Fact]
+        public async Task PublishAsync_Should_Allow_External_Outbox_To_Persist_Envelope_And_Skip_Inline_Publish()
+        {
+            var manager = Substitute.For<IProducingManager>();
+            var serializer = new TestSerializer();
+            var envelopeFactory = new PigeonPublishEnvelopeFactory(
+                serializer,
+                Options.Create(new GlobalSettings { Domain = "test-domain" }));
+            var interceptor = new EnvelopePersistingPublishDecisionInterceptor(envelopeFactory);
+            var publishInterceptor = Substitute.For<IPublishInterceptor>();
+            publishInterceptor
+                .Intercept(Arg.Any<PublishContext>(), Arg.Any<CancellationToken>())
+                .Returns(call =>
+                {
+                    var context = call.Arg<PublishContext>();
+                    context.AddMetadata("tenant", "north");
+                    context.CorrelationId = "corr-1";
+                    return ValueTask.CompletedTask;
+                });
+            var producer = new Producer(
+                new[] { publishInterceptor },
+                manager,
+                Options.Create(new GlobalSettings { Domain = "test-domain" }),
+                new[] { interceptor });
+
+            await producer.PublishAsync(new TestMessage { Text = "hello" }, "events", "orders.created", "1.0.0");
+
+            await manager.DidNotReceive().PushAsync(
+                Arg.Any<WrappedPayload<TestMessage>>(),
+                Arg.Any<PublishingRoute>(),
+                Arg.Any<CancellationToken>());
+
+            var envelope = Assert.Single(interceptor.Envelopes);
+            Assert.False(envelope.IsRaw);
+            Assert.Equal("events", envelope.Exchange);
+            Assert.Equal("orders.created", envelope.RoutingKey);
+            Assert.Equal("north", envelope.Metadata["tenant"]);
+            Assert.Equal("corr-1", envelope.CorrelationId);
+        }
+
+        [Fact]
+        public async Task PublishAsync_Should_Fail_When_External_Outbox_Persistence_Fails()
+        {
+            var manager = Substitute.For<IProducingManager>();
+            var producer = new Producer(
+                Enumerable.Empty<IPublishInterceptor>(),
+                manager,
+                Options.Create(new GlobalSettings { Domain = "test-domain" }),
+                new[] { new ThrowingPublishDecisionInterceptor() });
+
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+                async () => await producer.PublishAsync(new TestMessage { Text = "hello" }, "topic"));
+
+            Assert.Equal("outbox unavailable", exception.Message);
+            await manager.DidNotReceive().PushAsync(
+                Arg.Any<WrappedPayload<TestMessage>>(),
+                Arg.Any<PublishingRoute>(),
+                Arg.Any<CancellationToken>());
+        }
+
+        [Fact]
         public async Task PublishAsync_Should_Throw_If_Message_Null()
         {
             var producer = GetProducer();
@@ -494,6 +554,37 @@ namespace Pigeon.Messaging.Tests.Producing
                         ["correlation-id"] = "corr-1"
                     }
                 });
+        }
+
+        private sealed class EnvelopePersistingPublishDecisionInterceptor : IPublishDecisionInterceptor
+        {
+            private readonly IPigeonPublishEnvelopeFactory _envelopeFactory;
+
+            public EnvelopePersistingPublishDecisionInterceptor(IPigeonPublishEnvelopeFactory envelopeFactory)
+            {
+                _envelopeFactory = envelopeFactory;
+            }
+
+            public List<PigeonPublishEnvelope> Envelopes { get; } = new();
+
+            public async ValueTask<PigeonPublishDecisionResult> InterceptAsync(
+                PublishContext context,
+                CancellationToken cancellationToken = default)
+            {
+                Envelopes.Add(await _envelopeFactory.CreateAsync(context, cancellationToken));
+
+                return new PigeonPublishDecisionResult(
+                    PigeonPublishDecision.Skip,
+                    "External outbox persisted the publish envelope.");
+            }
+        }
+
+        private sealed class ThrowingPublishDecisionInterceptor : IPublishDecisionInterceptor
+        {
+            public ValueTask<PigeonPublishDecisionResult> InterceptAsync(
+                PublishContext context,
+                CancellationToken cancellationToken = default)
+                => throw new InvalidOperationException("outbox unavailable");
         }
 
         private sealed class TestSerializer : ISerializer
