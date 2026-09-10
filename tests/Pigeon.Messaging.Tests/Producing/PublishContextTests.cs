@@ -14,7 +14,7 @@
 
             context.AddMetadata("key1", 123);
 
-            var metadata = context.GetMetadata();
+            var metadata = context.Metadata;
 
             Assert.True(metadata.ContainsKey("key1"));
             Assert.Equal(123, metadata["key1"]);
@@ -46,7 +46,7 @@
             var context = new PublishContext();
             context.AddMetadata("key1", "value1");
 
-            var metadata = context.GetMetadata();
+            var metadata = context.Metadata;
 
             Assert.IsAssignableFrom<IReadOnlyDictionary<string, object>>(metadata);
 
@@ -57,6 +57,26 @@
             // Ensure it's read-only: modification throws
             var readOnlyDict = Assert.IsType<System.Collections.ObjectModel.ReadOnlyDictionary<string, object>>(metadata);
             Assert.Throws<NotSupportedException>(() => ((IDictionary<string, object>)readOnlyDict).Add("newKey", "newValue"));
+        }
+
+        [Fact]
+        public void AddHeader_Should_AddEntry_WhenKeyIsNew()
+        {
+            var context = new PublishContext();
+
+            context.AddHeader("x-correlation-id", "corr-1");
+
+            Assert.Equal("corr-1", context.Headers["x-correlation-id"]);
+        }
+
+        [Fact]
+        public void AddHeader_Should_ThrowInvalidOperationException_WhenKeyAlreadyExists()
+        {
+            var context = new PublishContext();
+            context.AddHeader("x-correlation-id", "corr-1");
+
+            var ex = Assert.Throws<InvalidOperationException>(() => context.AddHeader("x-correlation-id", "corr-2"));
+            Assert.Contains("Header with key 'x-correlation-id' already exists", ex.Message);
         }
     }
 }

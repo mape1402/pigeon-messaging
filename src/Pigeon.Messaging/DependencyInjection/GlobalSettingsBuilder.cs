@@ -174,6 +174,7 @@
         /// </summary>
         /// <param name="configure">The outbox configuration action.</param>
         /// <returns>The same <see cref="GlobalSettingsBuilder"/> instance for chaining.</returns>
+        [Obsolete("Pigeon outbox settings are deprecated and will be replaced by SquirrelBox Outbox configuration.")]
         public GlobalSettingsBuilder ConfigureOutbox(Action<OutboxSettings> configure)
         {
             if (configure == null)

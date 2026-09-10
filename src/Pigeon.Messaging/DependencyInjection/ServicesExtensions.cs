@@ -55,6 +55,8 @@
 
             services.AddScoped<IProducer, Producer>();
             services.AddSingleton<IProducingManager, ProducingManager>();
+            services.AddSingleton<IPigeonPublishEnvelopeFactory, PigeonPublishEnvelopeFactory>();
+            services.AddSingleton<IPigeonPublisherInvoker, PigeonPublisherInvoker>();
             services.AddSingleton<OutboxMessageFactory>();
 
             // Bind the MessagingSettings from configuration.
