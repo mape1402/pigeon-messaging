@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ------
 
+## [v4.0.0] - 2026-09-10
+
+### Added
+
+- `PigeonPublishEnvelope` for persisting prepared publish operations outside Pigeon.
+- `IPigeonPublishEnvelopeFactory` for external outbox integrations that need the final post-interceptor payload, route, metadata, headers, correlation id, trace id, and raw publish flag.
+- `IPigeonPublisherInvoker` for replaying prepared publish envelopes without rerunning producer interceptors, publish decision interceptors, or internal outbox logic.
+- Public publish context metadata, headers, correlation id, trace id, content type, operation, and transport values for durable integration adapters.
+
+### Deprecated
+
+- Pigeon's internal outbox registration APIs in favor of SquirrelBox Outbox through `SquirrelBox.Messaging.Pigeon`.
+
+------
+
 ## [v3.1.0] - 2026-09-09
 
 ### Added

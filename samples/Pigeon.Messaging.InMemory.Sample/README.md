@@ -1,6 +1,6 @@
 # Pigeon in-memory broker sample
 
-This sample demonstrates Pigeon's in-memory broker adapter for tests, examples, modular monolith scenarios, and deferred consume replay.
+This sample demonstrates Pigeon's in-memory broker adapter for tests, examples, modular monolith scenarios, deferred consume replay, and external outbox publish replay.
 
 It publishes one `OrderCreatedMessage` and delivers it to two independent subscriptions:
 
@@ -15,6 +15,8 @@ The sample also shows:
 - route-specific consume decision interceptors
 - route-specific consume execution interceptors around the handler
 - global publish decision interceptors
+- `IPigeonPublishEnvelopeFactory` for external outbox capture
+- `IPigeonPublisherInvoker` for replaying a prepared publish envelope
 - replay using the same registered consume handler
 - `IConsumeContextAccessor` compatibility during replay
 
@@ -26,4 +28,4 @@ No external broker is required.
 dotnet run --project samples\Pigeon.Messaging.InMemory.Sample\Pigeon.Messaging.InMemory.Sample.csproj
 ```
 
-The console output shows the inline delivery, deferred replay, audit execution interceptor events, published message count, delivery count, and acknowledgement state for each subscription.
+The console output shows the inline delivery, deferred replay, external outbox publish replay, audit execution interceptor events, published message count, delivery count, and acknowledgement state for each subscription.
