@@ -36,6 +36,7 @@ namespace Pigeon.Messaging.InMemory.Sample
             using var scope = _scopeFactory.CreateScope();
             var producer = scope.ServiceProvider.GetRequiredService<IProducer>();
             var consumerInvoker = scope.ServiceProvider.GetRequiredService<IPigeonConsumerInvoker>();
+            var publisherInvoker = scope.ServiceProvider.GetRequiredService<IPigeonPublisherInvoker>();
 
             _logger.LogInformation("Publishing OrderCreatedMessage {OrderId} to the in-memory broker.", _scenario.OrderId);
             await producer.PublishAsync(new OrderCreatedMessage { OrderId = _scenario.OrderId }, OrderRoutes.CreatedTopic, stoppingToken);
@@ -60,6 +61,25 @@ namespace Pigeon.Messaging.InMemory.Sample
 
                 _logger.LogInformation("Audit consumed inline and billing consumed through deferred replay.");
                 _logger.LogInformation("Audit execution interceptor events: {ExecutionEvents}", string.Join(", ", _scenario.ExecutionEvents));
+
+                _logger.LogInformation("Publishing OrderCreatedMessage {OrderId} through the sample external outbox.", _scenario.OrderId);
+                await producer.PublishAsync(
+                    new OrderCreatedMessage { OrderId = _scenario.OrderId },
+                    OrderRoutes.ExternalOutboxTopic,
+                    OrderRoutes.CreatedVersion,
+                    linked.Token);
+
+                var publishEnvelope = await _scenario.WaitForExternalOutboxEnvelopeAsync(linked.Token);
+
+                _logger.LogInformation(
+                    "Replaying external outbox publish envelope for destination {Destination}.",
+                    publishEnvelope.Destination);
+
+                await publisherInvoker.PublishAsync(publishEnvelope, linked.Token);
+                await _scenario.WaitForExternalOutboxAsync(linked.Token);
+                await WaitForCompletedDeliveriesAsync(3, linked.Token);
+
+                _logger.LogInformation("External outbox publish envelope replayed through IPigeonPublisherInvoker.");
                 _logger.LogInformation("Published messages: {PublishedMessages}", _broker.PublishedMessages.Count);
                 _logger.LogInformation("Deliveries: {Deliveries}", _broker.Deliveries.Count);
 

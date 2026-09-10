@@ -33,6 +33,7 @@ namespace Pigeon.Messaging.InMemory.Sample
 
             pigeon
                 .AddPublishDecisionInterceptor<SamplePublishDecisionInterceptor>()
+                .AddPublishDecisionInterceptor<ExternalOutboxPublishDecisionInterceptor>()
                 .ForConsumer(OrderRoutes.CreatedForBilling)
                 .AddConsumeDecisionInterceptor<DeferredBillingConsumeInterceptor>();
 
@@ -55,6 +56,15 @@ namespace Pigeon.Messaging.InMemory.Sample
                     (context, message) =>
                     {
                         context.Services.GetRequiredService<InMemorySampleScenario>().MarkAudit(message.OrderId);
+                        return Task.CompletedTask;
+                    });
+
+            pigeon
+                .AddConsumeHandler<OrderCreatedMessage>(
+                    OrderRoutes.ExternalOutbox,
+                    (context, message) =>
+                    {
+                        context.Services.GetRequiredService<InMemorySampleScenario>().MarkExternalOutbox(message.OrderId);
                         return Task.CompletedTask;
                     });
 
