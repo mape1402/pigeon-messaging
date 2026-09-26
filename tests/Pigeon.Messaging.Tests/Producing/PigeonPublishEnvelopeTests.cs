@@ -77,6 +77,53 @@ namespace Pigeon.Messaging.Tests.Producing
         }
 
         [Fact]
+        public async Task Factory_Should_Throw_When_Context_Is_Null()
+        {
+            var serializer = new TestSerializer();
+            var factory = new PigeonPublishEnvelopeFactory(
+                serializer,
+                Options.Create(new GlobalSettings { Domain = "sales" }));
+
+            await Assert.ThrowsAsync<ArgumentNullException>(async () => await factory.CreateAsync(null));
+        }
+
+        [Fact]
+        public void Factory_Should_Throw_When_Serializer_Is_Null()
+        {
+            Assert.Throws<ArgumentNullException>(() => new PigeonPublishEnvelopeFactory(
+                null,
+                Options.Create(new GlobalSettings { Domain = "sales" })));
+        }
+
+        [Fact]
+        public void Factory_Should_Throw_When_Settings_Are_Null()
+        {
+            var serializer = new TestSerializer();
+
+            Assert.Throws<ArgumentNullException>(() => new PigeonPublishEnvelopeFactory(
+                serializer,
+                null));
+        }
+
+        [Fact]
+        public async Task Factory_Should_Throw_When_Route_Is_Missing()
+        {
+            var serializer = new TestSerializer();
+            var factory = new PigeonPublishEnvelopeFactory(
+                serializer,
+                Options.Create(new GlobalSettings { Domain = "sales" }));
+            var context = new PublishContext
+            {
+                IsRaw = true,
+                Message = new OrderMessage("order-1"),
+                MessageType = typeof(OrderMessage),
+                Version = SemanticVersion.Parse("1.2.0")
+            };
+
+            await Assert.ThrowsAsync<InvalidOperationException>(async () => await factory.CreateAsync(context));
+        }
+
+        [Fact]
         public async Task Factory_Should_Create_Raw_Envelope_Without_Wrapping_Message()
         {
             var serializer = new TestSerializer();
