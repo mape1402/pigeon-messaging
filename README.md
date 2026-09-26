@@ -206,6 +206,58 @@ await producer.PublishRawAsync(
     topic: "hello-world");
 ```
 
+### Wrapped Payload JSON Policy
+
+`PublishAsync` sends a Pigeon wrapper around your message. By default, the wrapper uses the normal .NET property names:
+
+```json
+{
+  "$pigeon": {
+    "formatVersion": "1.0",
+    "propertyNamingPolicy": "Default"
+  },
+  "Domain": "YourApp.Domain",
+  "MessageVersion": "1.0.0",
+  "CreatedOnUtc": "2026-09-25T18:30:00+00:00",
+  "Message": {
+    "Text": "Hello, Pigeon!"
+  },
+  "Metadata": {}
+}
+```
+
+When `ConfigureJsonOptions` changes the naming policy, Pigeon uses the same policy for the wrapper and the message. The `"$pigeon"` marker and its inner properties stay fixed so consumers can detect the policy before reading the rest of the wrapper:
+
+```csharp
+builder.Services
+    .AddPigeon(builder.Configuration, config =>
+    {
+        config.SetDomain("YourApp.Domain");
+    })
+    .ConfigureJsonOptions(options =>
+    {
+        options.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+    });
+```
+
+```json
+{
+  "$pigeon": {
+    "formatVersion": "1.0",
+    "propertyNamingPolicy": "CamelCase"
+  },
+  "domain": "YourApp.Domain",
+  "messageVersion": "1.0.0",
+  "createdOnUtc": "2026-09-25T18:30:00+00:00",
+  "message": {
+    "text": "Hello, Pigeon!"
+  },
+  "metadata": {}
+}
+```
+
+Consumers validate the wrapper policy while reading messages. If a producer and consumer are configured with different wrapper naming policies, Pigeon throws `WrappedPayloadJsonPolicyMismatchException` with the expected and actual policies. Legacy messages without `"$pigeon"` are still supported when their detected wrapper shape matches the consumer configuration.
+
 ### Publish Inside an Ambient Transaction
 
 When `PublishAsync` runs inside a `TransactionScope` and the transactional outbox is not enabled, Pigeon suppresses the ambient transaction for the direct broker publish by default. This keeps brokers that do not participate in the current transaction from trying to enlist in it:

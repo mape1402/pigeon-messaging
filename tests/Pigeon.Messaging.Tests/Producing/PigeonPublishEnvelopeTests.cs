@@ -48,6 +48,32 @@ namespace Pigeon.Messaging.Tests.Producing
             Assert.Equal("sales", wrapped.Domain);
             Assert.Equal("order-1", wrapped.Message.Id);
             Assert.Equal("north", wrapped.Metadata["tenant"].ToString());
+            Assert.Equal(WrappedPayloadJsonPolicyNames.Default, wrapped.Pigeon.PropertyNamingPolicy);
+        }
+
+        [Fact]
+        public async Task Factory_Should_Create_CamelCase_Wrapped_Envelope_With_Fixed_Pigeon_Format_Property()
+        {
+            var options = new JsonSerializerOptions
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                Converters = { new SemanticVersionJsonConverter() }
+            };
+            var serializer = new TestSerializer(options);
+            var factory = new PigeonPublishEnvelopeFactory(
+                serializer,
+                Options.Create(new GlobalSettings { Domain = "sales" }),
+                new WrappedPayloadJsonPolicyProvider(options));
+            var context = CreateContext(isRaw: false, PublishingRoute.ForTopic("orders.created"));
+
+            var envelope = await factory.CreateAsync(context);
+            var json = Encoding.UTF8.GetString(envelope.Payload);
+
+            Assert.Contains(@"""$pigeon"":", json);
+            Assert.Contains(@"""propertyNamingPolicy"":""CamelCase""", json);
+            Assert.Contains(@"""domain"":""sales""", json);
+            Assert.Contains(@"""messageVersion"":""1.2.0""", json);
+            Assert.Contains(@"""message"":", json);
         }
 
         [Fact]
@@ -132,10 +158,20 @@ namespace Pigeon.Messaging.Tests.Producing
 
         private sealed class TestSerializer : ISerializer
         {
-            private readonly JsonSerializerOptions _options = new()
+            private readonly JsonSerializerOptions _options;
+
+            public TestSerializer()
+                : this(new JsonSerializerOptions
+                {
+                    Converters = { new SemanticVersionJsonConverter() }
+                })
             {
-                Converters = { new SemanticVersionJsonConverter() }
-            };
+            }
+
+            public TestSerializer(JsonSerializerOptions options)
+            {
+                _options = options;
+            }
 
             public string Serialize(object payload)
                 => JsonSerializer.Serialize(payload, payload.GetType(), _options);

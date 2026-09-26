@@ -15,6 +15,7 @@ The sample also shows:
 - route-specific consume decision interceptors
 - route-specific consume execution interceptors around the handler
 - global publish decision interceptors
+- camelCase wrapped payload serialization with the fixed `"$pigeon"` policy marker
 - `IPigeonPublishEnvelopeFactory` for external outbox capture
 - `IPigeonPublisherInvoker` for replaying a prepared publish envelope
 - replay using the same registered consume handler

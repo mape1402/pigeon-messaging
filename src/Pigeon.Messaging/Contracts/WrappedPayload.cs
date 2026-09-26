@@ -1,5 +1,7 @@
-﻿namespace Pigeon.Messaging.Contracts
+namespace Pigeon.Messaging.Contracts
 {
+    using System.Text.Json.Serialization;
+
     /// <summary>
     /// Represents a standardized message envelope for domain events or commands,
     /// providing tracing, versioning, and flexible metadata support.
@@ -9,6 +11,14 @@
     /// </typeparam>
     public class WrappedPayload<T> where T : class
     {
+        /// <summary>
+        /// Gets metadata that describes the Pigeon envelope serialization format.
+        /// The JSON property name is intentionally fixed so consumers can read it
+        /// before applying the configured wrapper naming policy.
+        /// </summary>
+        [JsonPropertyName("$pigeon")]
+        public WrappedPayloadSerializationInfo Pigeon { get; init; } = WrappedPayloadSerializationInfo.Default;
+
         /// <summary>
         /// Logical domain or bounded context that the message belongs to.
         /// Useful for routing, segregation, or multi-tenant systems.
