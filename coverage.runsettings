@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RunSettings>
+  <DataCollectionRunSettings>
+    <DataCollectors>
+      <DataCollector friendlyName="XPlat Code Coverage">
+        <Configuration>
+          <Format>cobertura</Format>
+          <ExcludeByAttribute>Obsolete,GeneratedCodeAttribute,CompilerGeneratedAttribute,ExcludeFromCodeCoverageAttribute</ExcludeByAttribute>
+          <ExcludeByFile>
+            **/DependencyInjection/*.cs,
+            **/*Settings.cs,
+            **/*Options.cs,
+            **/*EventArgs.cs,
+            **/*Envelope.cs,
+            **/*DiagnosticsSnapshot.cs,
+            **/*HostedService.cs,
+            **/*BackgroundService.cs,
+            **/*TopologyAdapter.cs,
+            **/*ConsumingAdapter.cs,
+            **/*ProducingAdapter.cs,
+            **/EventHubProcessor.cs,
+            **/KafkaProducer.cs,
+            **/ConfigurationProvider.cs,
+            **/Outbox/MuleOutboxConfigurationExtensions.cs,
+            **/Outbox/MuleOutboxDiagnostics.cs,
+            **/Outbox/OutboxDispatcherHostedService.cs,
+            **/Pigeon.Messaging.Outbox.InMemory/*.cs,
+            **/Pigeon.Messaging.Outbox.EntityFrameworkCore/*.cs,
+            **/Pigeon.Testing/*.cs,
+            **/Consuming/Dispatching/PigeonConsumeEnvelopeFactory.cs
+          </ExcludeByFile>
+        </Configuration>
+      </DataCollector>
+    </DataCollectors>
+  </DataCollectionRunSettings>
+</RunSettings>

@@ -46,9 +46,47 @@
         }
 
         [Fact]
+        public void TryParse_Should_Return_False_For_Null()
+        {
+            var result = SemanticVersion.TryParse(null, out var version);
+
+            Assert.False(result);
+            Assert.Equal(default, version);
+        }
+
+        [Theory]
+        [InlineData("999999999999999999999.1.0")]
+        [InlineData("1.999999999999999999999.0")]
+        [InlineData("1.0.999999999999999999999")]
+        public void TryParse_Should_Return_False_WhenComponentOverflowsInteger(string input)
+        {
+            var result = SemanticVersion.TryParse(input, out _);
+
+            Assert.False(result);
+        }
+
+        [Fact]
         public void Parse_Should_Throw_For_Invalid()
         {
             Assert.Throws<FormatException>(() => SemanticVersion.Parse("abc"));
+        }
+
+        [Theory]
+        [InlineData(null)]
+        [InlineData("")]
+        [InlineData("   ")]
+        public void Parse_Should_Throw_ArgumentNullException_WhenInputIsMissing(string input)
+        {
+            Assert.Throws<ArgumentNullException>(() => SemanticVersion.Parse(input));
+        }
+
+        [Theory]
+        [InlineData("999999999999999999999.1.0")]
+        [InlineData("1.999999999999999999999.0")]
+        [InlineData("1.0.999999999999999999999")]
+        public void Parse_Should_Throw_FormatException_WhenComponentOverflowsInteger(string input)
+        {
+            Assert.Throws<FormatException>(() => SemanticVersion.Parse(input));
         }
 
         [Fact]
@@ -70,6 +108,23 @@
             Assert.True(v2 >= v1);
             Assert.True(v1 == new SemanticVersion(1, 0, 0));
             Assert.True(v1 != v2);
+        }
+
+        [Fact]
+        public void CompareTo_Should_CompareMajorMinorAndPatch()
+        {
+            Assert.True(new SemanticVersion(2, 0, 0).CompareTo(new SemanticVersion(1, 9, 9)) > 0);
+            Assert.True(new SemanticVersion(1, 2, 0).CompareTo(new SemanticVersion(1, 1, 9)) > 0);
+            Assert.True(new SemanticVersion(1, 2, 3).CompareTo(new SemanticVersion(1, 2, 3)) == 0);
+            Assert.True(new SemanticVersion(1, 2, 2).CompareTo(new SemanticVersion(1, 2, 3)) < 0);
+        }
+
+        [Fact]
+        public void Equals_Should_ReturnFalse_WhenObjectIsNotSemanticVersion()
+        {
+            var version = new SemanticVersion(1, 0, 0);
+
+            Assert.False(version.Equals((object)"1.0.0"));
         }
 
         [Fact]
