@@ -16,6 +16,47 @@ namespace Pigeon.Messaging.Tests.Producing
     public class ProducingManagerTests
     {
         [Fact]
+        public async Task PushAsync_WithTopic_Should_UseNoopTopology_WhenConstructedWithAdapterOnly()
+        {
+            var adapter = Substitute.For<IMessageBrokerProducingAdapter>();
+            var manager = new ProducingManager(adapter);
+            var payload = new WrappedPayload<SampleMessage>
+            {
+                CreatedOnUtc = DateTimeOffset.UtcNow,
+                Domain = "domain",
+                Message = new SampleMessage(),
+                MessageVersion = SemanticVersion.Default,
+                Metadata = new ReadOnlyDictionary<string, object>(new Dictionary<string, object>())
+            };
+
+            await manager.PushAsync(payload, "orders.created");
+
+            await adapter.Received(1).PublishMessageAsync(
+                payload,
+                Arg.Is<PublishingRoute>(route => route.Topic == "orders.created"),
+                Arg.Any<CancellationToken>());
+        }
+
+        [Fact]
+        public async Task PushRawAsync_WithTopic_Should_CreateTopicRoute()
+        {
+            var adapter = Substitute.For<IMessageBrokerProducingAdapter>();
+            var topologyProvisioningService = Substitute.For<ITopologyProvisioningService>();
+            var manager = new ProducingManager(adapter, topologyProvisioningService);
+            var message = new SampleMessage();
+
+            await manager.PushRawAsync(message, "orders.raw");
+
+            await topologyProvisioningService.Received(1).EnsurePublishTopologyAsync(
+                Arg.Is<PublishingRoute>(route => route.Topic == "orders.raw"),
+                Arg.Any<CancellationToken>());
+            await adapter.Received(1).PublishRawMessageAsync(
+                message,
+                Arg.Is<PublishingRoute>(route => route.Topic == "orders.raw"),
+                Arg.Any<CancellationToken>());
+        }
+
+        [Fact]
         public async Task PushAsync_Should_Ensure_Topology_Before_Publishing()
         {
             var adapter = Substitute.For<IMessageBrokerProducingAdapter>();
