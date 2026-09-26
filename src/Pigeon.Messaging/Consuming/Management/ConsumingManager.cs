@@ -16,6 +16,7 @@
         private readonly ITopologyProvisioningService _topologyProvisioningService;
         private readonly GlobalSettings _globalSettings;
         private readonly ConsumerExecutionDiagnostics _diagnostics;
+        private readonly IRawPayloadFactory _rawPayloadFactory;
         private readonly ILogger<ConsumingManager> _logger;
 
         private CancellationToken _backgroundCancellationToken;
@@ -52,7 +53,8 @@
             ITopologyProvisioningService topologyProvisioningService,
             IOptions<GlobalSettings> globalSettings,
             ConsumerExecutionDiagnostics diagnostics,
-            ILogger<ConsumingManager> logger)
+            ILogger<ConsumingManager> logger,
+            IRawPayloadFactory rawPayloadFactory = null)
         {
             _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
             _messageBrokerAdapters = messageBrokerAdapters ?? throw new ArgumentNullException(nameof(messageBrokerAdapters));
@@ -60,6 +62,7 @@
             _topologyProvisioningService = topologyProvisioningService ?? throw new ArgumentNullException(nameof(topologyProvisioningService));
             _globalSettings = globalSettings?.Value ?? throw new ArgumentNullException(nameof(globalSettings));
             _diagnostics = diagnostics ?? throw new ArgumentNullException(nameof(diagnostics));
+            _rawPayloadFactory = rawPayloadFactory ?? new RawPayloadFactory(WrappedPayloadJsonPolicyProvider.Default);
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -218,7 +221,7 @@
                 using var timeoutCts = new CancellationTokenSource(GetHandlerTimeout());
                 using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(timeoutCts.Token, cancellationToken);
 
-                var rawPayload = new RawPayload(e.RawPayload);
+                var rawPayload = _rawPayloadFactory.Create(e.RawPayload);
 
                 var topic = e.Topic;
 

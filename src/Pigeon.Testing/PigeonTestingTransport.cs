@@ -15,6 +15,7 @@ namespace Pigeon.Testing
         private readonly ISerializer _serializer;
         private readonly IConsumingConfigurator _consumingConfigurator;
         private readonly IConsumingDispatcher _dispatcher;
+        private readonly IRawPayloadFactory _rawPayloadFactory;
         private readonly ConcurrentQueue<PigeonTestingMessage> _pending = new();
         private readonly ConcurrentQueue<PigeonTestingMessage> _published = new();
         private readonly ConcurrentQueue<PigeonTestingMessage> _consumed = new();
@@ -26,12 +27,14 @@ namespace Pigeon.Testing
             IServiceProvider serviceProvider,
             ISerializer serializer,
             IConsumingConfigurator consumingConfigurator,
-            IConsumingDispatcher dispatcher)
+            IConsumingDispatcher dispatcher,
+            IRawPayloadFactory rawPayloadFactory)
         {
             _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
             _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
             _consumingConfigurator = consumingConfigurator ?? throw new ArgumentNullException(nameof(consumingConfigurator));
             _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
+            _rawPayloadFactory = rawPayloadFactory ?? throw new ArgumentNullException(nameof(rawPayloadFactory));
         }
 
         public IReadOnlyCollection<object> Messages => _published.Select(message => message.Message).ToArray();
@@ -150,7 +153,7 @@ namespace Pigeon.Testing
                 await _dispatcher.DispatchAsync(
                     pendingMessage.Topic,
                     endpoint.Subscription,
-                    new RawPayload(pendingMessage.RawJson),
+                    _rawPayloadFactory.Create(pendingMessage.RawJson),
                     _ => Task.CompletedTask,
                     (_, _) => Task.CompletedTask,
                     cancellationToken);

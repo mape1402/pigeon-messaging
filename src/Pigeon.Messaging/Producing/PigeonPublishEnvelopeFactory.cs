@@ -8,13 +8,16 @@ namespace Pigeon.Messaging.Producing
     {
         private readonly ISerializer _serializer;
         private readonly GlobalSettings _settings;
+        private readonly IWrappedPayloadJsonPolicyProvider _wrappedPayloadJsonPolicyProvider;
 
         public PigeonPublishEnvelopeFactory(
             ISerializer serializer,
-            IOptions<GlobalSettings> settings)
+            IOptions<GlobalSettings> settings,
+            IWrappedPayloadJsonPolicyProvider wrappedPayloadJsonPolicyProvider = null)
         {
             _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
             _settings = settings?.Value ?? throw new ArgumentNullException(nameof(settings));
+            _wrappedPayloadJsonPolicyProvider = wrappedPayloadJsonPolicyProvider ?? WrappedPayloadJsonPolicyProvider.Default;
         }
 
         public ValueTask<PigeonPublishEnvelope> CreateAsync(
@@ -68,6 +71,8 @@ namespace Pigeon.Messaging.Producing
                 .SetValue(wrappedPayload, context.Metadata);
             wrappedType.GetProperty(nameof(WrappedPayload<object>.Domain))!
                 .SetValue(wrappedPayload, _settings.Domain);
+            wrappedType.GetProperty(nameof(WrappedPayload<object>.Pigeon))!
+                .SetValue(wrappedPayload, _wrappedPayloadJsonPolicyProvider.SerializationInfo);
 
             return wrappedPayload;
         }

@@ -421,6 +421,7 @@ namespace Pigeon.Messaging.Tests.Producing
 
             Assert.NotNull(captured);
             Assert.Equal("corr-1", captured.Metadata["correlation-id"]);
+            Assert.Equal(WrappedPayloadJsonPolicyNames.Default, captured.Pigeon.PropertyNamingPolicy);
         }
 
         [Fact]

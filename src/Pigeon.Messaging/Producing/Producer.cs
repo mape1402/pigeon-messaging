@@ -25,6 +25,7 @@ namespace Pigeon.Messaging.Producing
         private readonly IMuleClient _muleClient;
         private readonly PigeonRouteInterceptorRegistry _routeInterceptorRegistry;
         private readonly IServiceProvider _serviceProvider;
+        private readonly IWrappedPayloadJsonPolicyProvider _wrappedPayloadJsonPolicyProvider;
 
         /// <summary>
         /// Initializes a new producer without outbox persistence.
@@ -35,14 +36,16 @@ namespace Pigeon.Messaging.Producing
         /// <param name="decisionInterceptors">The publish decision interceptors executed before broker or outbox dispatch.</param>
         /// <param name="routeInterceptorRegistry">The route-specific interceptor registry.</param>
         /// <param name="serviceProvider">The current scoped service provider.</param>
+        /// <param name="wrappedPayloadJsonPolicyProvider">The wrapped payload JSON policy provider.</param>
         public Producer(
             IEnumerable<IPublishInterceptor> interceptors,
             IProducingManager producingManager,
             IOptions<GlobalSettings> settings,
             IEnumerable<IPublishDecisionInterceptor> decisionInterceptors = null,
             PigeonRouteInterceptorRegistry routeInterceptorRegistry = null,
-            IServiceProvider serviceProvider = null)
-            : this(interceptors, producingManager, settings, (OutboxMessageFactory)null, (IMuleClient)null, decisionInterceptors, routeInterceptorRegistry, serviceProvider)
+            IServiceProvider serviceProvider = null,
+            IWrappedPayloadJsonPolicyProvider wrappedPayloadJsonPolicyProvider = null)
+            : this(interceptors, producingManager, settings, (OutboxMessageFactory)null, (IMuleClient)null, decisionInterceptors, routeInterceptorRegistry, serviceProvider, wrappedPayloadJsonPolicyProvider)
         {
         }
 
@@ -57,6 +60,7 @@ namespace Pigeon.Messaging.Producing
         /// <param name="decisionInterceptors">The publish decision interceptors executed before broker or outbox dispatch.</param>
         /// <param name="routeInterceptorRegistry">The route-specific interceptor registry.</param>
         /// <param name="serviceProvider">The current scoped service provider.</param>
+        /// <param name="wrappedPayloadJsonPolicyProvider">The wrapped payload JSON policy provider.</param>
         public Producer(
             IEnumerable<IPublishInterceptor> interceptors,
             IProducingManager producingManager,
@@ -65,8 +69,9 @@ namespace Pigeon.Messaging.Producing
             OutboxMessageFactory outboxMessageFactory,
             IEnumerable<IPublishDecisionInterceptor> decisionInterceptors = null,
             PigeonRouteInterceptorRegistry routeInterceptorRegistry = null,
-            IServiceProvider serviceProvider = null)
-            : this(interceptors, producingManager, settings, outboxStorage, outboxMessageFactory, null, null, decisionInterceptors, routeInterceptorRegistry, serviceProvider)
+            IServiceProvider serviceProvider = null,
+            IWrappedPayloadJsonPolicyProvider wrappedPayloadJsonPolicyProvider = null)
+            : this(interceptors, producingManager, settings, outboxStorage, outboxMessageFactory, null, null, decisionInterceptors, routeInterceptorRegistry, serviceProvider, wrappedPayloadJsonPolicyProvider)
         {
         }
 
@@ -82,6 +87,7 @@ namespace Pigeon.Messaging.Producing
         /// <param name="decisionInterceptors">The publish decision interceptors executed before broker or outbox dispatch.</param>
         /// <param name="routeInterceptorRegistry">The route-specific interceptor registry.</param>
         /// <param name="serviceProvider">The current scoped service provider.</param>
+        /// <param name="wrappedPayloadJsonPolicyProvider">The wrapped payload JSON policy provider.</param>
         public Producer(
             IEnumerable<IPublishInterceptor> interceptors,
             IProducingManager producingManager,
@@ -91,8 +97,9 @@ namespace Pigeon.Messaging.Producing
             IOutboxCommitNotifier outboxCommitNotifier,
             IEnumerable<IPublishDecisionInterceptor> decisionInterceptors = null,
             PigeonRouteInterceptorRegistry routeInterceptorRegistry = null,
-            IServiceProvider serviceProvider = null)
-            : this(interceptors, producingManager, settings, outboxStorage, outboxMessageFactory, outboxCommitNotifier, null, decisionInterceptors, routeInterceptorRegistry, serviceProvider)
+            IServiceProvider serviceProvider = null,
+            IWrappedPayloadJsonPolicyProvider wrappedPayloadJsonPolicyProvider = null)
+            : this(interceptors, producingManager, settings, outboxStorage, outboxMessageFactory, outboxCommitNotifier, null, decisionInterceptors, routeInterceptorRegistry, serviceProvider, wrappedPayloadJsonPolicyProvider)
         {
         }
 
@@ -107,6 +114,7 @@ namespace Pigeon.Messaging.Producing
         /// <param name="decisionInterceptors">The publish decision interceptors executed before broker or outbox dispatch.</param>
         /// <param name="routeInterceptorRegistry">The route-specific interceptor registry.</param>
         /// <param name="serviceProvider">The current scoped service provider.</param>
+        /// <param name="wrappedPayloadJsonPolicyProvider">The wrapped payload JSON policy provider.</param>
         public Producer(
             IEnumerable<IPublishInterceptor> interceptors,
             IProducingManager producingManager,
@@ -115,8 +123,9 @@ namespace Pigeon.Messaging.Producing
             IMuleClient muleClient,
             IEnumerable<IPublishDecisionInterceptor> decisionInterceptors = null,
             PigeonRouteInterceptorRegistry routeInterceptorRegistry = null,
-            IServiceProvider serviceProvider = null)
-            : this(interceptors, producingManager, settings, null, outboxMessageFactory, null, muleClient, decisionInterceptors, routeInterceptorRegistry, serviceProvider)
+            IServiceProvider serviceProvider = null,
+            IWrappedPayloadJsonPolicyProvider wrappedPayloadJsonPolicyProvider = null)
+            : this(interceptors, producingManager, settings, null, outboxMessageFactory, null, muleClient, decisionInterceptors, routeInterceptorRegistry, serviceProvider, wrappedPayloadJsonPolicyProvider)
         {
         }
 
@@ -130,7 +139,8 @@ namespace Pigeon.Messaging.Producing
             IMuleClient muleClient,
             IEnumerable<IPublishDecisionInterceptor> decisionInterceptors,
             PigeonRouteInterceptorRegistry routeInterceptorRegistry,
-            IServiceProvider serviceProvider)
+            IServiceProvider serviceProvider,
+            IWrappedPayloadJsonPolicyProvider wrappedPayloadJsonPolicyProvider)
         {
             _interceptors = interceptors ?? throw new ArgumentNullException(nameof(interceptors));
             _decisionInterceptors = decisionInterceptors ?? Array.Empty<IPublishDecisionInterceptor>();
@@ -142,6 +152,7 @@ namespace Pigeon.Messaging.Producing
             _muleClient = muleClient;
             _routeInterceptorRegistry = routeInterceptorRegistry;
             _serviceProvider = serviceProvider;
+            _wrappedPayloadJsonPolicyProvider = wrappedPayloadJsonPolicyProvider ?? WrappedPayloadJsonPolicyProvider.Default;
         }
 
         /// <summary>
@@ -265,14 +276,7 @@ namespace Pigeon.Messaging.Producing
                         cancellationToken))))
                 return;
 
-            var payload = new WrappedPayload<T>
-            {
-                CreatedOnUtc = DateTimeOffset.UtcNow,
-                Message = message,
-                MessageVersion = version,
-                Metadata = publishContext.GetMetadata(),
-                Domain = _settings.Domain
-            };
+            var payload = CreatePayload(message, publishContext, version);
 
             if (IsOutboxEnabled())
             {
@@ -323,7 +327,8 @@ namespace Pigeon.Messaging.Producing
                 Message = message,
                 MessageVersion = version,
                 Metadata = publishContext.GetMetadata(),
-                Domain = _settings.Domain
+                Domain = _settings.Domain,
+                Pigeon = _wrappedPayloadJsonPolicyProvider.SerializationInfo
             };
 
         private async ValueTask<PigeonPublishDecisionResult> GetPublishDecisionAsync(

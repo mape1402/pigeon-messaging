@@ -4,6 +4,7 @@
     using Microsoft.Extensions.Options;
     using Pigeon.Messaging;
     using Pigeon.Messaging.Consuming.Configuration;
+    using Pigeon.Messaging.Consuming;
     using Pigeon.Messaging.Consuming.Dispatching;
     using Pigeon.Messaging.Consuming.Management;
     using Pigeon.Messaging.Contracts;
@@ -45,6 +46,7 @@
             services.AddSingleton<ConsumerExecutionDiagnostics>();
             services.AddSingleton<IConsumerExecutionDiagnostics>(provider => provider.GetRequiredService<ConsumerExecutionDiagnostics>());
             services.AddSingleton<IConsumingDispatcher, ConsumingDispatcher>();
+            services.AddSingleton<IRawPayloadFactory, RawPayloadFactory>();
             services.AddSingleton<IConsumeHandlerPipeline, ConsumeHandlerPipeline>();
             services.AddSingleton<IPigeonConsumeEnvelopeFactory, PigeonConsumeEnvelopeFactory>();
             services.AddSingleton<IPigeonConsumerInvoker, PigeonConsumerInvoker>();
@@ -79,6 +81,8 @@
 
             services.AddSingleton(settingsBuilder.RouteInterceptorRegistry);
 
+            services.AddSingleton(settingsBuilder.JsonSerializerOptions);
+            services.AddSingleton<IWrappedPayloadJsonPolicyProvider>(new WrappedPayloadJsonPolicyProvider(settingsBuilder.JsonSerializerOptions));
             services.AddSingleton<ISerializer>(p => new DefaultSerializer(settingsBuilder.JsonSerializerOptions));
 
             // Scan assemblies for consumers and register them.

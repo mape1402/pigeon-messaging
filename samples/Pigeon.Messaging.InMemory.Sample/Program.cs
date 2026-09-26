@@ -6,6 +6,7 @@ namespace Pigeon.Messaging.InMemory.Sample
     using Pigeon.Messaging.Consuming.Management;
     using Pigeon.Messaging.Contracts;
     using Pigeon.Messaging.InMemory;
+    using System.Text.Json;
 
     internal static class Program
     {
@@ -29,6 +30,10 @@ namespace Pigeon.Messaging.InMemory.Sample
                     });
 
                     settings.UseInMemoryBroker();
+                })
+                .ConfigureJsonOptions(options =>
+                {
+                    options.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
                 });
 
             pigeon
