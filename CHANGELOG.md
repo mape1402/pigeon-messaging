@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ------
 
+## [v4.0.1] - 2026-09-26
+
+### Added
+
+- Added a repository coverage runsettings profile for repeatable Pigeon coverage validation.
+- Added unit coverage for route keys, publishing routes, publish context metadata and headers, consumer attributes, consumer endpoints, topology no-op behavior, serializer extensions, producing manager overloads, semantic version edge cases, and Kafka JSON serialization.
+
+------
+
 ## [v4.0.0] - 2026-09-10
 
 ### Added
