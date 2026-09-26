@@ -41,6 +41,12 @@ namespace Pigeon.Messaging.Tests.Consuming
         }
 
         [Fact]
+        public void Constructor_Should_Throw_If_Json_Is_Null()
+        {
+            Assert.Throws<ArgumentNullException>(() => new RawPayload(null));
+        }
+
+        [Fact]
         public void GetMessage_Should_Deserialize_Message()
         {
             var payload = new RawPayload(ValidJson);
@@ -53,6 +59,39 @@ namespace Pigeon.Messaging.Tests.Consuming
         }
 
         [Fact]
+        public void GetMessage_Should_Throw_When_MessageType_Is_Null()
+        {
+            var payload = new RawPayload(ValidJson);
+            var serializer = Substitute.For<ISerializer>();
+
+            Assert.Throws<ArgumentNullException>(() => payload.GetMessage(null, serializer));
+        }
+
+        [Fact]
+        public void GetMessage_Should_Throw_When_Serializer_Is_Null()
+        {
+            var payload = new RawPayload(ValidJson);
+
+            Assert.Throws<ArgumentNullException>(() => payload.GetMessage(typeof(Message), null));
+        }
+
+        [Fact]
+        public void GetMessage_Should_Throw_When_Message_Property_Is_Missing()
+        {
+            var json = @"{
+                ""Domain"": ""test-domain"",
+                ""MessageVersion"": ""1.2.3"",
+                ""CreatedOnUtc"": ""2024-01-01T00:00:00Z""
+            }";
+            var payload = new RawPayload(json);
+            var serializer = Substitute.For<ISerializer>();
+
+            var exception = Assert.Throws<JsonException>(() => payload.GetMessage(typeof(Message), serializer));
+
+            Assert.Contains("Missing 'Message'", exception.Message);
+        }
+
+        [Fact]
         public void GetMetadata_Should_Return_Metadata()
         {
             var payload = new RawPayload(ValidJson);
@@ -60,6 +99,22 @@ namespace Pigeon.Messaging.Tests.Consuming
 
             Assert.True(meta.ContainsKey("Key"));
             Assert.Equal(@"{ ""Prop"": ""Value"" }", meta["Key"]);
+        }
+
+        [Fact]
+        public void GetMetadata_Should_Return_Empty_Dictionary_When_Metadata_Is_Missing()
+        {
+            var json = @"{
+                ""Domain"": ""test-domain"",
+                ""MessageVersion"": ""1.2.3"",
+                ""CreatedOnUtc"": ""2024-01-01T00:00:00Z"",
+                ""Message"": { ""Text"": ""Hello"" }
+            }";
+            var payload = new RawPayload(json);
+
+            var metadata = payload.GetMetadata();
+
+            Assert.Empty(metadata);
         }
 
         [Fact]
@@ -151,6 +206,24 @@ namespace Pigeon.Messaging.Tests.Consuming
         }
 
         [Fact]
+        public void Factory_Should_Throw_Mismatch_When_Legacy_CamelCase_Differs_From_Local_Policy()
+        {
+            var legacyCamelCaseJson = @"{
+                ""domain"": ""test-domain"",
+                ""messageVersion"": ""1.2.3"",
+                ""createdOnUtc"": ""2024-01-01T00:00:00Z"",
+                ""message"": { ""text"": ""Hello"" }
+            }";
+            var factory = CreateFactory();
+
+            var exception = Assert.Throws<WrappedPayloadJsonPolicyMismatchException>(() => factory.Create(legacyCamelCaseJson));
+
+            Assert.Equal(WrappedPayloadJsonPolicyNames.Default, exception.ExpectedPolicy);
+            Assert.Equal(WrappedPayloadJsonPolicyNames.CamelCase, exception.ActualPolicy);
+            Assert.True(exception.IsLegacyPayload);
+        }
+
+        [Fact]
         public void Factory_Should_Throw_Clear_Error_For_Mixed_Legacy_Wrapper()
         {
             var json = @"{
@@ -164,6 +237,110 @@ namespace Pigeon.Messaging.Tests.Consuming
             var exception = Assert.Throws<JsonException>(() => factory.Create(json));
 
             Assert.Contains("partial or mixed wrapper shape", exception.Message);
+        }
+
+        [Fact]
+        public void Factory_Should_Throw_Clear_Error_For_Unrecognized_Wrapper()
+        {
+            var factory = CreateFactory();
+
+            var exception = Assert.Throws<JsonException>(() => factory.Create(@"{ ""value"": 123 }"));
+
+            Assert.Contains("does not contain a recognized Pigeon wrapper shape", exception.Message);
+        }
+
+        [Fact]
+        public void Factory_Should_Throw_When_Json_Is_Null()
+        {
+            var factory = CreateFactory();
+
+            Assert.Throws<ArgumentNullException>(() => factory.Create(null));
+        }
+
+        [Fact]
+        public void Factory_Should_Throw_When_PolicyProvider_Is_Null()
+        {
+            Assert.Throws<ArgumentNullException>(() => new RawPayloadFactory(null));
+        }
+
+        [Fact]
+        public void Factory_Should_Throw_When_Pigeon_Marker_Is_Not_Object()
+        {
+            var json = @"{
+                ""$pigeon"": ""invalid"",
+                ""Domain"": ""test-domain"",
+                ""MessageVersion"": ""1.2.3"",
+                ""CreatedOnUtc"": ""2024-01-01T00:00:00Z"",
+                ""Message"": { ""Text"": ""Hello"" }
+            }";
+            var factory = CreateFactory();
+
+            var exception = Assert.Throws<JsonException>(() => factory.Create(json));
+
+            Assert.Contains("Invalid '$pigeon' property", exception.Message);
+        }
+
+        [Fact]
+        public void Factory_Should_Throw_When_FormatVersion_Is_Unsupported()
+        {
+            var json = @"{
+                ""$pigeon"": { ""formatVersion"": ""2.0"", ""propertyNamingPolicy"": ""Default"" },
+                ""Domain"": ""test-domain"",
+                ""MessageVersion"": ""1.2.3"",
+                ""CreatedOnUtc"": ""2024-01-01T00:00:00Z"",
+                ""Message"": { ""Text"": ""Hello"" }
+            }";
+            var factory = CreateFactory();
+
+            var exception = Assert.Throws<JsonException>(() => factory.Create(json));
+
+            Assert.Contains("Unsupported WrappedPayload format version", exception.Message);
+        }
+
+        [Fact]
+        public void Factory_Should_Throw_When_PropertyNamingPolicy_Is_Missing()
+        {
+            var json = @"{
+                ""$pigeon"": { ""formatVersion"": ""1.0"" },
+                ""Domain"": ""test-domain"",
+                ""MessageVersion"": ""1.2.3"",
+                ""CreatedOnUtc"": ""2024-01-01T00:00:00Z"",
+                ""Message"": { ""Text"": ""Hello"" }
+            }";
+            var factory = CreateFactory();
+
+            var exception = Assert.Throws<JsonException>(() => factory.Create(json));
+
+            Assert.Contains("Invalid '$pigeon.propertyNamingPolicy'", exception.Message);
+        }
+
+        [Fact]
+        public void PolicyProvider_Should_Resolve_Custom_Naming_Policy()
+        {
+            var provider = new WrappedPayloadJsonPolicyProvider(new JsonSerializerOptions
+            {
+                PropertyNamingPolicy = new UpperCaseNamingPolicy()
+            });
+
+            Assert.Equal(typeof(UpperCaseNamingPolicy).FullName, provider.PolicyName);
+            Assert.Equal(typeof(UpperCaseNamingPolicy).FullName, provider.SerializationInfo.PropertyNamingPolicy);
+        }
+
+        [Fact]
+        public void PolicyProvider_Should_Throw_When_Options_Are_Null()
+        {
+            Assert.Throws<ArgumentNullException>(() => new WrappedPayloadJsonPolicyProvider(null));
+        }
+
+        [Fact]
+        public void PolicyMismatchException_Should_Create_Message_Without_Property_Name()
+        {
+            var exception = new WrappedPayloadJsonPolicyMismatchException("Default", "CamelCase");
+
+            Assert.Equal("Default", exception.ExpectedPolicy);
+            Assert.Equal("CamelCase", exception.ActualPolicy);
+            Assert.Null(exception.PropertyName);
+            Assert.DoesNotContain("Property '", exception.Message);
         }
 
         private static RawPayloadFactory CreateFactory(JsonNamingPolicy namingPolicy = null)
@@ -180,6 +357,12 @@ namespace Pigeon.Messaging.Tests.Consuming
         private class Message
         {
             public string Text { get; set; }
+        }
+
+        private sealed class UpperCaseNamingPolicy : JsonNamingPolicy
+        {
+            public override string ConvertName(string name)
+                => name.ToUpperInvariant();
         }
     }
 }
