@@ -698,6 +698,14 @@ External test hosts can expose a thin wrapper over the adapter-friendly registra
 services.AddPigeonTestingAdapter(typeof(CustomersHubConsumer).Assembly);
 ```
 
+Pigeon also includes a repository coverage profile for validating the full solution consistently:
+
+```bash
+dotnet test ./Pigeon.Messaging.sln --configuration Release --settings ./coverage.runsettings --collect:"XPlat Code Coverage"
+```
+
+The current release target keeps the measured Pigeon coverage above 97%.
+
 ### Deprecated: Use the In-Memory Outbox
 
 Pigeon's internal outbox providers are deprecated in 4.0. Use SquirrelBox for new inbox/outbox work. The in-memory Pigeon outbox remains available temporarily for compatibility with existing tests and samples that need the old Pigeon outbox pipeline without a database:
