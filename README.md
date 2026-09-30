@@ -746,6 +746,23 @@ config.SetTopologyProvisioningMode(
 
 Pigeon keeps an in-memory registry of provisioned topology so the same queue, topic, subscription, exchange, or binding is not recreated on every publish or consume.
 
+Azure Service Bus maps Pigeon's publish routes and default consumers to queues. A publish or default consumer for `orders.created` provisions and uses the queue named `orders.created`. Explicit consumer subscriptions continue to use Azure Service Bus topic subscriptions:
+
+```csharp
+await producer.PublishAsync(message, topic: "orders.created");
+// provisions queue: orders.created
+
+await producer.PublishAsync(message, exchange: "events", routingKey: "orders.created", version: "1.0.0");
+// provisions queue: orders.created
+
+services.AddConsumeHandler<OrderCreated>(
+    topic: "orders.created",
+    version: "1.0.0",
+    subscription: "billing",
+    handler: HandleOrderCreatedAsync);
+// provisions topic: orders.created, subscription: billing
+```
+
 For high-throughput publishers, avoid first-message topology latency by warming known publish routes during startup:
 
 ```csharp
