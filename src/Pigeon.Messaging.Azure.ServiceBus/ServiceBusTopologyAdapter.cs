@@ -20,21 +20,32 @@ namespace Pigeon.Messaging.Azure.ServiceBus
             _adminClient = new ServiceBusAdministrationClient(options.Value.ConnectionString);
         }
 
+        internal ServiceBusTopologyAdapter(ServiceBusAdministrationClient adminClient)
+        {
+            _adminClient = adminClient ?? throw new ArgumentNullException(nameof(adminClient));
+        }
+
         public string BrokerName => "AzureServiceBus";
 
         public Task EnsurePublishTopologyAsync(PublishingRoute route, CancellationToken cancellationToken = default)
-            => EnsureTopicAsync(route.Topic, cancellationToken);
+            => EnsureQueueAsync(route.Topic, cancellationToken);
 
         public async Task EnsureConsumeTopologyAsync(ConsumerEndpoint endpoint, CancellationToken cancellationToken = default)
         {
-            await EnsureTopicAsync(endpoint.Topic, cancellationToken);
-
             if (endpoint.Subscription == ConsumerEndpoint.DefaultSubscription)
+            {
+                await EnsureQueueAsync(endpoint.Topic, cancellationToken);
                 return;
+            }
+
+            await EnsureTopicAsync(endpoint.Topic, cancellationToken);
 
             await IgnoreAlreadyExistsAsync(
                 () => _adminClient.CreateSubscriptionAsync(endpoint.Topic, endpoint.Subscription, cancellationToken));
         }
+
+        private Task EnsureQueueAsync(string queue, CancellationToken cancellationToken)
+            => IgnoreAlreadyExistsAsync(() => _adminClient.CreateQueueAsync(queue, cancellationToken));
 
         private Task EnsureTopicAsync(string topic, CancellationToken cancellationToken)
             => IgnoreAlreadyExistsAsync(() => _adminClient.CreateTopicAsync(topic, cancellationToken));

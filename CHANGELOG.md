@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ------
 
+## [v4.0.2] - 2026-09-30
+
+### Fixed
+
+- Fixed Azure Service Bus topology provisioning so publish routes and default consumers create queues, matching the Service Bus sender and queue processor used by the adapter.
+- Fixed Azure Service Bus consume topology so explicit consumer subscriptions continue to provision topic subscriptions.
+
+------
+
 ## [v4.0.1] - 2026-09-26
 
 ### Added
