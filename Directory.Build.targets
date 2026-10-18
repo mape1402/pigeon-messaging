@@ -16,6 +16,6 @@
     <PackageReference Update="Mule.DurableActions" Version="1.4.1" />
     <PackageReference Update="Mule.DurableActions.EntityFrameworkCore" Version="1.4.1" />
     <PackageReference Update="Mule.DurableActions.InMemory" Version="1.4.1" />
-    <PackageReference Update="MinVer" Version="6.0.0"/>
+    <PackageReference Update="MinVer" Version="7.0.0"/>
   </ItemGroup>
 </Project>
