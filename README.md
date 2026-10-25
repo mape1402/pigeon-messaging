@@ -352,6 +352,8 @@ await producer.PublishAsync(new OrderCreatedMessage(), "orders.created");
 
 One publish is delivered to every matching in-memory subscription. The broker is process-local, non-durable, and not distributed, so it is not a replacement for RabbitMQ, Kafka, or Azure brokers between services.
 
+Retries are scheduled independently for the affected subscription. The default retry delay is 100 ms and can be configured with `config.UseInMemoryBroker(options => options.RetryDelay = TimeSpan.FromSeconds(1))`. Pending retries and messages are lost when the process stops; this transport does not provide durable delivery.
+
 Tests can inspect the broker state:
 
 ```csharp
@@ -470,6 +472,11 @@ public sealed class TerminalDecisionObserver : IConsumeDecisionObserver
 pigeon.AddConsumeDecisionObserver<TerminalDecisionObserver>();
 pigeon.ForConsumer(OrderRoutes.CreatedForBilling)
     .AddConsumeDecisionObserver<TerminalDecisionObserver>();
+
+// A telemetry observer must not change the message settlement if it fails.
+pigeon.AddConsumeDecisionObserver<TelemetryDecisionObserver>(ObserverFailureBehavior.Continue);
+pigeon.ForConsumer(OrderRoutes.CreatedForBilling)
+    .AddConsumeDecisionObserver<BillingTelemetryObserver>(ObserverFailureBehavior.Continue);
 ```
 
 An interceptor can provide optional semantic outcome and metadata without changing the transport decision:
@@ -488,11 +495,26 @@ return new PigeonConsumeDecisionResult(PigeonConsumeDecision.Reject, "Validation
 
 Decision metadata is copied into `ConsumeContext.ReplyMetadata` before observers run. Keys are case-insensitive and decision values overwrite existing ones. The original result remains available to the observer.
 
-If an observer fails during broker delivery, Pigeon requests retry instead of applying the original decision. If retry cannot be requested, the failure propagates to the transport callback; adapter-specific error handling may log or handle it. During durable replay, the observer failure propagates to the replay executor. Observers must be idempotent because redelivery can run them again. Broker auto-acknowledgement and transports without retry support cannot guarantee redelivery after an observer failure; use a transport and acknowledgement mode that support retry when this guarantee is required.
+Failure behavior is configured per observer registration:
 
-The current Kafka and in-memory adapters do not request redelivery for an individual failed delivery. Pigeon therefore reports an observer failure as an unsupported retry for those adapters rather than reporting a successful retry.
+- `ObserverFailureBehavior.Fail` is the default. A failure stops the observer pipeline. During broker delivery, Pigeon requests retry instead of applying the original decision; during durable replay, it propagates the failure to the replay executor.
+- `ObserverFailureBehavior.Continue` logs the failure, executes the remaining observers, and preserves the original decision. Cancellation is propagated regardless of the configured behavior.
 
-The `Pigeon.Messaging.ConsumeDecisions` meter exposes `pigeon.consume.decisions.terminal`, `pigeon.consume.observers.executions`, `pigeon.consume.observers.failures`, and `pigeon.consume.observers.retries` counters.
+Critical observers must be idempotent: a redelivery may execute observers that already completed. `ConsumeObserverRetryException` identifies an observer failure for which retry was unavailable or failed; its `ObserverException` and `InnerException` expose both causes. A queued dispatch cannot return such a failure to the original callback after it has returned, so Pigeon logs it and leaves transport recovery to the broker.
+
+Retry and rejection depend on the transport and acknowledgement mode:
+
+| Transport | Critical observer retry | `Reject` |
+| --- | --- | --- |
+| RabbitMQ | Requeues the delivery independently of `RequeueOnFailure`; manual acknowledgement is required. | Rejects without requeue; dead-lettering depends on broker configuration. |
+| Azure Service Bus / Event Grid | Abandons the Service Bus delivery; actual retries and dead-lettering depend on broker configuration. | Dead-letters the delivery. |
+| Kafka | Seeks to the failed offset. Commits only advance past contiguous completed deliveries per partition; redelivery can repeat later work. | Advances the offset without creating a dead-letter record. |
+| In-memory | Schedules another in-process delivery to the affected subscription after `RetryDelay`. | Marks the delivery failed without retry. |
+| Azure Event Hubs | The current adapter has no per-event retry or checkpoints. A critical observer failure stops that listener and is logged; it does not guarantee replay, including after restart. | No broker-level settlement or dead-letter operation is available in this adapter. |
+
+`OnReceive`/auto-ack can settle a delivery before observer execution and cannot guarantee redelivery. Use a retry-capable transport with manual acknowledgement or `OnHandlerSuccess` when observer completion is required. Event Hubs deliveries bypass Pigeon's optional dispatch queue so that a critical observer failure can reach its listener; this adapter currently reads from the latest position and must not be treated as a durable inbox.
+
+The `Pigeon.Messaging.ConsumeDecisions` meter exposes `pigeon.consume.decisions.terminal`, `pigeon.consume.observers.executions`, `pigeon.consume.observers.failures`, `pigeon.consume.observers.failures.continued`, `pigeon.consume.observers.failures.critical`, and `pigeon.consume.observers.retries` counters.
 
 Publish decision interceptors run after existing `IPublishInterceptor` instances and before outbox or direct broker publishing:
 
