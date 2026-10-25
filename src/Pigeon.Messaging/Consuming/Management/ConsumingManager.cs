@@ -135,7 +135,7 @@
             {
                 _diagnostics.RecordReceived();
 
-                if (_useQueuedDispatch)
+                if (_useQueuedDispatch && !e.RequiresSynchronousDispatch)
                 {
                     await EnqueueMessageAsync(e, cancellationToken);
                     return;
@@ -181,10 +181,19 @@
         private async Task ProcessMessagesAsync(CancellationToken cancellationToken)
         {
             await foreach (var message in _messageQueue.Reader.ReadAllAsync(cancellationToken))
-                await DispatchMessageAsync(
-                    message.Message,
-                    DateTimeOffset.UtcNow - message.EnqueuedOnUtc,
-                    cancellationToken);
+            {
+                try
+                {
+                    await DispatchMessageAsync(
+                        message.Message,
+                        DateTimeOffset.UtcNow - message.EnqueuedOnUtc,
+                        cancellationToken);
+                }
+                catch (ConsumeObserverRetryException ex)
+                {
+                    _logger.LogError(ex, "A queued delivery could not request observer redelivery; it remains unsettled.");
+                }
+            }
         }
 
         private async Task ProcessMessagesWithoutConcurrencyLimitAsync(CancellationToken cancellationToken)
@@ -211,7 +220,12 @@
 
             _inFlightDispatches.TryAdd(id, dispatch);
             _ = dispatch.ContinueWith(
-                _ => _inFlightDispatches.TryRemove(id, out _),
+                task =>
+                {
+                    if (task.IsFaulted)
+                        _logger.LogError(task.Exception, "A background delivery failed; its settlement may require broker recovery.");
+                    _inFlightDispatches.TryRemove(id, out _);
+                },
                 CancellationToken.None,
                 TaskContinuationOptions.ExecuteSynchronously,
                 TaskScheduler.Default);

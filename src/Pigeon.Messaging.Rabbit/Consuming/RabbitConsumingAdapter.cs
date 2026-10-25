@@ -3,6 +3,7 @@
     using Microsoft.Extensions.Logging;
     using Microsoft.Extensions.Options;
     using Pigeon.Messaging.Consuming.Configuration;
+    using Pigeon.Messaging.Consuming.Dispatching;
     using Pigeon.Messaging.Consuming.Management;
     using Pigeon.Messaging.Topology;
     using RabbitMQ.Client;
@@ -141,6 +142,11 @@
                             (_, token) => channel.BasicNackAsync(e.DeliveryTag, multiple: false, requeue: false, cancellationToken: token).AsTask());
 
                     await OnMessageConsumedAsync(messageConsumed, cancellationToken);
+                }
+                catch (ConsumeObserverRetryException ex)
+                {
+                    _logger.LogError(ex, "RabbitConsumingAdapter: Unable to request observer redelivery; the delivery was not rejected.");
+                    throw;
                 }
                 catch (Exception ex)
                 {

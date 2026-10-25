@@ -27,6 +27,7 @@
         private int _acknowledged;
 
         internal bool HasRetryCallback { get; }
+        internal bool RequiresSynchronousDispatch { get; }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="MessageConsumedEventArgs"/> class.
@@ -108,6 +109,30 @@
             Func<Exception, CancellationToken, Task> retryAsync,
             Func<Exception, CancellationToken, Task> rejectAsync,
             bool supportsRetry)
+            : this(topic, rawPayload, subscription, completeAsync, failAsync, retryAsync, rejectAsync, supportsRetry, false)
+        {
+        }
+
+        /// <summary>Initializes a delivery with explicit retry and dispatch capabilities.</summary>
+        /// <param name="topic">The topic the message was consumed from.</param>
+        /// <param name="rawPayload">The raw JSON payload.</param>
+        /// <param name="subscription">The subscription that consumed the message.</param>
+        /// <param name="completeAsync">Callback for successful processing.</param>
+        /// <param name="failAsync">Callback for a generic failure.</param>
+        /// <param name="retryAsync">Callback for a retry request.</param>
+        /// <param name="rejectAsync">Callback for rejection.</param>
+        /// <param name="supportsRetry">Whether the retry callback requests redelivery.</param>
+        /// <param name="requiresSynchronousDispatch">Whether dispatch must be awaited by the transport listener.</param>
+        public MessageConsumedEventArgs(
+            string topic,
+            string rawPayload,
+            string subscription,
+            Func<CancellationToken, Task> completeAsync,
+            Func<Exception, CancellationToken, Task> failAsync,
+            Func<Exception, CancellationToken, Task> retryAsync,
+            Func<Exception, CancellationToken, Task> rejectAsync,
+            bool supportsRetry,
+            bool requiresSynchronousDispatch)
         {
             Topic = topic ?? throw new ArgumentNullException(nameof(topic));
             RawPayload = rawPayload ?? throw new ArgumentNullException(nameof(rawPayload));
@@ -117,18 +142,14 @@
             _retryAsync = retryAsync ?? _failAsync;
             _rejectAsync = rejectAsync ?? _failAsync;
             HasRetryCallback = supportsRetry && (retryAsync != null || failAsync != null);
+            RequiresSynchronousDispatch = requiresSynchronousDispatch;
         }
 
         /// <summary>
         /// Confirms successful message processing in the underlying broker.
         /// </summary>
         public Task CompleteAsync(CancellationToken cancellationToken = default)
-        {
-            if (Interlocked.Exchange(ref _acknowledged, 1) == 1)
-                return Task.CompletedTask;
-
-            return _completeAsync(cancellationToken);
-        }
+            => SettleAsync(() => _completeAsync(cancellationToken));
 
         /// <summary>
         /// Reports failed message processing to the underlying broker.
@@ -143,12 +164,7 @@
         /// <param name="cancellationToken">A token to observe for cancellation requests.</param>
         /// <returns>A task that represents the asynchronous retry operation.</returns>
         public Task RetryAsync(Exception exception = null, CancellationToken cancellationToken = default)
-        {
-            if (Interlocked.Exchange(ref _acknowledged, 1) == 1)
-                return Task.CompletedTask;
-
-            return _retryAsync(exception, cancellationToken);
-        }
+            => SettleAsync(() => _retryAsync(exception, cancellationToken));
 
         /// <summary>
         /// Rejects the message in the underlying broker.
@@ -157,11 +173,22 @@
         /// <param name="cancellationToken">A token to observe for cancellation requests.</param>
         /// <returns>A task that represents the asynchronous rejection operation.</returns>
         public Task RejectAsync(Exception exception = null, CancellationToken cancellationToken = default)
-        {
-            if (Interlocked.Exchange(ref _acknowledged, 1) == 1)
-                return Task.CompletedTask;
+            => SettleAsync(() => _rejectAsync(exception, cancellationToken));
 
-            return _rejectAsync(exception, cancellationToken);
+        private async Task SettleAsync(Func<Task> settle)
+        {
+            if (Interlocked.CompareExchange(ref _acknowledged, 1, 0) != 0)
+                return;
+
+            try
+            {
+                await settle().ConfigureAwait(false);
+            }
+            catch
+            {
+                Volatile.Write(ref _acknowledged, 0);
+                throw;
+            }
         }
     }
 }

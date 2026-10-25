@@ -1,6 +1,7 @@
 namespace Pigeon.Messaging.Consuming.Dispatching
 {
-    internal sealed class ConsumeObserverRetryException : Exception
+    /// <summary>Indicates an observer failed and the transport could not request redelivery.</summary>
+    public sealed class ConsumeObserverRetryException : Exception
     {
         internal ConsumeObserverRetryException(Exception observerException, Exception retryException)
             : base("The consume decision observer failed and the transport could not request a retry.", retryException)
@@ -8,6 +9,7 @@ namespace Pigeon.Messaging.Consuming.Dispatching
             ObserverException = observerException;
         }
 
-        internal Exception ObserverException { get; }
+        /// <summary>Gets the original observer failure.</summary>
+        public Exception ObserverException { get; }
     }
 }

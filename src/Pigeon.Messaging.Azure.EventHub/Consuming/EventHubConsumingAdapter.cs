@@ -3,6 +3,7 @@
     using Microsoft.Extensions.Logging;
     using Microsoft.Extensions.Options;
     using Pigeon.Messaging.Consuming.Configuration;
+    using Pigeon.Messaging.Consuming.Dispatching;
     using Pigeon.Messaging.Consuming.Management;
     using Pigeon.Messaging.Topology;
     using System.Collections.Concurrent;
@@ -171,13 +172,27 @@
                         var eventData = partitionEvent.Data;
                         var json = eventData.EventBody.ToArray().FromBytes();
 
-                        await OnMessageConsumedAsync(new MessageConsumedEventArgs(endpoint.Topic, json, endpoint.Subscription), cancellationToken);
+                        await OnMessageConsumedAsync(new MessageConsumedEventArgs(
+                            endpoint.Topic, json, endpoint.Subscription, null, null, null, null,
+                            supportsRetry: false, requiresSynchronousDispatch: true), cancellationToken);
+                    }
+                    catch (ConsumeObserverRetryException ex)
+                    {
+                        _logger.LogCritical(ex, "AzureEventHubConsumingAdapter: A critical observer failed, but this adapter cannot replay individual events. Stopping the listener for topic '{Topic}' and subscription '{Subscription}'.", endpoint.Topic, endpoint.Subscription);
+                        throw;
                     }
                     catch (Exception ex)
                     {
                         _logger.LogError(ex, "AzureEventHubConsumingAdapter: Has occurred an unexpected error while processing event from topic '{Topic}' and subscription '{Subscription}'.", endpoint.Topic, endpoint.Subscription);
                     }
                 }
+            }
+            catch (ConsumeObserverRetryException)
+            {
+                throw;
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
             }
             catch (Exception ex)
             {
