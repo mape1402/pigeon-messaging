@@ -488,7 +488,9 @@ return new PigeonConsumeDecisionResult(PigeonConsumeDecision.Reject, "Validation
 
 Decision metadata is copied into `ConsumeContext.ReplyMetadata` before observers run. Keys are case-insensitive and decision values overwrite existing ones. The original result remains available to the observer.
 
-If an observer fails during broker delivery, Pigeon requests retry instead of applying the original decision. If retry cannot be requested, the failure propagates. During durable replay, the observer failure propagates to the replay executor. Observers must be idempotent because redelivery can run them again. Broker auto-acknowledgement and transports without retry support cannot guarantee redelivery after an observer failure; use a transport and acknowledgement mode that support retry when this guarantee is required.
+If an observer fails during broker delivery, Pigeon requests retry instead of applying the original decision. If retry cannot be requested, the failure propagates to the transport callback; adapter-specific error handling may log or handle it. During durable replay, the observer failure propagates to the replay executor. Observers must be idempotent because redelivery can run them again. Broker auto-acknowledgement and transports without retry support cannot guarantee redelivery after an observer failure; use a transport and acknowledgement mode that support retry when this guarantee is required.
+
+The current Kafka and in-memory adapters do not request redelivery for an individual failed delivery. Pigeon therefore reports an observer failure as an unsupported retry for those adapters rather than reporting a successful retry.
 
 The `Pigeon.Messaging.ConsumeDecisions` meter exposes `pigeon.consume.decisions.terminal`, `pigeon.consume.observers.executions`, `pigeon.consume.observers.failures`, and `pigeon.consume.observers.retries` counters.
 

@@ -85,6 +85,29 @@
             Func<Exception, CancellationToken, Task> failAsync,
             Func<Exception, CancellationToken, Task> retryAsync,
             Func<Exception, CancellationToken, Task> rejectAsync)
+            : this(topic, rawPayload, subscription, completeAsync, failAsync, retryAsync, rejectAsync,
+                retryAsync != null || failAsync != null)
+        {
+        }
+
+        /// <summary>Initializes a delivery and declares whether retry provides redelivery.</summary>
+        /// <param name="topic">The topic the message was consumed from.</param>
+        /// <param name="rawPayload">The raw JSON payload.</param>
+        /// <param name="subscription">The subscription that consumed the message.</param>
+        /// <param name="completeAsync">Callback for successful processing.</param>
+        /// <param name="failAsync">Callback for a generic failure.</param>
+        /// <param name="retryAsync">Callback for a retry request.</param>
+        /// <param name="rejectAsync">Callback for rejection.</param>
+        /// <param name="supportsRetry">Whether the retry callback requests redelivery from the transport.</param>
+        public MessageConsumedEventArgs(
+            string topic,
+            string rawPayload,
+            string subscription,
+            Func<CancellationToken, Task> completeAsync,
+            Func<Exception, CancellationToken, Task> failAsync,
+            Func<Exception, CancellationToken, Task> retryAsync,
+            Func<Exception, CancellationToken, Task> rejectAsync,
+            bool supportsRetry)
         {
             Topic = topic ?? throw new ArgumentNullException(nameof(topic));
             RawPayload = rawPayload ?? throw new ArgumentNullException(nameof(rawPayload));
@@ -93,7 +116,7 @@
             _failAsync = failAsync ?? ((_, _) => Task.CompletedTask);
             _retryAsync = retryAsync ?? _failAsync;
             _rejectAsync = rejectAsync ?? _failAsync;
-            HasRetryCallback = retryAsync != null || failAsync != null;
+            HasRetryCallback = supportsRetry && (retryAsync != null || failAsync != null);
         }
 
         /// <summary>

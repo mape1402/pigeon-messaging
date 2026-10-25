@@ -276,6 +276,35 @@ namespace Pigeon.Messaging.Tests.Consuming.Dispatching
             Assert.Empty(events);
         }
 
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task Manager_RespectsDeclaredRetryCapabilityWithoutChangingExistingDecisions(bool observerFails)
+        {
+            var events = new List<string>();
+            var services = CreateServices(events, new PigeonConsumeDecisionResult(PigeonConsumeDecision.Retry));
+            if (observerFails)
+                services.AddScoped<IConsumeDecisionObserver>(_ => Observer(_ => throw new InvalidOperationException("observer")));
+            using var provider = services.BuildServiceProvider();
+            var adapter = new ObserverTestAdapter();
+            var manager = new ConsumingManager(new ConsumingDispatcher(provider), new[] { adapter },
+                Options.Create(new GlobalSettings()), NullLogger<ConsumingManager>.Instance);
+            await manager.StartAsync();
+            var args = new MessageConsumedEventArgs("orders", Payload, "billing",
+                _ => { events.Add("complete"); return Task.CompletedTask; },
+                (_, _) => { events.Add("failure"); return Task.CompletedTask; },
+                (_, _) => { events.Add("retry"); return Task.CompletedTask; },
+                (_, _) => { events.Add("reject"); return Task.CompletedTask; }, supportsRetry: false);
+
+            if (observerFails)
+                await Assert.ThrowsAsync<ConsumeObserverRetryException>(() => adapter.DeliverAsync(args));
+            else
+                await adapter.DeliverAsync(args);
+
+            await manager.StopAsync();
+            Assert.Equal(observerFails ? Array.Empty<string>() : new[] { "retry" }, events);
+        }
+
         [Fact]
         public async Task TerminalDecision_EmitsObserverCounters()
         {

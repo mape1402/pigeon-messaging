@@ -200,7 +200,7 @@
 
                     return Task.CompletedTask;
                 },
-                (_, _) => Task.CompletedTask);
+                null); // A no-op failure callback cannot request redelivery.
         }
 
         private void StopConsumer(ConsumerEndpoint endpoint)
