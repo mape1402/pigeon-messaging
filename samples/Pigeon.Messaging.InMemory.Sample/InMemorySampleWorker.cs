@@ -48,6 +48,7 @@ namespace Pigeon.Messaging.InMemory.Sample
             {
                 await _scenario.WaitForAuditAsync(linked.Token);
                 var envelope = await _scenario.WaitForDeferredEnvelopeAsync(linked.Token);
+                await _scenario.WaitForDecisionObservationAsync(linked.Token);
 
                 _logger.LogInformation(
                     "Replaying deferred billing envelope for topic {Topic}, subscription {Subscription}.",

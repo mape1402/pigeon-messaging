@@ -4,6 +4,7 @@ namespace Pigeon.Messaging.InMemory.Sample
     using Microsoft.Extensions.DependencyInjection;
     using Microsoft.Extensions.Hosting;
     using Pigeon.Messaging.Consuming.Management;
+    using Pigeon.Messaging.Consuming.Dispatching;
     using Pigeon.Messaging.Contracts;
     using Pigeon.Messaging.InMemory;
     using System.Text.Json;
@@ -39,8 +40,10 @@ namespace Pigeon.Messaging.InMemory.Sample
             pigeon
                 .AddPublishDecisionInterceptor<SamplePublishDecisionInterceptor>()
                 .AddPublishDecisionInterceptor<ExternalOutboxPublishDecisionInterceptor>()
+                .AddConsumeDecisionObserver<SampleConsumeDecisionObserver>()
                 .ForConsumer(OrderRoutes.CreatedForBilling)
-                .AddConsumeDecisionInterceptor<DeferredBillingConsumeInterceptor>();
+                .AddConsumeDecisionInterceptor<DeferredBillingConsumeInterceptor>()
+                .AddConsumeDecisionObserver<SampleBillingDecisionObserver>(ObserverFailureBehavior.Continue);
 
             pigeon
                 .ForConsumer(OrderRoutes.CreatedForAudit)

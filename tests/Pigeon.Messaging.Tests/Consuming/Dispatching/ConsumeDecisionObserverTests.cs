@@ -350,6 +350,31 @@ namespace Pigeon.Messaging.Tests.Consuming.Dispatching
             Assert.Empty(events);
         }
 
+        [Fact]
+        public async Task Manager_PropagatesForSynchronousTransportEvenWhenQueueIsConfigured()
+        {
+            var events = new List<string>();
+            var services = CreateServices(events, new PigeonConsumeDecisionResult(PigeonConsumeDecision.AckAndSkip));
+            services.AddScoped<IConsumeDecisionObserver>(_ => Observer(_ => throw new InvalidOperationException("observer")));
+            using var provider = services.BuildServiceProvider();
+            var adapter = new ObserverTestAdapter();
+            var manager = new ConsumingManager(new ConsumingDispatcher(provider), new[] { adapter },
+                Options.Create(new GlobalSettings { ConsumerExecution = new ConsumerExecutionSettings { MaxConcurrency = 1 } }),
+                NullLogger<ConsumingManager>.Instance);
+            await manager.StartAsync();
+            try
+            {
+                var args = new MessageConsumedEventArgs("orders", Payload, "billing", null, null, null, null,
+                    supportsRetry: false, requiresSynchronousDispatch: true);
+                await Assert.ThrowsAsync<ConsumeObserverRetryException>(() => adapter.DeliverAsync(args));
+            }
+            finally
+            {
+                await manager.StopAsync();
+            }
+            Assert.Empty(events);
+        }
+
         [Theory]
         [InlineData(false)]
         [InlineData(true)]

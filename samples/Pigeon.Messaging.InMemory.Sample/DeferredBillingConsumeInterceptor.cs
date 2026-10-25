@@ -26,7 +26,11 @@ namespace Pigeon.Messaging.InMemory.Sample
 
             return ValueTask.FromResult(new PigeonConsumeDecisionResult(
                 PigeonConsumeDecision.Defer,
-                "Billing work was scheduled for durable replay."));
+                "Billing work was scheduled for durable replay.")
+            {
+                Outcome = new PigeonConsumeOutcome { Kind = PigeonConsumeOutcomeKind.Deferred },
+                Metadata = new Dictionary<string, string> { ["billing-status"] = "scheduled" }
+            });
         }
     }
 }

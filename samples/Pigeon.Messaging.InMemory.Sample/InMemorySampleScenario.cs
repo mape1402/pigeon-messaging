@@ -9,6 +9,7 @@ namespace Pigeon.Messaging.InMemory.Sample
         private readonly TaskCompletionSource _billingReceived = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly TaskCompletionSource _auditReceived = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly TaskCompletionSource _externalOutboxReceived = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _decisionObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly TaskCompletionSource<PigeonConsumeEnvelope> _deferredEnvelope = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly TaskCompletionSource<PigeonPublishEnvelope> _externalOutboxEnvelope = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly ConcurrentQueue<string> _executionEvents = new();
@@ -44,6 +45,11 @@ namespace Pigeon.Messaging.InMemory.Sample
 
         public void RecordExecution(string eventName)
             => _executionEvents.Enqueue(eventName);
+
+        public void MarkDecisionObserved() => _decisionObserved.TrySetResult();
+
+        public Task WaitForDecisionObservationAsync(CancellationToken cancellationToken)
+            => _decisionObserved.Task.WaitAsync(cancellationToken);
 
         public Task WaitForBothModulesAsync(CancellationToken cancellationToken)
             => Task.WhenAll(
