@@ -184,7 +184,7 @@
             _listeners.TryAdd(endpoint.Key, listener);
         }
 
-        private MessageConsumedEventArgs CreateConsumedEvent(
+        internal MessageConsumedEventArgs CreateConsumedEvent(
             string topic,
             string value,
             string subscription,
@@ -211,6 +211,20 @@
                 {
                     lock (consumer)
                         tracker.Retry(consumer, result, delivery);
+
+                    return Task.CompletedTask;
+                },
+                (_, _) =>
+                {
+                    lock (consumer)
+                        tracker.Retry(consumer, result, delivery);
+
+                    return Task.CompletedTask;
+                },
+                (_, _) =>
+                {
+                    lock (consumer)
+                        tracker.Complete(consumer, result, delivery);
 
                     return Task.CompletedTask;
                 });
