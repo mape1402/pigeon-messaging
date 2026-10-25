@@ -9,6 +9,7 @@ namespace Microsoft.Extensions.DependencyInjection
     public sealed class PigeonRouteInterceptorRegistry
     {
         private readonly List<RouteInterceptorRegistration> _consumeDecisionInterceptors = new();
+        private readonly List<RouteInterceptorRegistration> _consumeDecisionObservers = new();
         private readonly List<RouteInterceptorRegistration> _consumeExecutionInterceptors = new();
         private readonly List<RouteInterceptorRegistration> _publishDecisionInterceptors = new();
 
@@ -19,6 +20,12 @@ namespace Microsoft.Extensions.DependencyInjection
         /// <param name="interceptorType">The interceptor implementation type.</param>
         public void AddConsumeDecisionInterceptor(PigeonRouteKey route, Type interceptorType)
             => _consumeDecisionInterceptors.Add(new RouteInterceptorRegistration(Normalize(route), interceptorType));
+
+        /// <summary>Registers a decision observer for a route.</summary>
+        /// <param name="route">The route key.</param>
+        /// <param name="observerType">The observer implementation type.</param>
+        public void AddConsumeDecisionObserver(PigeonRouteKey route, Type observerType)
+            => _consumeDecisionObservers.Add(new RouteInterceptorRegistration(Normalize(route), observerType));
 
         /// <summary>
         /// Registers a consume execution interceptor for a route.
@@ -43,6 +50,12 @@ namespace Microsoft.Extensions.DependencyInjection
         /// <returns>The matching interceptor implementation types.</returns>
         public IReadOnlyCollection<Type> GetConsumeDecisionInterceptors(PigeonRouteKey route)
             => GetInterceptors(_consumeDecisionInterceptors, Normalize(route));
+
+        /// <summary>Gets decision observer types registered for a route.</summary>
+        /// <param name="route">The route key.</param>
+        /// <returns>The matching observer types in registration order.</returns>
+        public IReadOnlyCollection<Type> GetConsumeDecisionObservers(PigeonRouteKey route)
+            => GetInterceptors(_consumeDecisionObservers, Normalize(route));
 
         /// <summary>
         /// Gets consume execution interceptor types registered for the route.

@@ -123,6 +123,17 @@
             return builder;
         }
 
+        /// <summary>Registers a global observer for terminal consume decisions.</summary>
+        /// <typeparam name="TObserver">The observer type.</typeparam>
+        /// <param name="builder">The Pigeon service builder.</param>
+        /// <returns>The same builder for chaining.</returns>
+        public static IPigeonServiceBuilder AddConsumeDecisionObserver<TObserver>(this IPigeonServiceBuilder builder)
+            where TObserver : class, IConsumeDecisionObserver
+        {
+            builder.GlobalSettingsBuilder.AddService<IConsumeDecisionObserver, TObserver>(ServiceLifetime.Scoped);
+            return builder;
+        }
+
         /// <summary>
         /// Registers a global consume execution interceptor.
         /// </summary>

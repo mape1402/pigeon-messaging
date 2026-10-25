@@ -31,6 +31,9 @@ namespace Pigeon.Messaging.Consuming.Dispatching
         /// </summary>
         public string Reason { get; }
 
+        /// <summary>Gets the optional semantic meaning of the decision.</summary>
+        public PigeonConsumeOutcome Outcome { get; init; }
+
         /// <summary>
         /// Gets metadata emitted by the decision interceptor.
         /// </summary>
