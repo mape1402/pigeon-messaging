@@ -49,7 +49,25 @@ namespace Pigeon.Messaging.Consuming.Dispatching
                     context.ReplyMetadata[item.Key] = item.Value;
 
             var observation = new ConsumeDecisionObservation(context, result);
-            foreach (var observer in context.Services.GetServices<IConsumeDecisionObserver>())
+            IEnumerable<IConsumeDecisionObserver> globalObservers;
+            try
+            {
+                globalObservers = context.Services.GetServices<IConsumeDecisionObserver>();
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception exception)
+            {
+                ObserverFailures.Add(1);
+                ObserverCriticalFailures.Add(1);
+                Logger(context).LogError(exception, "Failed to resolve global decision observers for topic {Topic}, version {Version}, subscription {Subscription}, message {MessageId}, correlation {CorrelationId}",
+                    context.Topic, context.MessageVersion, context.Subscription, context.MessageId, context.CorrelationId);
+                throw;
+            }
+
+            foreach (var observer in globalObservers)
             {
                 var configured = observer as ConfiguredConsumeDecisionObserver;
                 await ExecuteObserverAsync(() => observer, configured?.ObserverType ?? observer.GetType(),
