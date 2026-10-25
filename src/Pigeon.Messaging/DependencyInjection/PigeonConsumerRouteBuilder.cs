@@ -29,6 +29,16 @@ namespace Microsoft.Extensions.DependencyInjection
             return this;
         }
 
+        /// <summary>Registers a decision observer for this route.</summary>
+        /// <typeparam name="TObserver">The observer type.</typeparam>
+        /// <returns>The same route builder for chaining.</returns>
+        public PigeonConsumerRouteBuilder AddConsumeDecisionObserver<TObserver>()
+            where TObserver : class, IConsumeDecisionObserver
+        {
+            _builder.AddRouteConsumeDecisionObserver<TObserver>(_route);
+            return this;
+        }
+
         /// <summary>
         /// Registers a consume execution interceptor for this route.
         /// </summary>

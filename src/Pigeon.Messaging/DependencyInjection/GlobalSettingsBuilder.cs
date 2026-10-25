@@ -284,6 +284,14 @@
 
         internal PigeonRouteInterceptorRegistry RouteInterceptorRegistry => _routeInterceptorRegistry;
 
+        internal GlobalSettingsBuilder AddRouteConsumeDecisionObserver<TObserver>(PigeonRouteKey route)
+            where TObserver : class, IConsumeDecisionObserver
+        {
+            _services.AddScoped<TObserver>();
+            _routeInterceptorRegistry.AddConsumeDecisionObserver(route, typeof(TObserver));
+            return this;
+        }
+
         internal GlobalSettingsBuilder AddRouteConsumeDecisionInterceptor<TInterceptor>(PigeonRouteKey route)
             where TInterceptor : class, IConsumeDecisionInterceptor
         {
