@@ -351,6 +351,21 @@ namespace Pigeon.Messaging.Tests.Consuming.Dispatching
         }
 
         [Fact]
+        public async Task GlobalObserverResolutionFailure_RequestsRetry()
+        {
+            var events = new List<string>();
+            var services = CreateServices(events, new PigeonConsumeDecisionResult(PigeonConsumeDecision.AckAndSkip));
+            services.AddScoped<IConsumeDecisionObserver>(_ => throw new InvalidOperationException("observer construction failed"));
+            using var provider = services.BuildServiceProvider();
+            Exception failure = null;
+
+            await Dispatch(provider, new PigeonRouteInterceptorRegistry(), events, exception => failure = exception);
+
+            Assert.Equal(new[] { "retry" }, events);
+            Assert.Equal("observer construction failed", failure.Message);
+        }
+
+        [Fact]
         public async Task Manager_PropagatesForSynchronousTransportEvenWhenQueueIsConfigured()
         {
             var events = new List<string>();
