@@ -13,6 +13,8 @@ The sample also shows:
 
 - centralized route keys with `PigeonRouteKey`
 - route-specific consume decision interceptors
+- a critical global decision observer and a route-specific observer configured to continue on failure
+- decision outcome and metadata available to both observers before settlement
 - route-specific consume execution interceptors around the handler
 - global publish decision interceptors
 - camelCase wrapped payload serialization with the fixed `"$pigeon"` policy marker
@@ -29,4 +31,4 @@ No external broker is required.
 dotnet run --project samples\Pigeon.Messaging.InMemory.Sample\Pigeon.Messaging.InMemory.Sample.csproj
 ```
 
-The console output shows the inline delivery, deferred replay, external outbox publish replay, audit execution interceptor events, published message count, delivery count, and acknowledgement state for each subscription.
+The console output shows the terminal decision, its outcome and billing metadata, followed by inline delivery, deferred replay, external outbox publish replay, audit execution interceptor events, published message count, delivery count, and acknowledgement state for each subscription.
