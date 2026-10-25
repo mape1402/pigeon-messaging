@@ -76,7 +76,7 @@ namespace Pigeon.Messaging.Kafka.Tests.Consuming
             var tokenSource = new CancellationTokenSource();
             var called = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             adapter.MessageConsumed += (s, e) => called.TrySetResult();
-            consumer.Consume(Arg.Any<CancellationToken>()).Returns(new ConsumeResult<Ignore, string> { Topic = "topic", Message = new Message<Ignore, string> { Value = "msg" } });
+            consumer.Consume(Arg.Any<TimeSpan>()).Returns(new ConsumeResult<Ignore, string> { Topic = "topic", Message = new Message<Ignore, string> { Value = "msg" } });
 
             // Act
             var listenTask = Task.Run(() => adapter.GetType().GetMethod("ListenAsync", BindingFlags.NonPublic | BindingFlags.Instance)
