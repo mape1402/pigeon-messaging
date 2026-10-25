@@ -34,23 +34,11 @@ namespace Pigeon.Messaging.Consuming.Dispatching
                     await interceptor.Intercept(context, cancellationToken);
 
                 var route = new PigeonRouteKey(context.Topic, context.MessageVersion, context.Subscription);
-                foreach (var interceptor in scope.ServiceProvider.GetServices<IConsumeDecisionInterceptor>())
+                var decision = await ConsumeDecisionPipeline.ResolveAsync(context, route, _routeInterceptorRegistry, cancellationToken);
+                if (decision.Decision != PigeonConsumeDecision.Continue)
                 {
-                    var decision = await interceptor.InterceptAsync(context, cancellationToken)
-                        ?? PigeonConsumeDecisionResult.Continue;
-
-                    if (decision.Decision != PigeonConsumeDecision.Continue)
-                        return;
-                }
-
-                foreach (var interceptorType in _routeInterceptorRegistry.GetConsumeDecisionInterceptors(route))
-                {
-                    var interceptor = (IConsumeDecisionInterceptor)scope.ServiceProvider.GetRequiredService(interceptorType);
-                    var decision = await interceptor.InterceptAsync(context, cancellationToken)
-                        ?? PigeonConsumeDecisionResult.Continue;
-
-                    if (decision.Decision != PigeonConsumeDecision.Continue)
-                        return;
+                    await ConsumeDecisionPipeline.ObserveAsync(context, decision, route, _routeInterceptorRegistry, cancellationToken);
+                    return;
                 }
 
                 var consumingConfigurator = scope.ServiceProvider.GetRequiredService<IConsumingConfigurator>();

@@ -146,6 +146,10 @@
                     null,
                     cancellationToken.CanBeCanceled ? cancellationToken : _backgroundCancellationToken);
             }
+            catch (ConsumeObserverRetryException)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Has occurred an unexpected error when a message was accepted for dispatch.");
@@ -260,6 +264,11 @@
                     await CompleteMessageAsync(e, cancellationToken);
 
                 _diagnostics.RecordHandlerCompleted();
+            }
+            catch (ConsumeObserverRetryException)
+            {
+                _diagnostics.RecordHandlerFailed();
+                throw;
             }
             catch (Exception ex)
             {
