@@ -5,6 +5,7 @@ namespace Pigeon.Messaging.InMemory.Tests
     using Microsoft.Extensions.Hosting;
     using Microsoft.Extensions.Logging;
     using Pigeon.Messaging.Consuming.Management;
+    using Pigeon.Messaging.Consuming.Dispatching;
     using Pigeon.Messaging.Contracts;
     using Pigeon.Messaging.InMemory;
     using Pigeon.Messaging.Producing;
@@ -107,6 +108,67 @@ namespace Pigeon.Messaging.InMemory.Tests
             Assert.True(broker.PublishedMessages.Single().IsRaw);
             Assert.Empty(broker.Deliveries);
 
+            await StopHostedServicesAsync(provider);
+        }
+
+        [Fact]
+        public async Task ObserverFailure_RedeliversOnlyAffectedSubscription()
+        {
+            var services = CreateServices();
+            var state = new RetryObserverState();
+            services.AddSingleton(state);
+            var pigeon = services.AddPigeon(CreateConfiguration(), settings =>
+            {
+                settings.ConfigureConsumerExecution(execution => execution.AcknowledgementMode = MessageAcknowledgementMode.OnHandlerSuccess);
+                settings.UseInMemoryBroker(options => options.RetryDelay = TimeSpan.FromMilliseconds(10));
+            });
+            pigeon.AddConsumeDecisionInterceptor<RetryTestDecisionInterceptor>();
+            pigeon.AddConsumeDecisionObserver<RetryTestObserver>();
+            pigeon.AddConsumeHandler<OrderCreatedMessage>("orders.created", SemanticVersion.Default, "billing", (_, _) => throw new InvalidOperationException("Handler must not run."));
+            pigeon.AddConsumeHandler<OrderCreatedMessage>("orders.created", SemanticVersion.Default, "audit", (_, _) => throw new InvalidOperationException("Handler must not run."));
+            await using var provider = services.BuildServiceProvider();
+            await StartHostedServicesAsync(provider);
+
+            using var scope = provider.CreateScope();
+            await scope.ServiceProvider.GetRequiredService<IProducer>().PublishAsync(new OrderCreatedMessage { OrderId = "order-1" },
+                "orders.exchange", "orders.created", SemanticVersion.Default);
+            var broker = provider.GetRequiredService<IInMemoryBroker>();
+            await WaitUntilAsync(() => broker.Deliveries.Count == 3 && broker.Deliveries.Count(d => d.Completed) == 2);
+
+            var billing = broker.Deliveries.Where(d => d.Subscription == "billing").OrderBy(d => d.Attempt).ToArray();
+            Assert.Equal(new[] { 1, 2 }, billing.Select(d => d.Attempt));
+            Assert.True(billing[0].Failed);
+            Assert.True(billing[1].Completed);
+            Assert.Equal(billing[0].MessageId, billing[1].MessageId);
+            Assert.Single(broker.Deliveries.Where(d => d.Subscription == "audit"));
+            await StopHostedServicesAsync(provider);
+        }
+
+        [Fact]
+        public async Task OptionalObserverFailure_CompletesWithoutRedelivery()
+        {
+            var services = CreateServices();
+            services.AddSingleton(new RetryObserverState());
+            var pigeon = services.AddPigeon(CreateConfiguration(), settings =>
+            {
+                settings.ConfigureConsumerExecution(execution => execution.AcknowledgementMode = MessageAcknowledgementMode.OnHandlerSuccess);
+                settings.UseInMemoryBroker(options => options.RetryDelay = TimeSpan.FromMilliseconds(10));
+            });
+            pigeon.AddConsumeDecisionInterceptor<RetryTestDecisionInterceptor>();
+            pigeon.AddConsumeDecisionObserver<RetryTestObserver>(ObserverFailureBehavior.Continue);
+            pigeon.AddConsumeHandler<OrderCreatedMessage>("orders.created", SemanticVersion.Default, "billing", (_, _) => throw new InvalidOperationException());
+            await using var provider = services.BuildServiceProvider();
+            await StartHostedServicesAsync(provider);
+
+            using var scope = provider.CreateScope();
+            await scope.ServiceProvider.GetRequiredService<IProducer>().PublishAsync(new OrderCreatedMessage { OrderId = "order-1" },
+                "orders.exchange", "orders.created", SemanticVersion.Default);
+            var broker = provider.GetRequiredService<IInMemoryBroker>();
+            await WaitUntilAsync(() => broker.Deliveries.Count == 1 && broker.Deliveries.Single().Completed);
+            await Task.Delay(50);
+
+            Assert.Single(broker.Deliveries);
+            Assert.True(broker.Deliveries.Single().Completed);
             await StopHostedServicesAsync(provider);
         }
 

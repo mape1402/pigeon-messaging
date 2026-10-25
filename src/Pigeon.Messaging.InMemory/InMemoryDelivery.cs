@@ -10,6 +10,9 @@ namespace Pigeon.Messaging.InMemory
         /// </summary>
         public Guid MessageId { get; set; }
 
+        /// <summary>Gets or sets the one-based delivery attempt for this subscription.</summary>
+        public int Attempt { get; set; }
+
         /// <summary>
         /// Gets or sets the topic delivered to the consumer pipeline.
         /// </summary>

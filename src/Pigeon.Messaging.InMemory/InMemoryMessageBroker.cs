@@ -40,11 +40,12 @@ namespace Pigeon.Messaging.InMemory
                 await handler(message, cancellationToken);
         }
 
-        public InMemoryDelivery CreateDelivery(InMemoryPublishedMessage message, ConsumerEndpoint endpoint)
+        public InMemoryDelivery CreateDelivery(InMemoryPublishedMessage message, ConsumerEndpoint endpoint, int attempt = 1)
         {
             var delivery = new InMemoryDelivery
             {
                 MessageId = message.Id,
+                Attempt = attempt,
                 Topic = endpoint.Topic,
                 Subscription = endpoint.Subscription
             };
