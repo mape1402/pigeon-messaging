@@ -26,6 +26,8 @@
         private readonly Func<Exception, CancellationToken, Task> _rejectAsync;
         private int _acknowledged;
 
+        internal bool HasRetryCallback { get; }
+
         /// <summary>
         /// Initializes a new instance of the <see cref="MessageConsumedEventArgs"/> class.
         /// </summary>
@@ -91,6 +93,7 @@
             _failAsync = failAsync ?? ((_, _) => Task.CompletedTask);
             _retryAsync = retryAsync ?? _failAsync;
             _rejectAsync = rejectAsync ?? _failAsync;
+            HasRetryCallback = retryAsync != null || failAsync != null;
         }
 
         /// <summary>
