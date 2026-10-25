@@ -138,6 +138,7 @@
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "AzureServiceBusConsumingAdapter: Has ocurred an unexpected error while consuming a message.");
+                    throw;
                 }
             };
 

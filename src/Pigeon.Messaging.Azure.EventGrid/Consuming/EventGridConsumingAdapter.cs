@@ -128,13 +128,20 @@
                             @event.Data,
                             endpoint.Subscription,
                             token => args.CompleteMessageAsync(args.Message, token),
-                            (_, token) => args.AbandonMessageAsync(args.Message, cancellationToken: token));
+                            (_, token) => args.AbandonMessageAsync(args.Message, cancellationToken: token),
+                            (_, token) => args.AbandonMessageAsync(args.Message, cancellationToken: token),
+                            (exception, token) => args.DeadLetterMessageAsync(
+                                args.Message,
+                                deadLetterReason: exception?.GetType().Name ?? "Rejected",
+                                deadLetterErrorDescription: exception?.Message,
+                                cancellationToken: token));
 
                     await OnMessageConsumedAsync(consumed, args.CancellationToken);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "AzureServiceBusConsumingAdapter: Has ocurred an unexpected error while consuming a message.");
+                    _logger.LogError(ex, "AzureEventGridConsumingAdapter: An unexpected error occurred while consuming a message.");
+                    throw;
                 }
             };
 

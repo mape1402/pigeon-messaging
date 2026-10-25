@@ -13,6 +13,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.6" />
     <ProjectReference Include="..\..\src\Pigeon.Messaging.Rabbit\Pigeon.Messaging.Rabbit.csproj" />
   </ItemGroup>
 
