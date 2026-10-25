@@ -1,11 +1,14 @@
 # Pigeon.Messaging
 
-**Simple. Fast. Broker-agnostic messaging for .NET.**
-
 [![Build](https://github.com/mape1402/pigeon-messaging/actions/workflows/build-and-release.yml/badge.svg)](https://github.com/mape1402/pigeon-messaging/actions/workflows/build-and-release.yml)
 [![NuGet](https://img.shields.io/nuget/v/Pigeon.Messaging.svg)](https://www.nuget.org/packages/Pigeon.Messaging/)
 [![Downloads](https://img.shields.io/nuget/dt/Pigeon.Messaging.svg)](https://www.nuget.org/packages/Pigeon.Messaging/)
+[![Coverage snapshot: lines 99.07%, branches 93.69%](https://img.shields.io/badge/coverage%20snapshot-lines%2099.07%25%20%7C%20branches%2093.69%25-2ea44f)](#test-pigeon-without-a-broker)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+![Pigeon messaging hero: messages routed to multiple consumers](assets/pigeon-hero.png)
+
+**Simple. Fast. Broker-agnostic messaging for .NET.**
 
 ---
 
@@ -24,6 +27,7 @@ Its goal is to simplify publishing and consuming messages through a unified, dec
 - **Routed publishing** for broker-native fan-out patterns such as RabbitMQ exchanges, routing keys, queues, and bindings.
 - **Consumer discovery** through `HubConsumer` and `ConsumerAttribute`.
 - **Publish and consume interceptors** for metadata, tracing, security context, sagas, and other cross-cutting behavior.
+- **Terminal consume decision observers** with global or route-specific registration and configurable failure handling.
 - **Consume execution interceptors** for wrapping the actual handler globally or by route.
 - **Configurable topology provisioning** to create broker infrastructure on startup, publish, consume, or leave it fully manual.
 - **Configurable acknowledgement behavior** with manual ack, auto-ack on receive, or ack after a successful handler.
@@ -47,7 +51,7 @@ Pigeon is a good fit for microservices, distributed architectures, and applicati
 
 ## Supported Frameworks
 
-Pigeon 4.0 supports:
+Pigeon 4.x supports:
 
 - .NET 8
 - .NET 9
@@ -516,6 +520,8 @@ Retry and rejection depend on the transport and acknowledgement mode:
 
 The `Pigeon.Messaging.ConsumeDecisions` meter exposes `pigeon.consume.decisions.terminal`, `pigeon.consume.observers.executions`, `pigeon.consume.observers.failures`, `pigeon.consume.observers.failures.continued`, `pigeon.consume.observers.failures.critical`, and `pigeon.consume.observers.retries` counters.
 
+The [in-memory sample](samples/Pigeon.Messaging.InMemory.Sample/README.md) demonstrates global and route-specific observers, decision metadata, and deferred replay without an external broker.
+
 Publish decision interceptors run after existing `IPublishInterceptor` instances and before outbox or direct broker publishing:
 
 ```csharp
@@ -768,13 +774,15 @@ External test hosts can expose a thin wrapper over the adapter-friendly registra
 services.AddPigeonTestingAdapter(typeof(CustomersHubConsumer).Assembly);
 ```
 
-Pigeon also includes a repository coverage profile for validating the full solution consistently:
+To collect coverage for the full solution, including adapters and outbox packages, run the tests for a single target framework:
 
 ```bash
-dotnet test ./Pigeon.Messaging.sln --configuration Release --settings ./coverage.runsettings --collect:"XPlat Code Coverage"
+dotnet test ./Pigeon.Messaging.sln --configuration Release --framework net9.0 --collect:"XPlat Code Coverage"
 ```
 
-The current release target keeps the measured Pigeon coverage above 97%.
+Each test project produces a Cobertura report. Merge those reports to calculate solution-wide line and branch coverage. The optional `coverage.runsettings` profile excludes several categories of files and is therefore not a full-solution measurement.
+
+The coverage badge is a manually updated snapshot from the October 25, 2026 .NET 9 run, not a live CI measurement.
 
 ### Deprecated: Use the In-Memory Outbox
 

@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ------
 
+## [v4.1.0] - 2026-10-25
+
+### Added
+
+- Global and route-specific terminal consume decision observers through `IConsumeDecisionObserver`.
+- Configurable observer failure handling with `ObserverFailureBehavior.Fail` and `Continue`.
+- Structured consume outcomes, failure details, and decision metadata for terminal decisions.
+- Consume decision and observer metrics for terminal decisions, observer execution, failures, and retries.
+- Configurable in-memory broker retry delay and per-subscription redelivery.
+
+### Changed
+
+- Terminal decision observers execute in the message scope before settlement, and during deferred replay before the decision completes.
+- Critical observer failures request redelivery on supported transports; optional observers can fail without changing the original settlement.
+- Kafka tracks in-flight deliveries per partition so commits do not advance past unfinished messages, and retries seek back to the failed offset.
+- Kafka rejection advances the offset without creating a dead-letter record; RabbitMQ and Service Bus transports use their broker-native retry and rejection operations.
+- Event Hubs propagates critical observer failures to the listener and stops it when per-event retry is unavailable; replay is not guaranteed.
+
+------
+
 ## [v4.0.2] - 2026-09-30
 
 ### Fixed
