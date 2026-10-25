@@ -13,6 +13,8 @@ namespace Pigeon.Messaging.Consuming.Dispatching
         private static readonly Counter<long> ObserverExecutions = Meter.CreateCounter<long>("pigeon.consume.observers.executions");
         private static readonly Counter<long> ObserverFailures = Meter.CreateCounter<long>("pigeon.consume.observers.failures");
         private static readonly Counter<long> ObserverRetries = Meter.CreateCounter<long>("pigeon.consume.observers.retries");
+        private static readonly Counter<long> ObserverIgnoredFailures = Meter.CreateCounter<long>("pigeon.consume.observers.failures.continued");
+        private static readonly Counter<long> ObserverCriticalFailures = Meter.CreateCounter<long>("pigeon.consume.observers.failures.critical");
 
         internal static async ValueTask<PigeonConsumeDecisionResult> ResolveAsync(
             ConsumeContext context, PigeonRouteKey route, PigeonRouteInterceptorRegistry registry, CancellationToken cancellationToken)
@@ -47,29 +49,17 @@ namespace Pigeon.Messaging.Consuming.Dispatching
                     context.ReplyMetadata[item.Key] = item.Value;
 
             var observation = new ConsumeDecisionObservation(context, result);
-            Type observerType = null;
-            try
+            foreach (var observer in context.Services.GetServices<IConsumeDecisionObserver>())
             {
-                foreach (var observer in context.Services.GetServices<IConsumeDecisionObserver>())
-                {
-                    observerType = observer.GetType();
-                    await ExecuteObserverAsync(observer, observation, cancellationToken);
-                }
+                var configured = observer as ConfiguredConsumeDecisionObserver;
+                await ExecuteObserverAsync(() => observer, configured?.ObserverType ?? observer.GetType(),
+                    configured?.Behavior ?? ObserverFailureBehavior.Fail, observation, cancellationToken);
+            }
 
-                if (registry != null)
-                    foreach (var type in registry.GetConsumeDecisionObservers(route))
-                    {
-                        observerType = type;
-                        await ExecuteObserverAsync((IConsumeDecisionObserver)context.Services.GetRequiredService(type), observation, cancellationToken);
-                    }
-            }
-            catch (Exception exception)
-            {
-                ObserverFailures.Add(1);
-                Logger(context).LogError(exception, "Observer {Observer} failed for topic {Topic}, version {Version}, subscription {Subscription}, message {MessageId}, correlation {CorrelationId}",
-                    observerType?.FullName ?? "resolution", context.Topic, context.MessageVersion, context.Subscription, context.MessageId, context.CorrelationId);
-                throw;
-            }
+            if (registry != null)
+                foreach (var registration in registry.GetConsumeDecisionObserverRegistrations(route))
+                    await ExecuteObserverAsync(() => (IConsumeDecisionObserver)context.Services.GetRequiredService(registration.Type),
+                        registration.Type, registration.Behavior, observation, cancellationToken);
         }
 
         internal static void RecordObserverRetry(ConsumeContext context)
@@ -92,13 +82,33 @@ namespace Pigeon.Messaging.Consuming.Dispatching
             return result;
         }
 
-        private static async ValueTask ExecuteObserverAsync(IConsumeDecisionObserver observer, ConsumeDecisionObservation observation, CancellationToken cancellationToken)
+        private static async ValueTask ExecuteObserverAsync(Func<IConsumeDecisionObserver> resolve, Type observerType,
+            ObserverFailureBehavior behavior, ConsumeDecisionObservation observation, CancellationToken cancellationToken)
         {
             var context = observation.Context;
             ObserverExecutions.Add(1);
-            Logger(context).LogInformation("Executing observer {Observer} for topic {Topic}, version {Version}, subscription {Subscription}, message {MessageId}, correlation {CorrelationId}",
-                observer.GetType().FullName, context.Topic, context.MessageVersion, context.Subscription, context.MessageId, context.CorrelationId);
-            await observer.ObserveAsync(observation, cancellationToken);
+            Logger(context).LogInformation("Executing observer {Observer} with failure behavior {FailureBehavior} for topic {Topic}, version {Version}, subscription {Subscription}, message {MessageId}, correlation {CorrelationId}",
+                observerType.FullName, behavior, context.Topic, context.MessageVersion, context.Subscription, context.MessageId, context.CorrelationId);
+            try
+            {
+                await resolve().ObserveAsync(observation, cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception exception)
+            {
+                ObserverFailures.Add(1);
+                if (behavior == ObserverFailureBehavior.Continue)
+                    ObserverIgnoredFailures.Add(1);
+                else
+                    ObserverCriticalFailures.Add(1);
+                Logger(context).LogError(exception, "Observer {Observer} failed with behavior {FailureBehavior} for topic {Topic}, version {Version}, subscription {Subscription}, message {MessageId}, correlation {CorrelationId}",
+                    observerType.FullName, behavior, context.Topic, context.MessageVersion, context.Subscription, context.MessageId, context.CorrelationId);
+                if (behavior == ObserverFailureBehavior.Fail)
+                    throw;
+            }
         }
 
         private static ILogger<ConsumeDecisionObservation> Logger(ConsumeContext context)

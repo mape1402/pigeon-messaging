@@ -102,6 +102,10 @@
                         {
                             await ConsumeDecisionPipeline.ObserveAsync(context, decision, route, registry, cancellationToken);
                         }
+                        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                        {
+                            throw;
+                        }
                         catch (Exception exception)
                         {
                             if (!context.HasRetryCallback)
