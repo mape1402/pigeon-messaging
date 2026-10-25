@@ -243,8 +243,8 @@
                         subscription,
                         rawPayload,
                         token => CompleteMessageAsync(e, token),
-                        (ex, token) => RetryMessageAsync(e, ex, token),
-                        (ex, token) => RetryMessageAsync(e, ex, token),
+                        e.HasRetryCallback ? (ex, token) => RetryMessageAsync(e, ex, token) : null,
+                        e.HasRetryCallback ? (ex, token) => RetryMessageAsync(e, ex, token) : null,
                         (ex, token) => RejectMessageAsync(e, ex, token),
                         ConsumeExecutionSource.BrokerDelivery,
                         linkedCts.Token);

@@ -47,12 +47,29 @@ namespace Pigeon.Messaging.Consuming.Dispatching
                     context.ReplyMetadata[item.Key] = item.Value;
 
             var observation = new ConsumeDecisionObservation(context, result);
-            foreach (var observer in context.Services.GetServices<IConsumeDecisionObserver>())
-                await ExecuteObserverAsync(observer, observation, cancellationToken);
+            Type observerType = null;
+            try
+            {
+                foreach (var observer in context.Services.GetServices<IConsumeDecisionObserver>())
+                {
+                    observerType = observer.GetType();
+                    await ExecuteObserverAsync(observer, observation, cancellationToken);
+                }
 
-            if (registry != null)
-                foreach (var type in registry.GetConsumeDecisionObservers(route))
-                    await ExecuteObserverAsync((IConsumeDecisionObserver)context.Services.GetRequiredService(type), observation, cancellationToken);
+                if (registry != null)
+                    foreach (var type in registry.GetConsumeDecisionObservers(route))
+                    {
+                        observerType = type;
+                        await ExecuteObserverAsync((IConsumeDecisionObserver)context.Services.GetRequiredService(type), observation, cancellationToken);
+                    }
+            }
+            catch (Exception exception)
+            {
+                ObserverFailures.Add(1);
+                Logger(context).LogError(exception, "Observer {Observer} failed for topic {Topic}, version {Version}, subscription {Subscription}, message {MessageId}, correlation {CorrelationId}",
+                    observerType?.FullName ?? "resolution", context.Topic, context.MessageVersion, context.Subscription, context.MessageId, context.CorrelationId);
+                throw;
+            }
         }
 
         internal static void RecordObserverRetry(ConsumeContext context)
@@ -81,17 +98,7 @@ namespace Pigeon.Messaging.Consuming.Dispatching
             ObserverExecutions.Add(1);
             Logger(context).LogInformation("Executing observer {Observer} for topic {Topic}, version {Version}, subscription {Subscription}, message {MessageId}, correlation {CorrelationId}",
                 observer.GetType().FullName, context.Topic, context.MessageVersion, context.Subscription, context.MessageId, context.CorrelationId);
-            try
-            {
-                await observer.ObserveAsync(observation, cancellationToken);
-            }
-            catch (Exception exception)
-            {
-                ObserverFailures.Add(1);
-                Logger(context).LogError(exception, "Observer {Observer} failed for topic {Topic}, version {Version}, subscription {Subscription}, message {MessageId}, correlation {CorrelationId}",
-                    observer.GetType().FullName, context.Topic, context.MessageVersion, context.Subscription, context.MessageId, context.CorrelationId);
-                throw;
-            }
+            await observer.ObserveAsync(observation, cancellationToken);
         }
 
         private static ILogger<ConsumeDecisionObservation> Logger(ConsumeContext context)

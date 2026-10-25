@@ -103,7 +103,8 @@
                         catch (Exception exception)
                         {
                             if (!context.HasRetryCallback)
-                                throw;
+                                throw new ConsumeObserverRetryException(exception,
+                                    new NotSupportedException("The transport did not provide a retry callback."));
                             ConsumeDecisionPipeline.RecordObserverRetry(context);
                             try
                             {
