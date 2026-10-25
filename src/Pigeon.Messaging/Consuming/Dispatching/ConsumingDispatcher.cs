@@ -90,14 +90,34 @@
                     foreach (var interceptor in interceptors)
                         await interceptor.Intercept(context, cancellationToken);
 
-                    var decision = await GetConsumeDecisionAsync(
-                        context,
-                        new PigeonRouteKey(topic, configuration.Version, configuration.Subscription),
-                        cancellationToken);
+                    var route = new PigeonRouteKey(topic, configuration.Version, configuration.Subscription);
+                    var registry = _routeInterceptorRegistry ?? scope.ServiceProvider.GetService<PigeonRouteInterceptorRegistry>();
+                    var decision = await ConsumeDecisionPipeline.ResolveAsync(context, route, registry, cancellationToken);
 
                     if (decision.Decision != PigeonConsumeDecision.Continue)
                     {
+                        try
+                        {
+                            await ConsumeDecisionPipeline.ObserveAsync(context, decision, route, registry, cancellationToken);
+                        }
+                        catch (Exception exception)
+                        {
+                            if (!context.HasRetryCallback)
+                                throw;
+                            ConsumeDecisionPipeline.RecordObserverRetry(context);
+                            try
+                            {
+                                await context.RetryAsync(exception, cancellationToken);
+                            }
+                            catch (Exception retryException)
+                            {
+                                throw new ConsumeObserverRetryException(exception, retryException);
+                            }
+                            return;
+                        }
+
                         await ApplyDecisionAsync(context, decision, cancellationToken);
+                        ConsumeDecisionPipeline.RecordSettlement(context, decision);
                         return;
                     }
 
@@ -111,39 +131,6 @@
                     await handlerPipeline.InvokeAsync(context, configuration, cancellationToken);
                 }
             }
-        }
-
-        private async ValueTask<PigeonConsumeDecisionResult> GetConsumeDecisionAsync(
-            ConsumeContext context,
-            PigeonRouteKey route,
-            CancellationToken cancellationToken)
-        {
-            var globalInterceptors = context.Services.GetServices<IConsumeDecisionInterceptor>();
-
-            foreach (var interceptor in globalInterceptors)
-            {
-                var decision = await interceptor.InterceptAsync(context, cancellationToken)
-                    ?? PigeonConsumeDecisionResult.Continue;
-
-                if (decision.Decision != PigeonConsumeDecision.Continue)
-                    return decision;
-            }
-
-            var registry = _routeInterceptorRegistry ?? context.Services.GetService<PigeonRouteInterceptorRegistry>();
-            if (registry == null)
-                return PigeonConsumeDecisionResult.Continue;
-
-            foreach (var interceptorType in registry.GetConsumeDecisionInterceptors(route))
-            {
-                var interceptor = (IConsumeDecisionInterceptor)context.Services.GetRequiredService(interceptorType);
-                var decision = await interceptor.InterceptAsync(context, cancellationToken)
-                    ?? PigeonConsumeDecisionResult.Continue;
-
-                if (decision.Decision != PigeonConsumeDecision.Continue)
-                    return decision;
-            }
-
-            return PigeonConsumeDecisionResult.Continue;
         }
 
         private static async Task ApplyDecisionAsync(

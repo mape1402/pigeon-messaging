@@ -23,6 +23,8 @@
         private Func<Exception, CancellationToken, Task> _retryAsync = (_, _) => Task.CompletedTask;
         private Func<Exception, CancellationToken, Task> _rejectAsync = (_, _) => Task.CompletedTask;
 
+        internal bool HasRetryCallback { get; private set; }
+
         /// <summary>
         /// Provides access to scoped services.
         /// </summary>
@@ -161,6 +163,7 @@
             _completeAsync = completeAsync ?? (_ => Task.CompletedTask);
             _failAsync = failAsync ?? ((_, _) => Task.CompletedTask);
             _retryAsync = retryAsync ?? _failAsync;
+            HasRetryCallback = retryAsync != null || failAsync != null;
             _rejectAsync = rejectAsync ?? _failAsync;
         }
 
