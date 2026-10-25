@@ -120,34 +120,35 @@
         /// <param name="consumer">The Kafka consumer to listen on.</param>
         /// <param name="cancellationToken">A cancellation token to observe while waiting for messages.</param>
         private async Task ListenAsync(IConsumer<Ignore, string> consumer, CancellationToken cancellationToken)
-        {
-            while (!cancellationToken.IsCancellationRequested)
-            {
-                try
-                {
-                    var result = consumer.Consume(cancellationToken);
-                    await OnMessageConsumedAsync(
-                        CreateConsumedEvent(result.Topic, result.Message.Value, ConsumerEndpoint.DefaultSubscription, consumer, result),
-                        cancellationToken);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "KafkaConsumingAdapter: Has ocurred an unexpected error while consuming a message.");
-                }
-            }
-        }
+            => await ListenEndpointAsync(consumer, null, new KafkaSettlementTracker(), cancellationToken);
 
-        private async Task ListenEndpointAsync(IConsumer<Ignore, string> consumer, ConsumerEndpoint endpoint, CancellationToken cancellationToken)
+        private async Task ListenEndpointAsync(IConsumer<Ignore, string> consumer, ConsumerEndpoint endpoint, KafkaSettlementTracker tracker, CancellationToken cancellationToken)
         {
             while (!cancellationToken.IsCancellationRequested)
             {
                 try
                 {
-                    var result = consumer.Consume(cancellationToken);
-                    var topic = string.IsNullOrWhiteSpace(endpoint.Topic) ? result.Topic : endpoint.Topic;
+                    ConsumeResult<Ignore, string> result;
+                    KafkaSettlementTracker.Delivery delivery;
+                    lock (consumer)
+                    {
+                        result = consumer.Consume(TimeSpan.FromMilliseconds(100));
+                        delivery = result?.Message != null && _globalSettings.ConsumerExecution?.AcknowledgementMode != MessageAcknowledgementMode.OnReceive
+                            ? tracker.Register(result)
+                            : null;
+                    }
+
+                    if (result?.Message == null)
+                        continue;
+
+                    var topic = string.IsNullOrWhiteSpace(endpoint?.Topic) ? result.Topic : endpoint.Topic;
                     await OnMessageConsumedAsync(
-                        CreateConsumedEvent(topic, result.Message.Value, endpoint.Subscription, consumer, result),
+                        CreateConsumedEvent(topic, result.Message.Value, endpoint?.Subscription ?? ConsumerEndpoint.DefaultSubscription, consumer, result, tracker, delivery),
                         cancellationToken);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    break;
                 }
                 catch (Exception ex)
                 {
@@ -163,7 +164,11 @@
             var config = endpoint.Subscription == ConsumerEndpoint.DefaultSubscription
                 ? _configurationProvider.GetConsumerConfig()
                 : _configurationProvider.GetConsumerConfig(endpoint.Subscription);
-            var consumer = new ConsumerBuilder<Ignore, string>(config).Build();
+            var tracker = new KafkaSettlementTracker();
+            var consumer = new ConsumerBuilder<Ignore, string>(config)
+                .SetPartitionsRevokedHandler((_, partitions) => tracker.Release(partitions.Select(p => p.TopicPartition)))
+                .SetPartitionsLostHandler((_, partitions) => tracker.Release(partitions.Select(p => p.TopicPartition)))
+                .Build();
 
             if (!_consumers.TryAdd(endpoint.Key, consumer))
             {
@@ -174,7 +179,7 @@
 
             consumer.Subscribe(endpoint.Topic);
 
-            var listener = Task.Run(() => ListenEndpointAsync(consumer, endpoint, _cancellationTokenSource.Token));
+            var listener = Task.Run(() => ListenEndpointAsync(consumer, endpoint, tracker, _cancellationTokenSource.Token));
 
             _listeners.TryAdd(endpoint.Key, listener);
         }
@@ -184,7 +189,9 @@
             string value,
             string subscription,
             IConsumer<Ignore, string> consumer,
-            ConsumeResult<Ignore, string> result)
+            ConsumeResult<Ignore, string> result,
+            KafkaSettlementTracker tracker,
+            KafkaSettlementTracker.Delivery delivery)
         {
             if (_globalSettings.ConsumerExecution?.AcknowledgementMode == MessageAcknowledgementMode.OnReceive)
                 return new MessageConsumedEventArgs(topic, value, subscription);
@@ -196,11 +203,17 @@
                 _ =>
                 {
                     lock (consumer)
-                        consumer.Commit(result);
+                        tracker.Complete(consumer, result, delivery);
 
                     return Task.CompletedTask;
                 },
-                null); // A no-op failure callback cannot request redelivery.
+                (_, _) =>
+                {
+                    lock (consumer)
+                        tracker.Retry(consumer, result, delivery);
+
+                    return Task.CompletedTask;
+                });
         }
 
         private void StopConsumer(ConsumerEndpoint endpoint)
@@ -210,8 +223,11 @@
 
             try
             {
-                consumer.Close();
-                consumer.Dispose();
+                lock (consumer)
+                {
+                    consumer.Close();
+                    consumer.Dispose();
+                }
 
                 _listeners[endpoint.Key] = default;
             }
