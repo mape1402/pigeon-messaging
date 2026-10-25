@@ -53,7 +53,8 @@
             Func<Exception, CancellationToken, Task> retryAsync,
             Func<Exception, CancellationToken, Task> rejectAsync,
             ConsumeExecutionSource executionSource,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default,
+            bool supportsObserverRetry = true)
         {
             if(string.IsNullOrWhiteSpace(topic))
                 throw new ArgumentNullException(nameof(topic));
@@ -82,6 +83,7 @@
                     ExecutionSource = executionSource
                 };
                 context.SetAcknowledgementCallbacks(completeAsync, failAsync, retryAsync, rejectAsync);
+                context.RestrictObserverRetry(supportsObserverRetry);
 
                 var contextAccessor = scope.ServiceProvider.GetService<ConsumeContextAccessor>();
 

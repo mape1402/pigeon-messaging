@@ -25,6 +25,8 @@
 
         internal bool HasRetryCallback { get; private set; }
 
+        internal void RestrictObserverRetry(bool supportsRetry) => HasRetryCallback &= supportsRetry;
+
         /// <summary>
         /// Provides access to scoped services.
         /// </summary>
