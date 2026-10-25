@@ -8,6 +8,39 @@ namespace Pigeon.Messaging.Azure.ServiceBus.Tests
     public class ServiceBusProviderTests
     {
         [Fact]
+        public async Task CreateProcessorOptions_NullExecutionUsesSdkDefaults()
+        {
+            var options = Options.Create(new AzureServiceBusSettings { ConnectionString = "Endpoint=sb://test/;SharedAccessKeyName=Root;SharedAccessKey=abc" });
+            var provider = new ServiceBusProvider(options, Options.Create(new GlobalSettings { ConsumerExecution = null }));
+            var processorOptions = (ServiceBusProcessorOptions)typeof(ServiceBusProvider)
+                .GetMethod("CreateProcessorOptions", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(provider, null)!;
+            Assert.False(processorOptions.AutoCompleteMessages);
+            Assert.Equal(1, processorOptions.MaxConcurrentCalls);
+            Assert.Equal(0, processorOptions.PrefetchCount);
+            await provider.GetClient().DisposeAsync();
+        }
+
+        [Fact]
+        public async Task CreateProcessor_CreatesQueueProcessor()
+        {
+            var options = Options.Create(new AzureServiceBusSettings { ConnectionString = "Endpoint=sb://test/;SharedAccessKeyName=Root;SharedAccessKey=abc" });
+            var provider = new ServiceBusProvider(options);
+            await using var processor = provider.CreateProcessor("orders");
+            Assert.Equal("orders", processor.EntityPath);
+            await provider.GetClient().DisposeAsync();
+        }
+
+        [Fact]
+        public async Task CreateProcessor_CreatesSubscriptionProcessor()
+        {
+            var options = Options.Create(new AzureServiceBusSettings { ConnectionString = "Endpoint=sb://test/;SharedAccessKeyName=Root;SharedAccessKey=abc" });
+            var provider = new ServiceBusProvider(options);
+            await using var processor = provider.CreateProcessor("orders", "billing");
+            Assert.Contains("billing", processor.EntityPath);
+            await provider.GetClient().DisposeAsync();
+        }
+
+        [Fact]
         public void GetClient_Returns_Same_Instance()
         {
             // Arrange

@@ -11,11 +11,18 @@ namespace Pigeon.Messaging.Kafka
     {
         private readonly IConfigurationProvider _configurationProvider;
         private readonly KafkaSettings _settings;
+        private readonly Func<ProducerConfig, IAdminClient> _createAdminClient;
 
         public KafkaTopologyAdapter(IConfigurationProvider configurationProvider, IOptions<KafkaSettings> settings)
+            : this(configurationProvider, settings, config => new AdminClientBuilder(config).Build())
+        {
+        }
+
+        internal KafkaTopologyAdapter(IConfigurationProvider configurationProvider, IOptions<KafkaSettings> settings, Func<ProducerConfig, IAdminClient> createAdminClient)
         {
             _configurationProvider = configurationProvider ?? throw new ArgumentNullException(nameof(configurationProvider));
             _settings = settings?.Value ?? throw new ArgumentNullException(nameof(settings));
+            _createAdminClient = createAdminClient ?? throw new ArgumentNullException(nameof(createAdminClient));
         }
 
         public string BrokerName => "Kafka";
@@ -28,7 +35,7 @@ namespace Pigeon.Messaging.Kafka
 
         private async Task EnsureTopicAsync(string topic)
         {
-            using var adminClient = new AdminClientBuilder(_configurationProvider.GetProducerConfig()).Build();
+            using var adminClient = _createAdminClient(_configurationProvider.GetProducerConfig());
 
             try
             {

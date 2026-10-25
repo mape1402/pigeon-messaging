@@ -13,6 +13,10 @@ namespace Pigeon.Messaging.Outbox.InMemory.Tests.DependencyInjection
     public class InMemoryOutboxExtensionsTests
     {
         [Fact]
+        public void UseInMemoryOutbox_RequiresBuilder()
+            => Assert.Throws<ArgumentNullException>(() => InMemoryOutboxExtensions.UseInMemoryOutbox(null));
+
+        [Fact]
         public void UseInMemoryOutbox_Should_Register_Outbox_Services_And_Enable_Outbox()
         {
             var services = new ServiceCollection();

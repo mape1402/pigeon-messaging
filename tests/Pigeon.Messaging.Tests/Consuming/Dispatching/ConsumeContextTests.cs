@@ -13,6 +13,25 @@
     public class ConsumeContextTests
     {
         [Fact]
+        public async Task FailAsync_ForwardsExceptionToAcknowledgementCallback()
+        {
+            Exception received = null;
+            var context = new ConsumeContext();
+            context.SetAcknowledgementCallbacks(_ => Task.CompletedTask, (error, _) => { received = error; return Task.CompletedTask; });
+            var failure = new InvalidOperationException("failed");
+            await context.FailAsync(failure);
+            Assert.Same(failure, received);
+        }
+
+        [Fact]
+        public void ReplyHeaders_AreCaseInsensitive()
+        {
+            var context = new ConsumeContext();
+            context.ReplyHeaders["Correlation-Id"] = "123";
+            Assert.Equal("123", context.ReplyHeaders["correlation-id"]);
+        }
+
+        [Fact]
         public void GetMetadata_ShouldThrow_KeyNotFoundException_WhenKeyMissing()
         {
             var context = new ConsumeContext

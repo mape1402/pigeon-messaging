@@ -106,6 +106,12 @@ namespace Pigeon.Messaging.Azure.EventHub
             _cancellationTokenSource = new CancellationTokenSource();
         }
 
+        internal EventHubProcessor(AzureEventHubSettings settings, string hubName, string consumerGroup, EventHubConsumerClient consumerClient)
+            : this(settings, hubName, consumerGroup)
+        {
+            _consumerClient = consumerClient ?? throw new ArgumentNullException(nameof(consumerClient));
+        }
+
         public async IAsyncEnumerable<PartitionEvent> ReadEventsAsync([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             // Initialize consumer client if not already done

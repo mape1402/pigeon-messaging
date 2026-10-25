@@ -8,6 +8,17 @@ namespace Pigeon.Messaging.Azure.EventGrid.Tests
     public class EventGridProviderTests
     {
         [Fact]
+        public async Task CreateProcessor_CreatesSubscriptionProcessor()
+        {
+            var settings = new AzureEventGridSettings { ServiceBusEndPoint = "Endpoint=sb://test/;SharedAccessKeyName=Root;SharedAccessKey=abc" };
+            var provider = new EventGridProvider(Options.Create(settings));
+            await using var processor = provider.CreateProcessor("orders", "billing");
+            Assert.Contains("billing", processor.EntityPath);
+            var client = (ServiceBusClient)typeof(EventGridProvider).GetField("_client", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(provider);
+            await client.DisposeAsync();
+        }
+
+        [Fact]
         public void Constructor_Should_Throw_ArgumentNullException_For_Null_Options()
         {
             // Act & Assert

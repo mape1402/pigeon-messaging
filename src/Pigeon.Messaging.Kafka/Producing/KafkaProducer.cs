@@ -30,6 +30,12 @@
                 .Build();
         }
 
+        internal KafkaProducer(IProducer<Null, WrappedPayload<T>> producer, IProducer<Null, T> rawProducer)
+        {
+            _producer = producer ?? throw new ArgumentNullException(nameof(producer));
+            _rawProducer = rawProducer ?? throw new ArgumentNullException(nameof(rawProducer));
+        }
+
         /// <summary>
         /// Publishes a wrapped payload message to the specified Kafka topic asynchronously.
         /// </summary>

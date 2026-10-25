@@ -86,20 +86,15 @@ namespace Pigeon.Messaging.Producing
         }
 
         private static Dictionary<string, string> ToStringDictionary(IReadOnlyDictionary<string, object> metadata)
-            => metadata is null
-                ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-                : metadata.ToDictionary(
-                    item => item.Key,
-                    item => item.Value?.ToString(),
-                    StringComparer.OrdinalIgnoreCase);
+            => metadata.ToDictionary(
+                item => item.Key,
+                item => item.Value?.ToString(),
+                StringComparer.OrdinalIgnoreCase);
 
         private static string ResolveString(
             IReadOnlyDictionary<string, object> metadata,
             params string[] keys)
         {
-            if (metadata == null)
-                return null;
-
             foreach (var key in keys)
             {
                 if (metadata.TryGetValue(key, out var value))
