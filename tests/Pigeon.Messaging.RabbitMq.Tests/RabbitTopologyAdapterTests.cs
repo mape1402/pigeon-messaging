@@ -21,6 +21,18 @@ namespace Pigeon.Messaging.RabbitMq.Tests
         }
 
         [Fact]
+        public void Constructor_RequiresConnectionProvider()
+            => Assert.Throws<ArgumentNullException>(() => new RabbitTopologyAdapter(null, Options.Create(new RabbitSettings())));
+
+        [Fact]
+        public void Constructor_RequiresSettings()
+            => Assert.Throws<ArgumentNullException>(() => new RabbitTopologyAdapter(_connectionProvider, null));
+
+        [Fact]
+        public void BrokerName_IdentifiesRabbitMq()
+            => Assert.Equal("RabbitMq", new RabbitTopologyAdapter(_connectionProvider, Options.Create(new RabbitSettings())).BrokerName);
+
+        [Fact]
         public async Task EnsurePublishTopologyAsync_Should_Declare_Queue_When_No_Exchange_Is_Configured()
         {
             var adapter = new RabbitTopologyAdapter(_connectionProvider, Options.Create(new RabbitSettings()));

@@ -8,6 +8,16 @@ namespace Pigeon.Messaging.Azure.EventHub.Tests
     public class EventHubProviderTests
     {
         [Fact]
+        public async Task CreateProcessor_UsesExplicitConsumerGroup()
+        {
+            var provider = new EventHubProvider(Options.Create(new AzureEventHubSettings()));
+            var processor = provider.CreateProcessor("orders", "billing");
+            var group = processor.GetType().GetField("_consumerGroup", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(processor);
+            Assert.Equal("billing", group);
+            await processor.DisposeAsync();
+        }
+
+        [Fact]
         public void Constructor_Should_Throw_ArgumentNullException_For_Null_Options()
         {
             // Act & Assert

@@ -11,10 +11,17 @@ namespace Pigeon.Messaging.Azure.EventGrid
     internal class EventGridTopologyAdapter : IMessageBrokerTopologyAdapter
     {
         private readonly AzureEventGridSettings _settings;
+        private readonly Func<string, ServiceBusAdministrationClient> _createAdminClient;
 
         public EventGridTopologyAdapter(IOptions<AzureEventGridSettings> options)
+            : this(options, connectionString => new ServiceBusAdministrationClient(connectionString))
+        {
+        }
+
+        internal EventGridTopologyAdapter(IOptions<AzureEventGridSettings> options, Func<string, ServiceBusAdministrationClient> createAdminClient)
         {
             _settings = options?.Value ?? throw new ArgumentNullException(nameof(options));
+            _createAdminClient = createAdminClient ?? throw new ArgumentNullException(nameof(createAdminClient));
         }
 
         public string BrokerName => "AzureEventGrid";
@@ -27,7 +34,7 @@ namespace Pigeon.Messaging.Azure.EventGrid
             if (string.IsNullOrWhiteSpace(_settings.ServiceBusEndPoint))
                 return;
 
-            var adminClient = new ServiceBusAdministrationClient(_settings.ServiceBusEndPoint);
+            var adminClient = _createAdminClient(_settings.ServiceBusEndPoint);
 
             await IgnoreAlreadyExistsAsync(() => adminClient.CreateTopicAsync(endpoint.Topic, cancellationToken));
 
