@@ -446,6 +446,52 @@ Consume decisions map to portable settlement:
 - `Reject`: skips the handler and rejects or dead-letters where supported.
 - `Defer`: skips the handler and acknowledges after the interceptor has persisted durable work.
 
+### Observe Terminal Consume Decisions
+
+Register observers globally, for a specific route, or both. Observers run in registration order, globals first, inside the message scope and before broker settlement. `Continue` does not notify them.
+
+```csharp
+public sealed class TerminalDecisionObserver : IConsumeDecisionObserver
+{
+    private readonly ILogger<TerminalDecisionObserver> _logger;
+
+    public TerminalDecisionObserver(ILogger<TerminalDecisionObserver> logger) => _logger = logger;
+
+    public ValueTask ObserveAsync(
+        ConsumeDecisionObservation observation,
+        CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Terminal decision {Decision} for {Topic}",
+            observation.Result.Decision, observation.Context.Topic);
+        return ValueTask.CompletedTask;
+    }
+}
+
+pigeon.AddConsumeDecisionObserver<TerminalDecisionObserver>();
+pigeon.ForConsumer(OrderRoutes.CreatedForBilling)
+    .AddConsumeDecisionObserver<TerminalDecisionObserver>();
+```
+
+An interceptor can provide optional semantic outcome and metadata without changing the transport decision:
+
+```csharp
+return new PigeonConsumeDecisionResult(PigeonConsumeDecision.Reject, "Validation failed")
+{
+    Outcome = new PigeonConsumeOutcome
+    {
+        Kind = PigeonConsumeOutcomeKind.Rejected,
+        Failure = new PigeonConsumeFailure { Code = "order.invalid", Message = "Invalid order", IsRetryable = false }
+    },
+    Metadata = new Dictionary<string, string> { ["error-code"] = "order.invalid" }
+};
+```
+
+Decision metadata is copied into `ConsumeContext.ReplyMetadata` before observers run. Keys are case-insensitive and decision values overwrite existing ones. The original result remains available to the observer.
+
+If an observer fails during broker delivery, Pigeon requests retry instead of applying the original decision. If retry cannot be requested, the failure propagates. During durable replay, the observer failure propagates to the replay executor. Observers must be idempotent because redelivery can run them again. Broker auto-acknowledgement and transports without retry support cannot guarantee redelivery after an observer failure; use a transport and acknowledgement mode that support retry when this guarantee is required.
+
+The `Pigeon.Messaging.ConsumeDecisions` meter exposes `pigeon.consume.decisions.terminal`, `pigeon.consume.observers.executions`, `pigeon.consume.observers.failures`, and `pigeon.consume.observers.retries` counters.
+
 Publish decision interceptors run after existing `IPublishInterceptor` instances and before outbox or direct broker publishing:
 
 ```csharp
