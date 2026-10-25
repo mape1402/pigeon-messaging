@@ -2,6 +2,7 @@ namespace Microsoft.Extensions.DependencyInjection
 {
     using Pigeon.Messaging;
     using Pigeon.Messaging.Consuming.Configuration;
+    using Pigeon.Messaging.Consuming.Dispatching;
 
     /// <summary>
     /// Stores route-specific interceptor registrations used by Pigeon runtime builders.
@@ -9,7 +10,7 @@ namespace Microsoft.Extensions.DependencyInjection
     public sealed class PigeonRouteInterceptorRegistry
     {
         private readonly List<RouteInterceptorRegistration> _consumeDecisionInterceptors = new();
-        private readonly List<RouteInterceptorRegistration> _consumeDecisionObservers = new();
+        private readonly List<(PigeonRouteKey Route, Type Type, ObserverFailureBehavior Behavior)> _consumeDecisionObservers = new();
         private readonly List<RouteInterceptorRegistration> _consumeExecutionInterceptors = new();
         private readonly List<RouteInterceptorRegistration> _publishDecisionInterceptors = new();
 
@@ -25,7 +26,18 @@ namespace Microsoft.Extensions.DependencyInjection
         /// <param name="route">The route key.</param>
         /// <param name="observerType">The observer implementation type.</param>
         public void AddConsumeDecisionObserver(PigeonRouteKey route, Type observerType)
-            => _consumeDecisionObservers.Add(new RouteInterceptorRegistration(Normalize(route), observerType));
+            => AddConsumeDecisionObserver(route, observerType, ObserverFailureBehavior.Fail);
+
+        /// <summary>Registers a decision observer and its failure policy for a route.</summary>
+        /// <param name="route">The route key.</param>
+        /// <param name="observerType">The observer type.</param>
+        /// <param name="failureBehavior">The observer failure policy.</param>
+        public void AddConsumeDecisionObserver(PigeonRouteKey route, Type observerType, ObserverFailureBehavior failureBehavior)
+        {
+            if (failureBehavior != ObserverFailureBehavior.Fail && failureBehavior != ObserverFailureBehavior.Continue)
+                throw new ArgumentOutOfRangeException(nameof(failureBehavior));
+            _consumeDecisionObservers.Add((Normalize(route), observerType, failureBehavior));
+        }
 
         /// <summary>
         /// Registers a consume execution interceptor for a route.
@@ -55,7 +67,10 @@ namespace Microsoft.Extensions.DependencyInjection
         /// <param name="route">The route key.</param>
         /// <returns>The matching observer types in registration order.</returns>
         public IReadOnlyCollection<Type> GetConsumeDecisionObservers(PigeonRouteKey route)
-            => GetInterceptors(_consumeDecisionObservers, Normalize(route));
+            => GetConsumeDecisionObserverRegistrations(route).Select(item => item.Type).ToArray();
+
+        internal IReadOnlyCollection<(Type Type, ObserverFailureBehavior Behavior)> GetConsumeDecisionObserverRegistrations(PigeonRouteKey route)
+            => _consumeDecisionObservers.Where(item => item.Route == Normalize(route)).Select(item => (item.Type, item.Behavior)).ToArray();
 
         /// <summary>
         /// Gets consume execution interceptor types registered for the route.

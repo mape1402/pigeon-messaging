@@ -146,6 +146,10 @@
                     null,
                     cancellationToken.CanBeCanceled ? cancellationToken : _backgroundCancellationToken);
             }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
             catch (ConsumeObserverRetryException)
             {
                 throw;
@@ -265,6 +269,11 @@
                     await CompleteMessageAsync(e, cancellationToken);
 
                 _diagnostics.RecordHandlerCompleted();
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                _diagnostics.RecordHandlerFailed();
+                throw;
             }
             catch (ConsumeObserverRetryException)
             {

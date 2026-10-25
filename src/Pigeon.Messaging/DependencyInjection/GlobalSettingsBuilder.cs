@@ -284,12 +284,28 @@
 
         internal PigeonRouteInterceptorRegistry RouteInterceptorRegistry => _routeInterceptorRegistry;
 
-        internal GlobalSettingsBuilder AddRouteConsumeDecisionObserver<TObserver>(PigeonRouteKey route)
+        internal GlobalSettingsBuilder AddGlobalConsumeDecisionObserver<TObserver>(ObserverFailureBehavior behavior)
             where TObserver : class, IConsumeDecisionObserver
         {
+            ValidateObserverFailureBehavior(behavior);
             _services.AddScoped<TObserver>();
-            _routeInterceptorRegistry.AddConsumeDecisionObserver(route, typeof(TObserver));
+            _services.AddScoped<IConsumeDecisionObserver>(provider => new ConfiguredConsumeDecisionObserver(provider, typeof(TObserver), behavior));
             return this;
+        }
+
+        internal GlobalSettingsBuilder AddRouteConsumeDecisionObserver<TObserver>(PigeonRouteKey route, ObserverFailureBehavior behavior)
+            where TObserver : class, IConsumeDecisionObserver
+        {
+            ValidateObserverFailureBehavior(behavior);
+            _services.AddScoped<TObserver>();
+            _routeInterceptorRegistry.AddConsumeDecisionObserver(route, typeof(TObserver), behavior);
+            return this;
+        }
+
+        private static void ValidateObserverFailureBehavior(ObserverFailureBehavior behavior)
+        {
+            if (behavior != ObserverFailureBehavior.Fail && behavior != ObserverFailureBehavior.Continue)
+                throw new ArgumentOutOfRangeException(nameof(behavior));
         }
 
         internal GlobalSettingsBuilder AddRouteConsumeDecisionInterceptor<TInterceptor>(PigeonRouteKey route)

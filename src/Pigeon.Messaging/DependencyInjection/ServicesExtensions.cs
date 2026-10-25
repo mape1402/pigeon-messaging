@@ -134,6 +134,18 @@
             return builder;
         }
 
+        /// <summary>Registers a global observer with its failure policy.</summary>
+        /// <typeparam name="TObserver">The observer type.</typeparam>
+        /// <param name="builder">The Pigeon service builder.</param>
+        /// <param name="failureBehavior">How an observer failure affects processing.</param>
+        /// <returns>The same builder for chaining.</returns>
+        public static IPigeonServiceBuilder AddConsumeDecisionObserver<TObserver>(this IPigeonServiceBuilder builder, ObserverFailureBehavior failureBehavior)
+            where TObserver : class, IConsumeDecisionObserver
+        {
+            builder.GlobalSettingsBuilder.AddGlobalConsumeDecisionObserver<TObserver>(failureBehavior);
+            return builder;
+        }
+
         /// <summary>
         /// Registers a global consume execution interceptor.
         /// </summary>

@@ -34,8 +34,16 @@ namespace Microsoft.Extensions.DependencyInjection
         /// <returns>The same route builder for chaining.</returns>
         public PigeonConsumerRouteBuilder AddConsumeDecisionObserver<TObserver>()
             where TObserver : class, IConsumeDecisionObserver
+            => AddConsumeDecisionObserver<TObserver>(ObserverFailureBehavior.Fail);
+
+        /// <summary>Registers a route observer with its failure policy.</summary>
+        /// <typeparam name="TObserver">The observer type.</typeparam>
+        /// <param name="failureBehavior">How an observer failure affects processing.</param>
+        /// <returns>The same route builder for chaining.</returns>
+        public PigeonConsumerRouteBuilder AddConsumeDecisionObserver<TObserver>(ObserverFailureBehavior failureBehavior)
+            where TObserver : class, IConsumeDecisionObserver
         {
-            _builder.AddRouteConsumeDecisionObserver<TObserver>(_route);
+            _builder.AddRouteConsumeDecisionObserver<TObserver>(_route, failureBehavior);
             return this;
         }
 

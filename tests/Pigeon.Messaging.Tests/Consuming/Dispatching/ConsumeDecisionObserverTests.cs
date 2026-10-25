@@ -68,6 +68,58 @@ namespace Pigeon.Messaging.Tests.Consuming.Dispatching
             Assert.Equal(new[] { "handler" }, events);
         }
 
+        [Theory]
+        [InlineData(PigeonConsumeDecision.AckAndSkip, "complete")]
+        [InlineData(PigeonConsumeDecision.Reject, "reject")]
+        [InlineData(PigeonConsumeDecision.Retry, "retry")]
+        [InlineData(PigeonConsumeDecision.Defer, "complete")]
+        public async Task OptionalObserverFailures_ContinueInOrderAndApplyDecision(PigeonConsumeDecision decision, string settlement)
+        {
+            var events = new List<string>();
+            var services = CreateServices(events, new PigeonConsumeDecisionResult(decision));
+            services.AddScoped<RouteObserver>(_ => new RouteObserver(_ => { events.Add("optional"); throw new InvalidOperationException(); }));
+            services.AddScoped<IConsumeDecisionObserver>(provider => new ConfiguredConsumeDecisionObserver(provider, typeof(RouteObserver), ObserverFailureBehavior.Continue));
+            services.AddScoped<IConsumeDecisionObserver>(_ => Observer(_ => events.Add("next")));
+            var registry = new PigeonRouteInterceptorRegistry();
+            registry.AddConsumeDecisionObserver(Route, typeof(RouteObserver), ObserverFailureBehavior.Continue);
+            using var provider = services.BuildServiceProvider();
+
+            await Dispatch(provider, registry, events);
+
+            Assert.Equal(new[] { "optional", "next", "optional", settlement }, events);
+        }
+
+        [Fact]
+        public async Task SameObserverType_CanUseDifferentPoliciesPerRegistration()
+        {
+            var events = new List<string>();
+            var services = CreateServices(events, new PigeonConsumeDecisionResult(PigeonConsumeDecision.AckAndSkip));
+            services.AddScoped<RouteObserver>(_ => new RouteObserver(_ => { events.Add("observer"); throw new InvalidOperationException(); }));
+            services.AddScoped<IConsumeDecisionObserver>(provider => new ConfiguredConsumeDecisionObserver(provider, typeof(RouteObserver), ObserverFailureBehavior.Continue));
+            var registry = new PigeonRouteInterceptorRegistry();
+            registry.AddConsumeDecisionObserver(Route, typeof(RouteObserver), ObserverFailureBehavior.Fail);
+            using var provider = services.BuildServiceProvider();
+
+            await Dispatch(provider, registry, events);
+
+            Assert.Equal(new[] { "observer", "observer", "retry" }, events);
+        }
+
+        [Fact]
+        public async Task OptionalObserver_DoesNotSuppressOperationCancellation()
+        {
+            var services = new ServiceCollection();
+            services.AddScoped<RouteObserver>(_ => new RouteObserver(_ => throw new OperationCanceledException()));
+            services.AddScoped<IConsumeDecisionObserver>(provider => new ConfiguredConsumeDecisionObserver(provider, typeof(RouteObserver), ObserverFailureBehavior.Continue));
+            using var provider = services.BuildServiceProvider();
+            using var cancellation = new CancellationTokenSource();
+            cancellation.Cancel();
+            var context = new ConsumeContext { Services = provider, Topic = "orders", MessageVersion = SemanticVersion.Default, Subscription = "billing" };
+
+            await Assert.ThrowsAsync<OperationCanceledException>(() => ConsumeDecisionPipeline.ObserveAsync(context,
+                new PigeonConsumeDecisionResult(PigeonConsumeDecision.Reject), Route, null, cancellation.Token).AsTask());
+        }
+
         [Fact]
         public async Task Observers_AreScopedPerMessageAndAwaitedBeforeSettlement()
         {
@@ -223,6 +275,28 @@ namespace Pigeon.Messaging.Tests.Consuming.Dispatching
             });
 
             Assert.Equal(new[] { "global", "route" }, events);
+        }
+
+        [Fact]
+        public async Task Replay_ContinuesAfterOptionalObserverFailure()
+        {
+            var events = new List<string>();
+            var services = CreateServices(events, new PigeonConsumeDecisionResult(PigeonConsumeDecision.Defer));
+            services.AddScoped<RouteObserver>(_ => new RouteObserver(_ => throw new InvalidOperationException("optional")));
+            services.AddScoped<IConsumeDecisionObserver>(provider => new ConfiguredConsumeDecisionObserver(provider, typeof(RouteObserver), ObserverFailureBehavior.Continue));
+            services.AddScoped<IConsumeDecisionObserver>(_ => Observer(_ => events.Add("next")));
+            using var provider = services.BuildServiceProvider();
+            var registry = new PigeonRouteInterceptorRegistry();
+            var invoker = new PigeonConsumerInvoker(provider, new PigeonConsumeEnvelopeFactory(provider.GetRequiredService<ISerializer>()),
+                registry, new ConsumeHandlerPipeline(registry));
+
+            await invoker.InvokeAsync(new PigeonConsumeEnvelope
+            {
+                Topic = "orders", Version = SemanticVersion.Default, Subscription = "billing",
+                Payload = System.Text.Encoding.UTF8.GetBytes("{}")
+            });
+
+            Assert.Equal(new[] { "next" }, events);
         }
 
         [Theory]
