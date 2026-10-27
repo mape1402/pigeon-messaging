@@ -54,25 +54,34 @@ namespace Pigeon.Messaging.Azure.EventGrid
     /// </summary>
     internal class EventGridProvider : IEventGridProvider
     {
-        private readonly ServiceBusClient _client;
+        private readonly AzureEventGridClientFactory _clientFactory;
         private readonly GlobalSettings _globalSettings;
         private readonly AzureEventGridSettings _settings;
         private readonly ConcurrentDictionary<string, IEventGridPublisher> _publisherClients = new();
+        private ServiceBusClient _serviceBusClient;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="EventGridProvider"/> class.
         /// </summary>
         /// <param name="options">The Azure Event Grid settings options.</param>
-        public EventGridProvider(IOptions<AzureEventGridSettings> options)
-            : this(options, Options.Create(new GlobalSettings()))
+        internal EventGridProvider(IOptions<AzureEventGridSettings> options)
+            : this(new AzureEventGridClientFactory(options), options, Options.Create(new GlobalSettings()))
         {
         }
 
-        public EventGridProvider(IOptions<AzureEventGridSettings> options, IOptions<GlobalSettings> globalSettings)
+        internal EventGridProvider(IOptions<AzureEventGridSettings> options, IOptions<GlobalSettings> globalSettings)
+            : this(new AzureEventGridClientFactory(options), options, globalSettings)
+        {
+        }
+
+        public EventGridProvider(
+            AzureEventGridClientFactory clientFactory,
+            IOptions<AzureEventGridSettings> options,
+            IOptions<GlobalSettings> globalSettings)
         {
             _settings = options?.Value ?? throw new ArgumentNullException(nameof(options));
             _globalSettings = globalSettings?.Value ?? throw new ArgumentNullException(nameof(globalSettings));
-            _client = new ServiceBusClient(options.Value.ServiceBusEndPoint);
+            _clientFactory = clientFactory ?? throw new ArgumentNullException(nameof(clientFactory));
         }
 
         /// <inheritdoc />
@@ -92,18 +101,21 @@ namespace Pigeon.Messaging.Azure.EventGrid
                 if (!_settings.Endpoints.TryGetValue(routingKey, out var endpoint))
                     throw new InvalidOperationException($"Event Grid topic '{topic}' is not configured in the settings. Please ensure the topic is defined in the Endpoints configuration.");
 
-                var client = new EventGridPublisherClient(new Uri(endpoint.Url), new AzureKeyCredential(endpoint.AccessKey));
+                var client = _clientFactory.CreatePublisher(endpoint);
                 return new EventGridPublisher(_settings, topic, client);
             });
         }
 
         /// <inheritdoc />
         public ServiceBusProcessor CreateProcessor(string topic)
-            => _client.CreateProcessor(topic, CreateProcessorOptions());
+            => GetServiceBusClient().CreateProcessor(topic, CreateProcessorOptions());
 
         /// <inheritdoc />
         public ServiceBusProcessor CreateProcessor(string topic, string subscription)
-            => _client.CreateProcessor(topic, subscription, CreateProcessorOptions());
+            => GetServiceBusClient().CreateProcessor(topic, subscription, CreateProcessorOptions());
+
+        private ServiceBusClient GetServiceBusClient()
+            => _serviceBusClient ??= _clientFactory.CreateServiceBusClient();
 
         private ServiceBusProcessorOptions CreateProcessorOptions()
         {

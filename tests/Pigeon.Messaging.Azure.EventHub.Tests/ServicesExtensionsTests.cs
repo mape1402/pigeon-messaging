@@ -12,7 +12,7 @@ namespace Pigeon.Messaging.Azure.EventHub.Tests.DependencyInjection
     public class ServicesExtensionsTests
     {
         [Fact]
-        public void UseAzureEventHub_Should_Register_Default_Adapters_And_Provider()
+        public void UseAzureEventHub_Should_Register_Adapters_And_Provider()
         {
             // Arrange
             var services = new ServiceCollection();
@@ -23,7 +23,8 @@ namespace Pigeon.Messaging.Azure.EventHub.Tests.DependencyInjection
             var globalSettingsBuilder = new GlobalSettingsBuilder(services, mockConfiguration, mockConsumingConfigurator, messagingSettings);
 
             // Act
-            globalSettingsBuilder.UseAzureEventHub();
+            globalSettingsBuilder.UseAzureEventHub(options =>
+                options.ConnectionString = "Endpoint=sb://test.servicebus.windows.net/;SharedAccessKeyName=Root;SharedAccessKey=test");
 
             // Assert
             Assert.Contains(services, d => d.ServiceType == typeof(IEventHubProvider) && d.ImplementationType == typeof(EventHubProvider));

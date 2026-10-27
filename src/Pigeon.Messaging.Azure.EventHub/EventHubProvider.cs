@@ -52,33 +52,41 @@ namespace Pigeon.Messaging.Azure.EventHub
     internal class EventHubProvider : IEventHubProvider
     {
         private readonly AzureEventHubSettings _settings;
+        private readonly AzureEventHubClientFactory _clientFactory;
         private readonly ConcurrentDictionary<string, EventHubProducerClient> _producers = new();
 
         /// <summary>
         /// Initializes a new instance of the <see cref="EventHubProvider"/> class.
         /// </summary>
         /// <param name="options">The Azure Event Hub settings options.</param>
-        public EventHubProvider(IOptions<AzureEventHubSettings> options)
+        internal EventHubProvider(IOptions<AzureEventHubSettings> options)
         {
             _settings = options?.Value ?? throw new ArgumentNullException(nameof(options));
+            _clientFactory = new AzureEventHubClientFactory(options);
+        }
+
+        public EventHubProvider(AzureEventHubClientFactory clientFactory, IOptions<AzureEventHubSettings> options)
+        {
+            _settings = options?.Value ?? throw new ArgumentNullException(nameof(options));
+            _clientFactory = clientFactory ?? throw new ArgumentNullException(nameof(clientFactory));
         }
 
         /// <inheritdoc />
         public EventHubProducerClient GetProducer(string hubName)
         {
-            return _producers.GetOrAdd(hubName, name => new EventHubProducerClient(_settings.ConnectionString, name));
+            return _producers.GetOrAdd(hubName, _clientFactory.CreateProducer);
         }
 
         /// <inheritdoc />
         public IEventHubProcessor CreateProcessor(string hubName)
         {
-            return new EventHubProcessor(_settings, hubName);
+            return new EventHubProcessor(_settings, _clientFactory, hubName, _settings.ConsumerGroup);
         }
 
         /// <inheritdoc />
         public IEventHubProcessor CreateProcessor(string hubName, string consumerGroup)
         {
-            return new EventHubProcessor(_settings, hubName, consumerGroup);
+            return new EventHubProcessor(_settings, _clientFactory, hubName, consumerGroup);
         }
     }
 
@@ -90,11 +98,12 @@ namespace Pigeon.Messaging.Azure.EventHub
         private readonly AzureEventHubSettings _settings;
         private readonly string _hubName;
         private readonly string _consumerGroup;
+        private readonly AzureEventHubClientFactory _clientFactory;
         private EventHubConsumerClient _consumerClient;
         private readonly CancellationTokenSource _cancellationTokenSource;
 
         public EventHubProcessor(AzureEventHubSettings settings, string hubName)
-            : this(settings, hubName, settings.ConsumerGroup)
+            : this(settings, hubName, settings?.ConsumerGroup)
         {
         }
 
@@ -103,13 +112,27 @@ namespace Pigeon.Messaging.Azure.EventHub
             _settings = settings ?? throw new ArgumentNullException(nameof(settings));
             _hubName = hubName ?? throw new ArgumentNullException(nameof(hubName));
             _consumerGroup = string.IsNullOrWhiteSpace(consumerGroup) ? settings.ConsumerGroup : consumerGroup;
+            _clientFactory = new AzureEventHubClientFactory(Options.Create(settings));
+            _cancellationTokenSource = new CancellationTokenSource();
+        }
+
+        internal EventHubProcessor(AzureEventHubSettings settings, AzureEventHubClientFactory clientFactory, string hubName, string consumerGroup)
+        {
+            _settings = settings ?? throw new ArgumentNullException(nameof(settings));
+            _clientFactory = clientFactory ?? throw new ArgumentNullException(nameof(clientFactory));
+            _hubName = hubName ?? throw new ArgumentNullException(nameof(hubName));
+            _consumerGroup = string.IsNullOrWhiteSpace(consumerGroup) ? settings.ConsumerGroup : consumerGroup;
             _cancellationTokenSource = new CancellationTokenSource();
         }
 
         internal EventHubProcessor(AzureEventHubSettings settings, string hubName, string consumerGroup, EventHubConsumerClient consumerClient)
-            : this(settings, hubName, consumerGroup)
         {
+            _settings = settings ?? throw new ArgumentNullException(nameof(settings));
+            _hubName = hubName ?? throw new ArgumentNullException(nameof(hubName));
+            _consumerGroup = string.IsNullOrWhiteSpace(consumerGroup) ? settings.ConsumerGroup : consumerGroup;
+            _clientFactory = null;
             _consumerClient = consumerClient ?? throw new ArgumentNullException(nameof(consumerClient));
+            _cancellationTokenSource = new CancellationTokenSource();
         }
 
         public async IAsyncEnumerable<PartitionEvent> ReadEventsAsync([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
@@ -117,7 +140,7 @@ namespace Pigeon.Messaging.Azure.EventHub
             // Initialize consumer client if not already done
             if (_consumerClient == null)
             {
-                _consumerClient = new EventHubConsumerClient(_consumerGroup, _settings.ConnectionString, _hubName);
+                _consumerClient = _clientFactory.CreateConsumer(_consumerGroup, _hubName);
             }
 
             var linkedToken = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _cancellationTokenSource.Token).Token;

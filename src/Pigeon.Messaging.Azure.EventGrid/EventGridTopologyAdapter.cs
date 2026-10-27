@@ -10,17 +10,23 @@ namespace Pigeon.Messaging.Azure.EventGrid
 
     internal class EventGridTopologyAdapter : IMessageBrokerTopologyAdapter
     {
-        private readonly AzureEventGridSettings _settings;
-        private readonly Func<string, ServiceBusAdministrationClient> _createAdminClient;
+        private readonly AzureEventGridClientFactory _clientFactory;
+        private readonly Func<ServiceBusAdministrationClient> _createAdminClient;
 
-        public EventGridTopologyAdapter(IOptions<AzureEventGridSettings> options)
-            : this(options, connectionString => new ServiceBusAdministrationClient(connectionString))
+        internal EventGridTopologyAdapter(IOptions<AzureEventGridSettings> options)
+            : this(new AzureEventGridClientFactory(options))
         {
         }
 
-        internal EventGridTopologyAdapter(IOptions<AzureEventGridSettings> options, Func<string, ServiceBusAdministrationClient> createAdminClient)
+        public EventGridTopologyAdapter(AzureEventGridClientFactory clientFactory)
         {
-            _settings = options?.Value ?? throw new ArgumentNullException(nameof(options));
+            _clientFactory = clientFactory ?? throw new ArgumentNullException(nameof(clientFactory));
+            _createAdminClient = _clientFactory.CreateServiceBusAdministrationClient;
+        }
+
+        internal EventGridTopologyAdapter(AzureEventGridClientFactory clientFactory, Func<ServiceBusAdministrationClient> createAdminClient)
+        {
+            _clientFactory = clientFactory ?? throw new ArgumentNullException(nameof(clientFactory));
             _createAdminClient = createAdminClient ?? throw new ArgumentNullException(nameof(createAdminClient));
         }
 
@@ -31,10 +37,10 @@ namespace Pigeon.Messaging.Azure.EventGrid
 
         public async Task EnsureConsumeTopologyAsync(ConsumerEndpoint endpoint, CancellationToken cancellationToken = default)
         {
-            if (string.IsNullOrWhiteSpace(_settings.ServiceBusEndPoint))
+            if (!_clientFactory.HasServiceBusTransport)
                 return;
 
-            var adminClient = _createAdminClient(_settings.ServiceBusEndPoint);
+            var adminClient = _createAdminClient();
 
             await IgnoreAlreadyExistsAsync(() => adminClient.CreateTopicAsync(endpoint.Topic, cancellationToken));
 

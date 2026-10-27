@@ -25,6 +25,7 @@ namespace Microsoft.Extensions.DependencyInjection
         {
             builder.AddFeature(ftBuilder =>
             {
+                ftBuilder.Services.AddSingleton<AzureEventGridClientFactory>();
                 ftBuilder.Services.AddSingleton<IEventGridProvider, EventGridProvider>();
                 ftBuilder.Services.AddSingleton<IMessageBrokerProducingAdapter, EventGridProducingAdapter>();
                 ftBuilder.Services.AddSingleton<IMessageBrokerConsumingAdapter, EventGridConsumingAdapter>();
@@ -34,6 +35,8 @@ namespace Microsoft.Extensions.DependencyInjection
                     settings = new AzureEventGridSettings();
 
                 config(settings);
+
+                AzureEventGridSettingsValidator.Validate(settings);
 
                 ftBuilder.Services.AddSingleton(Options.Create(settings));
             });
