@@ -12,12 +12,14 @@ namespace Pigeon.Messaging.Azure.ServiceBus
     {
         private readonly ServiceBusAdministrationClient _adminClient;
 
-        public ServiceBusTopologyAdapter(IOptions<AzureServiceBusSettings> options)
+        internal ServiceBusTopologyAdapter(IOptions<AzureServiceBusSettings> options)
+            : this(new AzureServiceBusClientFactory(options))
         {
-            if (options?.Value == null)
-                throw new ArgumentNullException(nameof(options));
+        }
 
-            _adminClient = new ServiceBusAdministrationClient(options.Value.ConnectionString);
+        public ServiceBusTopologyAdapter(AzureServiceBusClientFactory clientFactory)
+        {
+            _adminClient = (clientFactory ?? throw new ArgumentNullException(nameof(clientFactory))).CreateAdministrationClient();
         }
 
         internal ServiceBusTopologyAdapter(ServiceBusAdministrationClient adminClient)

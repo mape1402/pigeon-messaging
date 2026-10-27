@@ -1,5 +1,7 @@
 namespace Pigeon.Messaging.Azure.EventGrid
 {
+    using global::Azure.Core;
+
     /// <summary>
     /// Represents the configuration settings required to connect to Azure Event Grid.
     /// </summary>
@@ -24,6 +26,16 @@ namespace Pigeon.Messaging.Azure.EventGrid
         public string ServiceBusEndPoint { get; set; }
 
         /// <summary>
+        /// Gets or sets the fully qualified Service Bus namespace used by Event Grid consumers.
+        /// </summary>
+        public string ServiceBusFullyQualifiedNamespace { get; set; }
+
+        /// <summary>
+        /// Gets or sets the programmatically supplied credential used by Event Grid consumers.
+        /// </summary>
+        public TokenCredential ServiceBusCredential { get; set; }
+
+        /// <summary>
         /// Gets or sets the default endpoint used for connecting to the service.
         /// </summary>
         public string DefaultEndpoint { get; set; }
@@ -46,5 +58,10 @@ namespace Pigeon.Messaging.Azure.EventGrid
         /// Gets or sets the access key for Event Grid authentication.
         /// </summary>
         public string AccessKey { get; set; }
+
+        /// <summary>
+        /// Gets or sets the programmatically supplied Microsoft Entra credential for this Event Grid endpoint.
+        /// </summary>
+        public TokenCredential Credential { get; set; }
     }
 }

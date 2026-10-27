@@ -14,7 +14,7 @@ namespace Pigeon.Messaging.Azure.EventGrid.Tests
             var provider = new EventGridProvider(Options.Create(settings));
             await using var processor = provider.CreateProcessor("orders", "billing");
             Assert.Contains("billing", processor.EntityPath);
-            var client = (ServiceBusClient)typeof(EventGridProvider).GetField("_client", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(provider);
+            var client = (ServiceBusClient)typeof(EventGridProvider).GetField("_serviceBusClient", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(provider);
             await client.DisposeAsync();
         }
 

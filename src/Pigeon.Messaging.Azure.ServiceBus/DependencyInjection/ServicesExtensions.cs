@@ -24,6 +24,7 @@
         {
             builder.AddFeature(ftBuilder =>
             {
+                ftBuilder.Services.AddSingleton<AzureServiceBusClientFactory>();
                 ftBuilder.Services.AddSingleton<IServiceBusProvider, ServiceBusProvider>();
                 ftBuilder.Services.AddSingleton<IMessageBrokerProducingAdapter, ServiceBusProducingAdapter>();
                 ftBuilder.Services.AddSingleton<IMessageBrokerConsumingAdapter, ServiceBusConsumingAdapter>();
@@ -33,6 +34,8 @@
                     settings = new AzureServiceBusSettings();
 
                 config(settings);
+
+                AzureServiceBusSettingsValidator.Validate(settings);
 
                 ftBuilder.Services.AddSingleton(Options.Options.Create(settings));
             });

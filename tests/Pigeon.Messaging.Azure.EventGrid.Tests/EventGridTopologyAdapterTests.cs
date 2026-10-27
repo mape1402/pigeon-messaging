@@ -11,20 +11,20 @@ namespace Pigeon.Messaging.Azure.EventGrid.Tests
     public class EventGridTopologyAdapterTests
     {
         [Fact]
-        public void Constructor_RequiresOptions()
-            => Assert.Throws<ArgumentNullException>(() => new EventGridTopologyAdapter(null));
+        public void Constructor_RequiresClientFactory()
+            => Assert.Throws<ArgumentNullException>(() => new EventGridTopologyAdapter((AzureEventGridClientFactory)null));
 
         [Fact]
-        public void Constructor_RequiresClientFactory()
-            => Assert.Throws<ArgumentNullException>(() => new EventGridTopologyAdapter(Options.Create(new AzureEventGridSettings()), null));
+        public void Constructor_RequiresAdministrationClientFactory()
+            => Assert.Throws<ArgumentNullException>(() => new EventGridTopologyAdapter(CreateFactory(), null));
 
         [Fact]
         public void BrokerName_IdentifiesEventGrid()
-            => Assert.Equal("AzureEventGrid", new EventGridTopologyAdapter(Options.Create(new AzureEventGridSettings())).BrokerName);
+            => Assert.Equal("AzureEventGrid", new EventGridTopologyAdapter(CreateFactory()).BrokerName);
 
         [Fact]
         public async Task EnsurePublishTopology_CompletesWithoutProvisioning()
-            => await new EventGridTopologyAdapter(Options.Create(new AzureEventGridSettings()))
+            => await new EventGridTopologyAdapter(CreateFactory())
                 .EnsurePublishTopologyAsync(PublishingRoute.ForTopic("orders"));
 
         [Theory]
@@ -33,8 +33,8 @@ namespace Pigeon.Messaging.Azure.EventGrid.Tests
         [InlineData(" ")]
         public async Task EnsureConsumeTopology_WithoutEndpointDoesNotCreateClient(string connection)
         {
-            var adapter = new EventGridTopologyAdapter(Options.Create(new AzureEventGridSettings { ServiceBusEndPoint = connection }),
-                _ => throw new InvalidOperationException());
+            var adapter = new EventGridTopologyAdapter(CreateFactory(new AzureEventGridSettings { ServiceBusEndPoint = connection }),
+                () => throw new InvalidOperationException());
             await adapter.EnsureConsumeTopologyAsync(new ConsumerEndpoint("orders"));
         }
 
@@ -83,6 +83,9 @@ namespace Pigeon.Messaging.Azure.EventGrid.Tests
         }
 
         private static EventGridTopologyAdapter CreateAdapter(ServiceBusAdministrationClient client)
-            => new(Options.Create(new AzureEventGridSettings { ServiceBusEndPoint = "connection" }), _ => client);
+            => new(CreateFactory(new AzureEventGridSettings { ServiceBusEndPoint = "connection" }), () => client);
+
+        private static AzureEventGridClientFactory CreateFactory(AzureEventGridSettings settings = null)
+            => new(Options.Create(settings ?? new AzureEventGridSettings()));
     }
 }

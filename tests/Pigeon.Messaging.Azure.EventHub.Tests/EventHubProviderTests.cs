@@ -10,7 +10,10 @@ namespace Pigeon.Messaging.Azure.EventHub.Tests
         [Fact]
         public async Task CreateProcessor_UsesExplicitConsumerGroup()
         {
-            var provider = new EventHubProvider(Options.Create(new AzureEventHubSettings()));
+            var provider = new EventHubProvider(Options.Create(new AzureEventHubSettings
+            {
+                ConnectionString = "Endpoint=sb://test.servicebus.windows.net/;SharedAccessKeyName=Root;SharedAccessKey=test"
+            }));
             var processor = provider.CreateProcessor("orders", "billing");
             var group = processor.GetType().GetField("_consumerGroup", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(processor);
             Assert.Equal("billing", group);

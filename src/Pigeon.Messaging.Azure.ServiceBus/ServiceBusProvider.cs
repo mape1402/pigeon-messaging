@@ -18,14 +18,19 @@
         /// Initializes a new instance of the <see cref="ServiceBusProvider"/> class.
         /// </summary>
         /// <param name="options">The Azure Service Bus settings options.</param>
-        public ServiceBusProvider(IOptions<AzureServiceBusSettings> options)
-            : this(options, Options.Create(new GlobalSettings()))
+        internal ServiceBusProvider(IOptions<AzureServiceBusSettings> options)
+            : this(new AzureServiceBusClientFactory(options), Options.Create(new GlobalSettings()))
         {
         }
 
-        public ServiceBusProvider(IOptions<AzureServiceBusSettings> options, IOptions<GlobalSettings> globalSettings)
+        internal ServiceBusProvider(IOptions<AzureServiceBusSettings> options, IOptions<GlobalSettings> globalSettings)
+            : this(new AzureServiceBusClientFactory(options), globalSettings)
         {
-            _client = new ServiceBusClient(options.Value.ConnectionString);
+        }
+
+        public ServiceBusProvider(AzureServiceBusClientFactory clientFactory, IOptions<GlobalSettings> globalSettings)
+        {
+            _client = (clientFactory ?? throw new ArgumentNullException(nameof(clientFactory))).CreateMessagingClient();
             _globalSettings = globalSettings?.Value ?? throw new ArgumentNullException(nameof(globalSettings));
         }
         

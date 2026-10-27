@@ -25,6 +25,7 @@ namespace Microsoft.Extensions.DependencyInjection
         {
             builder.AddFeature(ftBuilder =>
             {
+                ftBuilder.Services.AddSingleton<AzureEventHubClientFactory>();
                 ftBuilder.Services.AddSingleton<IEventHubProvider, EventHubProvider>();
                 ftBuilder.Services.AddSingleton<IMessageBrokerProducingAdapter, EventHubProducingAdapter>();
                 ftBuilder.Services.AddSingleton<IMessageBrokerConsumingAdapter, EventHubConsumingAdapter>();
@@ -34,6 +35,8 @@ namespace Microsoft.Extensions.DependencyInjection
                     settings = new AzureEventHubSettings();
 
                 config(settings);
+
+                AzureEventHubSettingsValidator.Validate(settings);
 
                 ftBuilder.Services.AddSingleton(Options.Create(settings));
             });
