@@ -21,7 +21,7 @@ namespace Pigeon.Messaging.Azure.EventGrid
         public Dictionary<string, Endpoint> Endpoints { get; set; }
 
         /// <summary>
-        /// Gets or sets the endpoint URI for the Service Bus.
+        /// Gets or sets the Service Bus connection string used by Event Grid consumers.
         /// </summary>
         public string ServiceBusEndPoint { get; set; }
 

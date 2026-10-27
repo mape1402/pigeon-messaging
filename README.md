@@ -35,6 +35,7 @@ Its goal is to simplify publishing and consuming messages through a unified, dec
 - **In-memory broker** for unit tests, examples, and modular monolith scenarios.
 - **External inbox/outbox integration hooks** for durable systems such as SquirrelBox.
 - **Lightweight core package** with adapter packages for each broker.
+- **Native provider authentication** with Microsoft Entra credentials for Azure and programmatic TLS/OAuth hooks for RabbitMQ and Kafka.
 
 Pigeon is a good fit for microservices, distributed architectures, and applications that need reliable asynchronous communication without coupling domain code to a specific broker SDK.
 
@@ -82,6 +83,115 @@ dotnet add package SquirrelBox.EntityFrameworkCore
 dotnet add package SquirrelBox.Mule
 dotnet add package SquirrelBox.Messaging.Pigeon
 ```
+
+## Provider Authentication
+
+Pigeon validates each configured provider during registration. Configuration errors identify the invalid setting without writing connection strings, access keys, access tokens, or credentials to logs.
+
+### Azure Service Bus and Azure Event Hubs
+
+Both adapters support either the existing connection-string mode or Microsoft Entra authentication. The two modes are mutually exclusive.
+
+Connection strings remain fully supported:
+
+```csharp
+config.UseAzureServiceBus(serviceBus =>
+{
+    serviceBus.ConnectionString = connectionString;
+});
+```
+
+For Microsoft Entra authentication, install `Azure.Identity` in the host application. Pigeon deliberately does not create `DefaultAzureCredential`; the host supplies the credential it wants to use:
+
+```bash
+dotnet add package Azure.Identity
+```
+
+```csharp
+using Azure.Identity;
+
+var credential = new DefaultAzureCredential();
+
+builder.Services.AddPigeon(builder.Configuration, config =>
+{
+    config.UseAzureServiceBus(serviceBus =>
+    {
+        serviceBus.FullyQualifiedNamespace = "example.servicebus.windows.net";
+        serviceBus.Credential = credential;
+    });
+
+    config.UseAzureEventHub(eventHub =>
+    {
+        eventHub.FullyQualifiedNamespace = "example.servicebus.windows.net";
+        eventHub.Credential = credential;
+    });
+});
+```
+
+`FullyQualifiedNamespace` may come from `appsettings.json`; `Credential` must be set in code. In AKS, `DefaultAzureCredential` uses the configured Workload Identity without a Service Bus SAS secret. Grant the workload identity `Azure Service Bus Data Sender` and `Azure Service Bus Data Receiver`. When Pigeon provisions queues, topics, subscriptions, or rules, grant an administrative role such as `Azure Service Bus Data Owner`.
+
+The Service Bus credential selected here is used for publishing, consuming, settlement, dead-letter operations, and topology provisioning. Event Hubs uses the same configured mode for both producers and consumers.
+
+### Azure Event Grid
+
+Event Grid publishing supports an access key or a programmatic `TokenCredential` per endpoint. Its optional Service Bus consumer transport is configured independently, allowing different identities when needed:
+
+```csharp
+using Azure.Identity;
+
+var credential = new DefaultAzureCredential();
+
+config.UseAzureEventGrid(eventGrid =>
+{
+    eventGrid.Endpoints = new Dictionary<string, Endpoint>
+    {
+        ["orders"] = new Endpoint
+        {
+            Url = "https://orders.eventgrid.azure.net/api/events",
+            Credential = credential
+        }
+    };
+
+    eventGrid.ServiceBusFullyQualifiedNamespace = "example.servicebus.windows.net";
+    eventGrid.ServiceBusCredential = credential;
+});
+```
+
+Use `AccessKey` instead of `Credential` for an existing Event Grid key-based endpoint. `ServiceBusEndPoint` remains the backward-compatible connection-string setting for Event Grid consumers; do not combine it with `ServiceBusFullyQualifiedNamespace` or `ServiceBusCredential`.
+
+### RabbitMQ and Kafka
+
+RabbitMQ continues to accept `Url`. `ConfigureConnectionFactory` is applied once before Pigeon opens the shared connection, so hosts can use native RabbitMQ.Client TLS, client-certificate, or OAuth configuration without placing credentials in a URI:
+
+```csharp
+config.UseRabbitMq(rabbit =>
+{
+    rabbit.Url = "amqps://rabbit.example/vhost";
+    rabbit.ConfigureConnectionFactory = factory =>
+    {
+        factory.Ssl.Enabled = true;
+    };
+});
+```
+
+Kafka retains SASL user/password configuration and adds native programmatic hooks. `ConfigureProducer`, `ConfigureConsumer`, and `OAuthBearerTokenRefreshHandler` are applied consistently to publisher, consumer, and topology clients:
+
+```csharp
+config.UseKafka(kafka =>
+{
+    kafka.BootstrapServers = "kafka.example:9093";
+    kafka.SecurityProtocol = SecurityProtocol.SaslSsl;
+    kafka.SaslMechanism = SaslMechanism.OAuthBearer;
+    kafka.ConfigureProducer = producer => producer.ClientId = "orders-publisher";
+    kafka.ConfigureConsumer = consumer => consumer.ClientId = "orders-consumer";
+    kafka.OAuthBearerTokenRefreshHandler = (client, _) =>
+    {
+        // Resolve a cached token and call client.OAuthBearerSetToken(...).
+    };
+});
+```
+
+The OAuth callback runs on the Kafka client path. Keep token acquisition cached and non-blocking, then use `OAuthBearerSetToken` or `OAuthBearerSetTokenFailure` to complete the callback.
 
 ## Quick Start
 
@@ -1174,7 +1284,7 @@ Use `IConsumeExecutionInterceptor` when the code must wrap the actual handler in
         "ConnectionString": "Endpoint=sb://test/;SharedAccessKeyName=Root;SharedAccessKey=abc"
       },
       "AzureEventGrid": {
-        "ServiceBusEndpoint": "",
+        "ServiceBusEndPoint": "",
         "Endpoints": {
           "Greeting": {
             "Url": "https://example.eventgrid.azure.net/api/events",
