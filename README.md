@@ -3,7 +3,7 @@
 [![Build](https://github.com/mape1402/pigeon-messaging/actions/workflows/build-and-release.yml/badge.svg)](https://github.com/mape1402/pigeon-messaging/actions/workflows/build-and-release.yml)
 [![NuGet](https://img.shields.io/nuget/v/Pigeon.Messaging.svg)](https://www.nuget.org/packages/Pigeon.Messaging/)
 [![Downloads](https://img.shields.io/nuget/dt/Pigeon.Messaging.svg)](https://www.nuget.org/packages/Pigeon.Messaging/)
-[![Coverage snapshot: lines 99.07%, branches 93.69%](https://img.shields.io/badge/coverage%20snapshot-lines%2099.07%25%20%7C%20branches%2093.69%25-2ea44f)](#test-pigeon-without-a-broker)
+[![Coverage snapshot: lines 99.07%, branches 93.12%](https://img.shields.io/badge/coverage%20snapshot-lines%2099.07%25%20%7C%20branches%2093.12%25-2ea44f)](#test-pigeon-without-a-broker)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 ![Pigeon messaging hero: messages routed to multiple consumers](assets/pigeon-hero.png)

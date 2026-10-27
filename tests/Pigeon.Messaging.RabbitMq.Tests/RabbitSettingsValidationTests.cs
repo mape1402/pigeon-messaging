@@ -6,6 +6,10 @@ using RabbitMQ.Client;
 public class RabbitSettingsValidationTests
 {
     [Fact]
+    public void Validate_RejectsNullSettings()
+        => Assert.Throws<ArgumentNullException>(() => RabbitSettingsValidator.Validate(null));
+
+    [Fact]
     public void Validate_AcceptsUrlMode()
         => RabbitSettingsValidator.Validate(new RabbitSettings { Url = "amqps://user:password@rabbit.example/vhost" });
 
