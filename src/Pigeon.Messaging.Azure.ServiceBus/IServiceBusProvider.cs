@@ -12,7 +12,7 @@
     public interface IServiceBusProvider
     {
         /// <summary>
-        /// Gets a Service Bus client for the specified connection string.
+        /// Gets a Service Bus client using the configured authentication mode.
         /// </summary>
         /// <returns>A Service Bus client.</returns>
         ServiceBusClient GetClient();

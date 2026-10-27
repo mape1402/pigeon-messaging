@@ -12,6 +12,19 @@ namespace Pigeon.Messaging.Azure.EventHub.Tests.DependencyInjection
     public class ServicesExtensionsTests
     {
         [Fact]
+        public void UseAzureEventHub_RejectsMissingAuthenticationAtRegistration()
+        {
+            var services = new ServiceCollection();
+            var builder = new GlobalSettingsBuilder(
+                services,
+                Substitute.For<Microsoft.Extensions.Configuration.IConfiguration>(),
+                Substitute.For<Pigeon.Messaging.Consuming.Configuration.IConsumingConfigurator>(),
+                new MessagingSettings { MessageBrokers = new() });
+
+            Assert.Throws<InvalidOperationException>(() => builder.UseAzureEventHub());
+        }
+
+        [Fact]
         public void UseAzureEventHub_Should_Register_Adapters_And_Provider()
         {
             // Arrange

@@ -15,6 +15,15 @@
     public class ServicesExtensionsTests
     {
         [Fact]
+        public void UseRabbitMq_RejectsMissingConnectionConfiguration()
+        {
+            var services = new ServiceCollection();
+            var globalSettingsBuilder = TestGlobalSettingsBuilder.Create(services);
+
+            Assert.Throws<InvalidOperationException>(() => globalSettingsBuilder.UseRabbitMq());
+        }
+
+        [Fact]
         public void UseRabbitMq_Should_Register_Adapters_And_ConnectionProvider()
         {
             // Arrange
