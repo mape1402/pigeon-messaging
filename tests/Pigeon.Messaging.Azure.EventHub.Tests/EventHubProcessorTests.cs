@@ -8,6 +8,35 @@ using System.Reflection;
 public class EventHubProcessorTests
 {
     [Fact]
+    public async Task Constructor_UsesConfiguredConsumerGroup()
+    {
+        await using var processor = new EventHubProcessor(
+            new AzureEventHubSettings
+            {
+                ConnectionString = "Endpoint=sb://test.servicebus.windows.net/;SharedAccessKeyName=Root;SharedAccessKey=test",
+                ConsumerGroup = "billing"
+            },
+            "orders");
+
+        Assert.NotNull(processor);
+    }
+
+    [Fact]
+    public async Task Constructor_UsesSettingsConsumerGroupWhenExplicitGroupIsBlank()
+    {
+        await using var processor = new EventHubProcessor(
+            new AzureEventHubSettings
+            {
+                ConnectionString = "Endpoint=sb://test.servicebus.windows.net/;SharedAccessKeyName=Root;SharedAccessKey=test",
+                ConsumerGroup = "billing"
+            },
+            "orders",
+            "");
+
+        Assert.NotNull(processor);
+    }
+
+    [Fact]
     public void Constructor_RequiresSettings()
         => Assert.Throws<ArgumentNullException>(() => new EventHubProcessor(null, "hub", "group"));
 

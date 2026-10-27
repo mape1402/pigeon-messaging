@@ -5,6 +5,10 @@ using Microsoft.Extensions.Options;
 public class AzureEventHubSettingsValidationTests
 {
     [Fact]
+    public void Validate_RejectsNullSettings()
+        => Assert.Throws<ArgumentNullException>(() => AzureEventHubSettingsValidator.Validate(null));
+
+    [Fact]
     public void Validate_AcceptsConnectionStringMode()
         => AzureEventHubSettingsValidator.Validate(new AzureEventHubSettings
         {

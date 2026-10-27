@@ -28,6 +28,31 @@ namespace Pigeon.Messaging.Azure.EventHub.Tests
         }
 
         [Fact]
+        public void Constructor_Should_Throw_ArgumentNullException_For_Null_ClientFactory()
+        {
+            var options = Options.Create(new AzureEventHubSettings
+            {
+                ConnectionString = "Endpoint=sb://test.servicebus.windows.net/;SharedAccessKeyName=Root;SharedAccessKey=test"
+            });
+
+            Assert.Throws<ArgumentNullException>(() => new EventHubProvider(null, options));
+        }
+
+        [Fact]
+        public void Constructor_UsesInjectedClientFactory()
+        {
+            var options = Options.Create(new AzureEventHubSettings
+            {
+                ConnectionString = "Endpoint=sb://test.servicebus.windows.net/;SharedAccessKeyName=Root;SharedAccessKey=test"
+            });
+            var factory = new AzureEventHubClientFactory(options);
+
+            var provider = new EventHubProvider(factory, options);
+
+            Assert.IsType<EventHubProducerClient>(provider.GetProducer("orders"));
+        }
+
+        [Fact]
         public void GetProducer_Should_Return_EventHubProducerClient()
         {
             // Arrange

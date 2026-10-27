@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ------
 
+## [v4.2.0] - 2026-10-27
+
+### Added
+
+- Microsoft Entra `TokenCredential` authentication for Azure Service Bus and Azure Event Hubs, including publishing, consuming, topology provisioning, settlement, and administrative operations.
+- Programmatic `TokenCredential` authentication for Azure Event Grid publishing and its optional Service Bus consumer transport.
+- RabbitMQ `ConfigureConnectionFactory` hook for native TLS, client-certificate, and OAuth configuration without embedding credentials in a URI.
+- Kafka producer, consumer, and administrative client configuration hooks, including OAuth bearer token refresh handling.
+
+### Changed
+
+- Provider configuration is validated during registration, rejecting ambiguous or incomplete authentication modes without logging connection strings, access keys, access tokens, or credentials.
+
+------
+
 ## [v4.1.0] - 2026-10-25
 
 ### Added

@@ -6,6 +6,10 @@ using Microsoft.Extensions.Options;
 public class KafkaAuthenticationSettingsTests
 {
     [Fact]
+    public void Validate_RejectsNullSettings()
+        => Assert.Throws<ArgumentNullException>(() => KafkaSettingsValidator.Validate(null));
+
+    [Fact]
     public void Validate_AcceptsBootstrapServers()
         => KafkaSettingsValidator.Validate(new KafkaSettings { BootstrapServers = "kafka.example:9092" });
 

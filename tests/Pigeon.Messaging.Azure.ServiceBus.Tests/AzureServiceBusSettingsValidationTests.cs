@@ -5,6 +5,10 @@ using Microsoft.Extensions.Options;
 public class AzureServiceBusSettingsValidationTests
 {
     [Fact]
+    public void Validate_RejectsNullSettings()
+        => Assert.Throws<ArgumentNullException>(() => AzureServiceBusSettingsValidator.Validate(null));
+
+    [Fact]
     public void Validate_AcceptsConnectionStringMode()
         => AzureServiceBusSettingsValidator.Validate(new AzureServiceBusSettings
         {
