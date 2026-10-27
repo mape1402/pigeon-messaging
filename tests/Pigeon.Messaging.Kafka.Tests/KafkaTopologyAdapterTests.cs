@@ -16,8 +16,8 @@ public class KafkaTopologyAdapterTests
     [Fact]
     public void Constructor_RejectsNullDependencies()
     {
-        Assert.Throws<ArgumentNullException>(() => new KafkaTopologyAdapter(null, _settings, _ => _admin));
-        Assert.Throws<ArgumentNullException>(() => new KafkaTopologyAdapter(_configuration, null, _ => _admin));
+        Assert.Throws<ArgumentNullException>(() => new KafkaTopologyAdapter(null, _settings, (_, _) => _admin));
+        Assert.Throws<ArgumentNullException>(() => new KafkaTopologyAdapter(_configuration, null, (_, _) => _admin));
         Assert.Throws<ArgumentNullException>(() => new KafkaTopologyAdapter(_configuration, _settings, null));
     }
 
@@ -59,5 +59,22 @@ public class KafkaTopologyAdapterTests
     [Fact]
     public void BrokerName_IsKafka() => Assert.Equal("Kafka", Adapter().BrokerName);
 
-    private KafkaTopologyAdapter Adapter() => new(_configuration, _settings, _ => _admin);
+    [Fact]
+    public async Task EnsureTopic_ForwardsOAuthRefreshHandlerToAdministrativeClient()
+    {
+        Action<IClient, string> handler = (_, _) => { };
+        _configuration.GetOAuthBearerTokenRefreshHandler().Returns(handler);
+        Action<IClient, string> observed = null;
+        var adapter = new KafkaTopologyAdapter(_configuration, _settings, (_, refreshHandler) =>
+        {
+            observed = refreshHandler;
+            return _admin;
+        });
+
+        await adapter.EnsurePublishTopologyAsync(PublishingRoute.ForTopic("orders"));
+
+        Assert.Same(handler, observed);
+    }
+
+    private KafkaTopologyAdapter Adapter() => new(_configuration, _settings, (_, _) => _admin);
 }

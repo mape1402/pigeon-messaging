@@ -11,14 +11,14 @@ namespace Pigeon.Messaging.Kafka
     {
         private readonly IConfigurationProvider _configurationProvider;
         private readonly KafkaSettings _settings;
-        private readonly Func<ProducerConfig, IAdminClient> _createAdminClient;
+        private readonly Func<ProducerConfig, Action<IClient, string>, IAdminClient> _createAdminClient;
 
         public KafkaTopologyAdapter(IConfigurationProvider configurationProvider, IOptions<KafkaSettings> settings)
-            : this(configurationProvider, settings, config => new AdminClientBuilder(config).Build())
+            : this(configurationProvider, settings, CreateAdminClient)
         {
         }
 
-        internal KafkaTopologyAdapter(IConfigurationProvider configurationProvider, IOptions<KafkaSettings> settings, Func<ProducerConfig, IAdminClient> createAdminClient)
+        internal KafkaTopologyAdapter(IConfigurationProvider configurationProvider, IOptions<KafkaSettings> settings, Func<ProducerConfig, Action<IClient, string>, IAdminClient> createAdminClient)
         {
             _configurationProvider = configurationProvider ?? throw new ArgumentNullException(nameof(configurationProvider));
             _settings = settings?.Value ?? throw new ArgumentNullException(nameof(settings));
@@ -35,7 +35,9 @@ namespace Pigeon.Messaging.Kafka
 
         private async Task EnsureTopicAsync(string topic)
         {
-            using var adminClient = _createAdminClient(_configurationProvider.GetProducerConfig());
+            using var adminClient = _createAdminClient(
+                _configurationProvider.GetProducerConfig(),
+                _configurationProvider.GetOAuthBearerTokenRefreshHandler());
 
             try
             {
@@ -53,5 +55,8 @@ namespace Pigeon.Messaging.Kafka
             {
             }
         }
+
+        private static IAdminClient CreateAdminClient(ProducerConfig config, Action<IClient, string> refreshHandler)
+            => KafkaClientBuilderAuthentication.Apply(new AdminClientBuilder(config), refreshHandler).Build();
     }
 }

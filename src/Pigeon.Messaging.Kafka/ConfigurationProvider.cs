@@ -30,7 +30,7 @@
 
         public ConsumerConfig GetConsumerConfig(string consumerGroup)
         {
-            return new ConsumerConfig
+            var config = new ConsumerConfig
             {
                 BootstrapServers = _kafkaSettings.BootstrapServers,
                 GroupId = string.IsNullOrWhiteSpace(consumerGroup) ? _globalSettings.Domain : consumerGroup,
@@ -41,12 +41,15 @@
                 Acks = _kafkaSettings.Acks,
                 EnableAutoCommit = _globalSettings.ConsumerExecution?.AcknowledgementMode == MessageAcknowledgementMode.OnReceive,
             };
+
+            _kafkaSettings.ConfigureConsumer?.Invoke(config);
+            return config;
         }
 
         /// <inheritdoc/>
         public ProducerConfig GetProducerConfig()
         {
-            return new ProducerConfig
+            var config = new ProducerConfig
             {
                 BootstrapServers = _kafkaSettings.BootstrapServers,
                 SaslUsername = _kafkaSettings.UserName,
@@ -55,6 +58,13 @@
                 SaslMechanism = _kafkaSettings.SaslMechanism,
                 Acks = _kafkaSettings.Acks
             };
+
+            _kafkaSettings.ConfigureProducer?.Invoke(config);
+            return config;
         }
+
+        /// <inheritdoc />
+        public Action<IClient, string> GetOAuthBearerTokenRefreshHandler()
+            => _kafkaSettings.OAuthBearerTokenRefreshHandler;
     }
 }

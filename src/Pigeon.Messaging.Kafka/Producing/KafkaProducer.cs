@@ -20,14 +20,15 @@
         public KafkaProducer(IConfigurationProvider configurationProvider, ISerializer serializer)
         {
             var config = configurationProvider.GetProducerConfig();
+            var refreshHandler = configurationProvider.GetOAuthBearerTokenRefreshHandler();
 
-            _producer = new ProducerBuilder<Null, WrappedPayload<T>>(config)
-                .SetValueSerializer(new JsonSerializer<WrappedPayload<T>>(serializer))
-                .Build();
+            var producerBuilder = new ProducerBuilder<Null, WrappedPayload<T>>(config)
+                .SetValueSerializer(new JsonSerializer<WrappedPayload<T>>(serializer));
+            _producer = KafkaClientBuilderAuthentication.Apply(producerBuilder, refreshHandler).Build();
 
-            _rawProducer = new ProducerBuilder<Null, T>(config)
-                .SetValueSerializer(new JsonSerializer<T>(serializer))
-                .Build();
+            var rawProducerBuilder = new ProducerBuilder<Null, T>(config)
+                .SetValueSerializer(new JsonSerializer<T>(serializer));
+            _rawProducer = KafkaClientBuilderAuthentication.Apply(rawProducerBuilder, refreshHandler).Build();
         }
 
         internal KafkaProducer(IProducer<Null, WrappedPayload<T>> producer, IProducer<Null, T> rawProducer)

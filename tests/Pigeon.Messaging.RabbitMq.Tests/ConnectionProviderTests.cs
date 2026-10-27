@@ -106,6 +106,24 @@
 
             // Assert: Nothing to assert because connection is null, no exception should occur
         }
+
+        [Fact]
+        public async Task Should_ApplyProgrammaticFactoryConfigurationOnce()
+        {
+            var configurations = 0;
+            _connection.IsOpen.Returns(false);
+            _options.Value.Returns(new RabbitSettings
+            {
+                Url = "amqp://guest:guest@localhost:5672",
+                ConfigureConnectionFactory = _ => configurations++
+            });
+            var sut = new ConnectionProvider(_factory, _options);
+
+            await sut.CreateConnectionAsync();
+            await sut.CreateConnectionAsync();
+
+            Assert.Equal(1, configurations);
+        }
     }
 
 }

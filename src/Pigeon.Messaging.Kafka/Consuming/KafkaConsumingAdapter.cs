@@ -165,9 +165,11 @@
                 ? _configurationProvider.GetConsumerConfig()
                 : _configurationProvider.GetConsumerConfig(endpoint.Subscription);
             var tracker = new KafkaSettlementTracker();
-            var consumer = new ConsumerBuilder<Ignore, string>(config)
+            var consumerBuilder = new ConsumerBuilder<Ignore, string>(config)
                 .SetPartitionsRevokedHandler((_, partitions) => tracker.Release(partitions.Select(p => p.TopicPartition)))
-                .SetPartitionsLostHandler((_, partitions) => tracker.Release(partitions.Select(p => p.TopicPartition)))
+                .SetPartitionsLostHandler((_, partitions) => tracker.Release(partitions.Select(p => p.TopicPartition)));
+            var consumer = KafkaClientBuilderAuthentication
+                .Apply(consumerBuilder, _configurationProvider.GetOAuthBearerTokenRefreshHandler())
                 .Build();
 
             if (!_consumers.TryAdd(endpoint.Key, consumer))

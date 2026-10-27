@@ -23,6 +23,24 @@
         public string Password { get; set; }
 
         /// <summary>
+        /// Gets or sets a programmatic callback used to refresh OAuth bearer tokens.
+        /// </summary>
+        /// <remarks>
+        /// Configure this when using <see cref="SaslMechanism.OAuthBearer"/> and a host-managed token source.
+        /// </remarks>
+        public Action<IClient, string> OAuthBearerTokenRefreshHandler { get; set; }
+
+        /// <summary>
+        /// Gets or sets programmatic producer configuration applied after Pigeon maps its settings.
+        /// </summary>
+        public Action<ProducerConfig> ConfigureProducer { get; set; }
+
+        /// <summary>
+        /// Gets or sets programmatic consumer configuration applied after Pigeon maps its settings.
+        /// </summary>
+        public Action<ConsumerConfig> ConfigureConsumer { get; set; }
+
+        /// <summary>
         /// Gets or sets the security protocol used for Kafka connections. Default is <see cref="SecurityProtocol.SaslSsl"/>.
         /// </summary>
         public SecurityProtocol SecurityProtocol { get; set; } = SecurityProtocol.SaslSsl;

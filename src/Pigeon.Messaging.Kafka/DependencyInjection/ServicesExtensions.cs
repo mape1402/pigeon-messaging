@@ -35,6 +35,8 @@
                     settings = new KafkaSettings();
                 
                 config(settings);
+
+                KafkaSettingsValidator.Validate(settings);
                 
                 ftBuilder.Services.AddSingleton(Options.Create(settings));
             });

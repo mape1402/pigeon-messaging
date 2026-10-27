@@ -36,6 +36,8 @@
 
                 config(settings);
 
+                RabbitSettingsValidator.Validate(settings);
+
                 ftBuilder.Services.AddSingleton(Options.Create(settings));
             });
 
