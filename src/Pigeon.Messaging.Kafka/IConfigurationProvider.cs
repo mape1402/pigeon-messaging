@@ -25,5 +25,11 @@
         /// <param name="consumerGroup">The consumer group to use.</param>
         /// <returns>A <see cref="ConsumerConfig"/> instance with the necessary settings for consuming messages.</returns>
         ConsumerConfig GetConsumerConfig(string consumerGroup);
+
+        /// <summary>
+        /// Gets the optional host-managed OAuth bearer token refresh callback.
+        /// </summary>
+        /// <returns>The configured callback, or <c>null</c> when OAuth refresh is not configured.</returns>
+        Action<IClient, string> GetOAuthBearerTokenRefreshHandler();
     }
 }

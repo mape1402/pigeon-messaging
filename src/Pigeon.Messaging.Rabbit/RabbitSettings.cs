@@ -1,5 +1,7 @@
 ﻿namespace Pigeon.Messaging.Rabbit
 {
+    using RabbitMQ.Client;
+
     /// <summary>
     /// Represents the configuration settings required to connect to a RabbitMQ broker.
     /// </summary>
@@ -10,6 +12,14 @@
         /// Example: amqp://user:password@host:port/vhost
         /// </summary>
         public string Url { get; set; }
+
+        /// <summary>
+        /// Gets or sets programmatic configuration applied to the RabbitMQ connection factory.
+        /// </summary>
+        /// <remarks>
+        /// Use this for native broker capabilities such as TLS, client certificates, or OAuth credentials.
+        /// </remarks>
+        public Action<IConnectionFactory> ConfigureConnectionFactory { get; set; }
 
         /// <summary>
         /// Gets or sets the RabbitMQ exchange used for routed publishing.

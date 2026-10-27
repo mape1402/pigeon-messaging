@@ -15,14 +15,14 @@
     public class ServicesExtensionsTests
     {
         [Fact]
-        public void UseRabbitMq_Should_Register_Default_Adapters_And_ConnectionProvider()
+        public void UseRabbitMq_Should_Register_Adapters_And_ConnectionProvider()
         {
             // Arrange
             var services = new ServiceCollection();
             var globalSettingsBuilder = TestGlobalSettingsBuilder.Create(services);
 
             // Act
-            globalSettingsBuilder.UseRabbitMq();
+            globalSettingsBuilder.UseRabbitMq(options => options.Url = "amqp://guest:guest@localhost:5672");
 
             // Assert
             Assert.Contains(services, d => d.ServiceType == typeof(IConnectionProvider) && d.ImplementationType == typeof(ConnectionProvider));

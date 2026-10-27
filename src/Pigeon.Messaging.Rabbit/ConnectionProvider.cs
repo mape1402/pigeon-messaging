@@ -18,6 +18,7 @@
         // Semaphore to ensure only one concurrent connection creation operation
         private readonly SemaphoreSlim _connectionLock = new(1, 1);
         private readonly IConnectionFactory _factory;
+        private bool _factoryConfigured;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="ConnectionProvider"/> class.
@@ -53,7 +54,7 @@
             {
                 if (_connection == null || !_connection.IsOpen)
                 {
-                    _factory.Uri = new Uri(_options.Url);
+                    ConfigureFactory();
                     _connection = await _factory.CreateConnectionAsync(cancellationToken);
                 }
                 return _connection;
@@ -62,6 +63,18 @@
             {
                 _connectionLock.Release();
             }
+        }
+
+        private void ConfigureFactory()
+        {
+            if (_factoryConfigured)
+                return;
+
+            if (!string.IsNullOrWhiteSpace(_options.Url))
+                _factory.Uri = new Uri(_options.Url);
+
+            _options.ConfigureConnectionFactory?.Invoke(_factory);
+            _factoryConfigured = true;
         }
 
         /// <summary>
